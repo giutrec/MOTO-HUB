@@ -342,6 +342,12 @@ class RideDaemonTransport(
 
         override fun onEvent(time: Long, type: Long, command: Long, payload: ByteArray?) {
             Log.d(TAG, "T-Box event type=$type command=$command bytes=${payload?.size ?: 0}")
+            if (type == PXC_EVENT_SOURCE) {
+                ProjectionEventLog.debug(
+                    "TBOX",
+                    "PXC event received: command=$command, bytes=${payload?.size ?: 0}."
+                )
+            }
             if (type == PXC_EVENT_SOURCE && command == PXC_HUD_CONFIG_COMMAND) {
                 val capabilities = payload?.let(::decodeTBoxCapabilities)
                 if (capabilities == null) {
