@@ -22,12 +22,14 @@ import io.motohub.android.encoding.AvcEncoder
 import io.motohub.android.androidauto.DisplayGeometry
 import io.motohub.android.androidauto.TBoxDisplayGeometryStore
 import io.motohub.android.tbox.TBoxEvent
+import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxNetworkEvent
 import io.motohub.android.tbox.TBoxSessionHandle
 import io.motohub.android.tbox.TBoxSessionRegistry
 import io.motohub.android.tbox.TBoxVideoAreaSource
 import io.motohub.android.tbox.negotiateVideoConfiguration
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -47,6 +49,7 @@ class ProjectionSessionService : Service() {
     private val transportUnavailable = AtomicBoolean(false)
     private val videoStreamStartRequested = AtomicBoolean(false)
     private val framesAccepted = AtomicLong(0)
+    private val capabilityStore by lazy { TBoxCapabilityStore(this) }
     private val mainHandler = Handler(Looper.getMainLooper())
     private lateinit var displayDimmer: PhoneDisplayDimmer
     @Volatile
@@ -220,10 +223,17 @@ class ProjectionSessionService : Service() {
     private fun observeActiveSession(handle: TBoxSessionHandle) {
         transportEventsJob?.cancel()
         networkEventsJob?.cancel()
-        transportEventsJob = serviceScope.launch {
+        transportEventsJob = serviceScope.launch(start = CoroutineStart.UNDISPATCHED) {
             handle.transport.events.collect { event ->
                 if (stopping) return@collect
                 when (event) {
+                    is TBoxEvent.Capabilities -> {
+                        capabilityStore.recordCapabilities(handle.motorcycle, event.value)
+                        ProjectionEventLog.record(
+                            "T-BOX",
+                            "Capability snapshot saved for ${handle.motorcycle.ssid}."
+                        )
+                    }
                     TBoxEvent.VideoStreamStart -> {
                         videoStreamStartRequested.set(true)
                         encoder?.requestSyncFrame("TFT consumer requested mirroring video")

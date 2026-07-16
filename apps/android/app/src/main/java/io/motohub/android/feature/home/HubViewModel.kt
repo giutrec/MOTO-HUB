@@ -13,6 +13,7 @@ import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.session.withMotorcycle
 import io.motohub.android.feature.pairing.TBoxQrPayload
 import io.motohub.android.tbox.RideDaemonTransport
+import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxNetworkConnector
 import io.motohub.android.tbox.TBoxNetworkEvent
 import io.motohub.android.tbox.TBoxSessionHandle
@@ -41,6 +42,7 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
     val uiState: StateFlow<HubUiState> = mutableUiState.asStateFlow()
     private val networkConnector = TBoxNetworkConnector(application)
     private val transport = RideDaemonTransport(application)
+    private val capabilityStore = TBoxCapabilityStore(application)
     private var connectJob: Job? = null
 
     init {
@@ -234,6 +236,7 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
             ProjectionEventLog.error("GARAGE", "Unable to delete motorcycle ${profile.ssid}.", it)
             return
         }
+        capabilityStore.delete(profileId)
         val remaining = current.motorcycles.filterNot { it.id == profileId }
         val active = profileStore.load()
         mutableUiState.value = if (active == null) {
@@ -302,6 +305,7 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
                 val host = discovered.getOrThrow()
+                capabilityStore.recordDiscovery(profile, host)
                 ProjectionEventLog.record(
                     "DISCOVERY",
                     "EasyConn service found at ${host.ipAddress}:${host.port}; package=${host.packageName}."

@@ -22,6 +22,7 @@ import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.session.ProjectionRuntime
 import io.motohub.android.session.ProjectionRuntimeState
 import io.motohub.android.tbox.TBoxEvent
+import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxNetworkEvent
 import io.motohub.android.tbox.TBoxSessionHandle
 import io.motohub.android.tbox.TBoxSessionRegistry
@@ -30,6 +31,7 @@ import io.motohub.android.tbox.negotiateVideoConfiguration
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -48,6 +50,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
     private var videoReadyTimeoutJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private val displayGeometryStore by lazy { TBoxDisplayGeometryStore(this) }
+    private val capabilityStore by lazy { TBoxCapabilityStore(this) }
     private val bikeStartRequested = AtomicBoolean(false)
     private val transportUnavailable = AtomicBoolean(false)
     private val videoStreamStartRequested = AtomicBoolean(false)
@@ -291,10 +294,17 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
     private fun observeActiveSession(handle: TBoxSessionHandle) {
         transportEventsJob?.cancel()
         networkEventsJob?.cancel()
-        transportEventsJob = serviceScope.launch {
+        transportEventsJob = serviceScope.launch(start = CoroutineStart.UNDISPATCHED) {
             handle.transport.events.collect { event ->
                 if (stopping) return@collect
                 when (event) {
+                    is TBoxEvent.Capabilities -> {
+                        capabilityStore.recordCapabilities(handle.motorcycle, event.value)
+                        ProjectionEventLog.record(
+                            "T-BOX",
+                            "Capability snapshot saved for ${handle.motorcycle.ssid}."
+                        )
+                    }
                     TBoxEvent.VideoStreamStart -> {
                         videoStreamStartRequested.set(true)
                         encoder?.requestSyncFrame("TFT consumer requested Android Auto video")

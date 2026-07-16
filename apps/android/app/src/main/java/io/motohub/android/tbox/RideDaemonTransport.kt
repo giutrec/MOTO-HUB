@@ -342,6 +342,21 @@ class RideDaemonTransport(
 
         override fun onEvent(time: Long, type: Long, command: Long, payload: ByteArray?) {
             Log.d(TAG, "T-Box event type=$type command=$command bytes=${payload?.size ?: 0}")
+            if (type == PXC_EVENT_SOURCE && command == PXC_HUD_CONFIG_COMMAND) {
+                val capabilities = payload?.let(::decodeTBoxCapabilities)
+                if (capabilities == null) {
+                    ProjectionEventLog.warning("TBOX", "Unable to decode the T-Box CLIENT_INFO payload.")
+                } else {
+                    ProjectionEventLog.record(
+                        "TBOX",
+                        "T-Box capabilities received: hu=${capabilities.huName ?: "not reported"}, " +
+                            "pxc=${capabilities.pxcVersion ?: "not reported"}, " +
+                            "touch=${capabilities.screenTouch ?: "not reported"}."
+                    )
+                    mutableEvents.tryEmit(TBoxEvent.Capabilities(capabilities))
+                }
+                return
+            }
             if (type != MEDIA_CONTROL_EVENT_SOURCE) return
             if (command == MEDIA_STREAM_START_COMMAND) {
                 ProjectionEventLog.record(
@@ -401,6 +416,8 @@ class RideDaemonTransport(
         const val DISCOVERY_TIMEOUT_MS = 15_000L
         const val EC_CONNECT_TIMEOUT_MS = 10_000
         const val MEDIA_CONTROL_EVENT_SOURCE = 3L
+        const val PXC_EVENT_SOURCE = 2L
+        const val PXC_HUD_CONFIG_COMMAND = 65_552L
         const val MEDIA_CAPTURE_CONFIG_COMMAND = 16L
         const val MEDIA_TOUCH_COMMAND = 32L
         const val MEDIA_STREAM_START_COMMAND = 112L

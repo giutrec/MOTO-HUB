@@ -11,6 +11,7 @@ data class TBoxHost(
 )
 
 sealed interface TBoxEvent {
+    data class Capabilities(val value: TBoxCapabilities) : TBoxEvent
     data class VideoArea(val width: Int, val height: Int) : TBoxEvent
     data class Touch(val action: Int, val x: Int, val y: Int) : TBoxEvent
     data object VideoStreamStart : TBoxEvent

@@ -35,11 +35,13 @@ import io.motohub.android.androidauto.AndroidAutoRuntimeState
 import io.motohub.android.androidauto.AndroidAutoSessionService
 import io.motohub.android.androidauto.AndroidAutoDisplayMode
 import io.motohub.android.androidauto.AndroidAutoDisplayModeStore
+import io.motohub.android.androidauto.TBoxDisplayGeometryStore
 import io.motohub.android.data.MotorcyclePhotoStore
 import io.motohub.android.feature.about.AboutScreen
 import io.motohub.android.feature.about.MOTO_HUB_GITHUB_URL
 import io.motohub.android.feature.garage.GarageScreen
 import io.motohub.android.feature.garage.MotorcycleDetailsScreen
+import io.motohub.android.feature.garage.TBoxCapabilityScreen
 import io.motohub.android.feature.home.HubHomeScreen
 import io.motohub.android.feature.home.HubViewModel
 import io.motohub.android.feature.androidauto.AndroidAutoPreviewScreen
@@ -53,6 +55,7 @@ import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.session.PhoneDisplayDimmer
 import io.motohub.android.session.PhoneDisplayDimPreferences
 import io.motohub.android.session.SessionPhase
+import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.ui.theme.MotoHubTheme
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
@@ -91,6 +94,7 @@ class MainActivity : ComponentActivity() {
                 var showAndroidAutoPreview by rememberSaveable { mutableStateOf(false) }
                 var showGarage by rememberSaveable { mutableStateOf(false) }
                 var editorProfileId by rememberSaveable { mutableStateOf<String?>(null) }
+                var capabilityProfileId by rememberSaveable { mutableStateOf<String?>(null) }
                 var photoTargetProfileId by rememberSaveable { mutableStateOf<String?>(null) }
                 var returnToGarageAfterQr by rememberSaveable { mutableStateOf(false) }
                 LaunchedEffect(androidAutoStreaming) {
@@ -98,6 +102,8 @@ class MainActivity : ComponentActivity() {
                 }
                 val context = LocalContext.current
                 val displayModeStore = remember(context) { AndroidAutoDisplayModeStore(context) }
+                val displayGeometryStore = remember(context) { TBoxDisplayGeometryStore(context) }
+                val capabilityStore = remember(context) { TBoxCapabilityStore(context) }
                 val motorcyclePhotoStore = remember(context) { MotorcyclePhotoStore(context) }
                 val motorcycleId = state.session.motorcycle?.id
                 var androidAutoDisplayMode by rememberSaveable {
@@ -337,6 +343,22 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     )
+                } else if (capabilityProfileId != null) {
+                    val profile = state.motorcycles.firstOrNull { it.id == capabilityProfileId }
+                    if (profile == null) {
+                        capabilityProfileId = null
+                        showGarage = true
+                    } else {
+                        TBoxCapabilityScreen(
+                            profile = profile,
+                            snapshot = capabilityStore.load(profile),
+                            geometry = displayGeometryStore.load(profile.ssid),
+                            onBack = {
+                                capabilityProfileId = null
+                                editorProfileId = profile.id
+                            }
+                        )
+                    }
                 } else if (editorProfileId != null) {
                     val profile = state.motorcycles.firstOrNull { it.id == editorProfileId }
                     if (profile == null) {
@@ -351,6 +373,14 @@ class MainActivity : ComponentActivity() {
                                 showGarage = true
                             },
                             onSave = { updatedProfile -> viewModel.updateMotorcycle(updatedProfile) },
+                            onOpenCapabilities = {
+                                capabilityProfileId = profile.id
+                                editorProfileId = null
+                                ProjectionEventLog.record(
+                                    "UI",
+                                    "T-Box capability inspector opened for ${profile.ssid}."
+                                )
+                            },
                             onDisplayModeChanged = { mode ->
                                 displayModeStore.save(profile, mode)
                                 motorcycleDetailsDisplayMode = mode

@@ -45,6 +45,7 @@ fun MotorcycleDetailsScreen(
     displayMode: AndroidAutoDisplayMode,
     onBack: () -> Unit,
     onSave: (MotorcycleProfile) -> Unit,
+    onOpenCapabilities: () -> Unit,
     onDisplayModeChanged: (AndroidAutoDisplayMode) -> Unit,
     onChoosePhoto: () -> Unit,
     onRemovePhoto: () -> Unit,
@@ -125,6 +126,33 @@ fun MotorcycleDetailsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)),
+                shape = MaterialTheme.shapes.large
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    MonoLabel("T-BOX INSPECTOR")
+                    Text("Observed hardware data", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Review the endpoint, display geometry, protocol versions, and feature flags " +
+                            "reported by this T-Box.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedButton(
+                        onClick = onOpenCapabilities,
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text("Open capability inspector", fontWeight = FontWeight.Bold) }
                 }
             }
 
