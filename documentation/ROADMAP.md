@@ -1,9 +1,11 @@
 # Roadmap
 
-Status: incremental proposal
+Status: active roadmap after beta implementation work
 
-The roadmap prioritizes technical risks that could invalidate the product. The
-complete UI comes after proving real streaming and Internet/T-Box routing.
+The roadmap prioritizes technical risks that could invalidate the product.
+Several original MVP items are now implemented; remaining work is mostly
+hardware validation, model compatibility, navigation quality and release
+hardening.
 
 ## Phase 0 - Reproducible Baseline
 
@@ -64,24 +66,41 @@ Gate: MVP criteria and the `TEST_STRATEGY.md` gates are satisfied.
 - accessibility and localization;
 - reproducible CI pipeline for the Go AAR and APK.
 
-## Phase 4 - Video Quality
+## Implemented Since The Original MVP Plan
 
-Only if justified by tests:
+- multiple motorcycle profiles in Garage;
+- Android Auto full mode with phone preview/touch control;
+- Ride Dashboard with OpenStreetMap or embedded Android Auto map region;
+- trip recording, local trip library and GPX export;
+- handlebar controls with single, double-tap and Select-hold timing;
+- Android Auto source overrides and per-motorcycle `FIT`, `STRETCH`, `CROP`;
+- per-motorcycle TFT safe margins;
+- adaptive video/power behavior, Wi-Fi streaming locks and recovery watchdogs;
+- seamless resume option;
+- auto-connect on launch and after deliberate projection stops;
+- diagnostics for VPN/local-network blockers and official CFMOTO app conflicts;
+- GitHub release/pre-release updater with release notes.
 
-- EGL compositor;
-- controlled fit/fill and bars;
-- rotation and resize without a full restart;
-- optional overlays;
-- quality adaptation based on polling, drops and thermal state;
-- profiles for each T-Box model.
+## Phase 4 - Video Quality And Compatibility
+
+- continue tuning the EGL Android Auto compositor for every aspect ratio;
+- validate `FIT`, `STRETCH`, and `CROP` on real horizontal and vertical TFTs;
+- expand model profiles only from measured safe-area and touch data;
+- refine adaptive quality thresholds from long rides and weak Wi-Fi tests;
+- improve diagnostics around frame pacing, decoder stalls and T-Box poll gaps.
 
 ## Phase 5 - Advanced Features
 
-To be evaluated separately:
+- native turn-by-turn navigation on the OpenStreetMap dashboard source is in
+  active design/implementation; see [NAVIGATION.md](NAVIGATION.md) and
+  [ADR-005](decisions/ADR-005-native-navigation-over-google-maps.md).
+
+Remaining items to be evaluated separately:
 
 - BLE for media commands and motorcycle events;
-- quick start for an already paired motorcycle;
-- native dashboards and dedicated scenes;
+- saved handlebar destinations and native navigation intents;
+- deeper integration between Ride Dashboard and Android Auto controls without
+  collapsing the three separate modes;
 - multiple saved T-Boxes;
 - Android shortcut integration;
 - public distribution and beta program.

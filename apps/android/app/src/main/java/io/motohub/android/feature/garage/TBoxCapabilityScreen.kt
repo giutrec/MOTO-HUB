@@ -1,5 +1,8 @@
 package io.motohub.android.feature.garage
 
+import io.motohub.android.i18n.motoHubText
+
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -11,12 +14,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -30,6 +36,8 @@ import io.motohub.android.androidauto.DisplayGeometry
 import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.tbox.TBoxCapabilities
 import io.motohub.android.tbox.TBoxCapabilitySnapshot
+import io.motohub.android.tbox.TBoxPortScanResult
+import io.motohub.android.tbox.TBoxPortStatus
 import io.motohub.android.ui.components.MonoLabel
 import io.motohub.android.ui.components.MotoHubBackground
 import io.motohub.android.ui.components.MotoHubHeader
@@ -43,9 +51,15 @@ fun TBoxCapabilityScreen(
     profile: MotorcycleProfile,
     snapshot: TBoxCapabilitySnapshot?,
     geometry: DisplayGeometry?,
+    portScanInProgress: Boolean = false,
+    portScanResult: TBoxPortScanResult? = null,
+    onScanPorts: () -> Unit = {},
     onBack: () -> Unit
 ) {
     val capabilities = snapshot?.capabilities
+
+    BackHandler(onBack = onBack)
+
     MotoHubBackground(Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -58,11 +72,11 @@ fun TBoxCapabilityScreen(
         ) {
             MotoHubHeader(
                 modifier = Modifier.fillMaxWidth(),
-                trailing = { TextButton(onClick = onBack) { Text("Back") } }
+                trailing = { TextButton(onClick = onBack) { Text(motoHubText("Back")) } }
             )
 
             Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                MonoLabel("T-BOX CAPABILITY INSPECTOR")
+                MonoLabel(motoHubText("T-BOX CAPABILITY INSPECTOR"))
                 Text(
                     text = profile.displayName ?: profile.ssid,
                     style = MaterialTheme.typography.headlineMedium,
@@ -86,6 +100,31 @@ fun TBoxCapabilityScreen(
                 )
                 InspectorRow("NSD package", snapshot?.host?.packageName, monospace = true)
                 InspectorRow("Last discovered", formatTimestamp(snapshot?.discoveredAtEpochMillis))
+            }
+
+            InspectorSection("DIAGNOSTICS") {
+                Text(
+                    motoHubText("If EasyConn discovery keeps failing, briefly reconnect to this T-Box and probe ") +
+                        "its well-known ports (10915-10935) directly to see which one actually answers.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Button(
+                    onClick = onScanPorts,
+                    enabled = !portScanInProgress,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (portScanInProgress) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text(motoHubText("Scan common EasyConn ports"))
+                    }
+                }
+                portScanResult?.let { result -> PortScanResultView(result) }
             }
 
             InspectorSection("DISPLAY") {
@@ -274,6 +313,57 @@ private fun CapabilityRow(label: String, supported: Boolean?) {
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold
         )
+    }
+}
+
+@Composable
+private fun PortScanResultView(result: TBoxPortScanResult) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (result.peerIp == null) {
+            Text(
+                motoHubText("Could not derive a peer IP - this network may not have a usable route yet."),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+            return@Column
+        }
+        val open = result.entries.filter { it.status == TBoxPortStatus.OPEN }
+        Text(
+            motoHubText(
+                "Peer %1\$s -> %2\$s",
+                result.peerIp,
+                if (open.isEmpty()) motoHubText("no open ports found")
+                else motoHubText("open: %1\$s", open.joinToString { it.port.toString() })
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            color = if (open.isEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.tertiary
+        )
+        // Only ports worth a second look: an accepted connection, or an explicit refusal (the
+        // peer is alive and chose to reject it) - a silent timeout on most of the range is
+        // expected and would just be noise here.
+        result.entries.filter { it.status != TBoxPortStatus.NO_RESPONSE }.forEach { entry ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    motoHubText("Port %1\$d", entry.port),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace
+                )
+                Text(
+                    entry.status.name,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    color = if (entry.status == TBoxPortStatus.OPEN)
+                        MaterialTheme.colorScheme.tertiary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 
