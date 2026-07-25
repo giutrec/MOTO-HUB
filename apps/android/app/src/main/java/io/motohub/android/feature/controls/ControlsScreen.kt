@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.motohub.android.androidauto.AndroidAutoInputCodes
 import io.motohub.android.androidauto.AaInputBridge
 import io.motohub.android.feature.ridedashboard.RideDashboardControlBridge
@@ -117,7 +118,13 @@ fun ControlsScreen(
     }
     var doubleTapDelay by remember { mutableStateOf(HandlebarTimingPrefs.doubleTap(context)) }
     var selectHoldDelay by remember { mutableStateOf(HandlebarTimingPrefs.selectHold(context)) }
-    val androidAutoInputReady = androidAutoStreaming && AaInputBridge.isReady()
+    // AaInputBridge.isReady()/sendKey()/sendScroll() only reflect a LOCAL AaInput sink, which
+    // only exists in Core. Pro's Android Auto runs in Core and marks readiness via the same
+    // shared `ready` StateFlow, routing keys/scroll to Core over AIDL via
+    // AndroidAutoPreviewRuntime instead (already how night mode below is wired) — reading
+    // `ready` here (rather than isReady()) also makes this properly reactive to Compose.
+    val androidAutoInputActuallyReady by AaInputBridge.ready.collectAsStateWithLifecycle()
+    val androidAutoInputReady = androidAutoStreaming && androidAutoInputActuallyReady
     val dashboardInputReady = rideDashboardStreaming && RideDashboardControlBridge.isReady()
     val handlebarTargetActive = androidAutoStreaming || rideDashboardStreaming
     val handlebarTarget = when {
@@ -138,8 +145,8 @@ fun ControlsScreen(
     if (padFullscreen) {
         FullscreenDpad(
             enabled = androidAutoInputReady,
-            onKey = { code -> AaInputBridge.sendKey(code) },
-            onScroll = { delta -> AaInputBridge.sendScroll(delta) },
+            onKey = { code -> AndroidAutoPreviewRuntime.sendKey(code) },
+            onScroll = { delta -> AndroidAutoPreviewRuntime.sendScroll(delta) },
             onExit = { padFullscreen = false }
         )
         return
@@ -227,8 +234,8 @@ fun ControlsScreen(
                     } else {
                         Dpad(
                             enabled = androidAutoInputReady,
-                            onKey = { code -> AaInputBridge.sendKey(code) },
-                            onScroll = { delta -> AaInputBridge.sendScroll(delta) }
+                            onKey = { code -> AndroidAutoPreviewRuntime.sendKey(code) },
+                            onScroll = { delta -> AndroidAutoPreviewRuntime.sendScroll(delta) }
                         )
                     }
                 }

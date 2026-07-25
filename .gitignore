@@ -3,6 +3,7 @@
 .gradle/
 **/build/
 **/.cxx/
+**/.kotlin/
 local.properties
 *.keystore
 *.jks

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -34,8 +35,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.motohub.android.session.MotorcycleProfile
+import io.motohub.android.ui.components.HeroPrimaryAction
+import io.motohub.android.ui.components.HeroTile
 import io.motohub.android.ui.components.LivePill
+import io.motohub.android.ui.components.ModeIcon
 import io.motohub.android.ui.components.MonoLabel
+import io.motohub.android.ui.theme.MotoHubDashboard
+import io.motohub.android.ui.theme.MotoHubManual
 
 @Composable
 fun GarageTabContent(
@@ -44,7 +50,8 @@ fun GarageTabContent(
     onAddMotorcycle: () -> Unit,
     onAddMotorcycleManually: () -> Unit,
     onSelectMotorcycle: (String) -> Unit,
-    onOpenDetails: (String) -> Unit
+    onOpenDetails: (String) -> Unit,
+    onOpenDefaultSettings: () -> Unit = {}
 ) {
     val active = profiles.firstOrNull { it.id == activeProfileId }
     val others = profiles.filterNot { it.id == activeProfileId }
@@ -63,7 +70,22 @@ fun GarageTabContent(
         }
 
         if (active == null) {
-            EmptyGarageCard(onAddMotorcycle, onAddMotorcycleManually)
+            EmptyGarageHero()
+            HeroPrimaryAction(
+                title = "Scan motorcycle QR code",
+                subtitle = "Point your camera at the T-Box sticker",
+                icon = "QrScan",
+                color = MaterialTheme.colorScheme.primary,
+                onClick = onAddMotorcycle
+            )
+            HeroTile(
+                title = "No QR? Manual setup",
+                subtitle = "Type the network in yourself",
+                icon = "Manual",
+                color = MotoHubManual,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onAddMotorcycleManually
+            )
         } else {
             ActiveMotorcycleCard(
                 profile = active,
@@ -79,27 +101,39 @@ fun GarageTabContent(
                     )
                 }
             }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                HeroTile(
+                    title = "Add motorcycle",
+                    subtitle = "Scan its T-Box QR code",
+                    icon = "Bike",
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f),
+                    onClick = onAddMotorcycle
+                )
+                HeroTile(
+                    title = "No QR? Manual",
+                    subtitle = "Type the network in",
+                    icon = "Manual",
+                    color = MotoHubManual,
+                    modifier = Modifier.weight(1f),
+                    onClick = onAddMotorcycleManually
+                )
+            }
         }
 
-        Button(
-            onClick = onAddMotorcycle,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp),
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            )
-        ) {
-            Text(motoHubText("Add motorcycle"), fontWeight = FontWeight.Bold)
-        }
-        TextButton(
-            onClick = onAddMotorcycleManually,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(motoHubText("No QR? Connect manually"))
-        }
+        // Phone-only Android Auto/Ride Dashboard (no T-Box) already work with zero motorcycles
+        // paired - this is where their shared defaults (AA fit, TFT margins, and - Advanced only -
+        // dashboard widgets) live, since none of those have a per-motorcycle profile to attach to.
+        // Not gated to Advanced: Core's own phone-only Android Auto needs this too.
+        MonoLabel(motoHubText("NO MOTORCYCLE? NO PROBLEM"))
+        HeroTile(
+            title = "Default settings",
+            subtitle = "Used by Android Auto & Ride Dashboard without a T-Box",
+            icon = "Customize",
+            color = MotoHubDashboard,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onOpenDefaultSettings
+        )
         Spacer(Modifier.height(8.dp))
     }
 }
@@ -113,7 +147,7 @@ private fun ActiveMotorcycleCard(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = MaterialTheme.shapes.large,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f))
+        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
     ) {
         Column(
             modifier = Modifier
@@ -121,12 +155,23 @@ private fun ActiveMotorcycleCard(
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            MotorcyclePhoto(
-                path = profile.photoPath,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(178.dp)
-            )
+            Box {
+                MotorcyclePhoto(
+                    path = profile.photoPath,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(178.dp)
+                )
+                Box(
+                    modifier = Modifier
+                        .padding(10.dp)
+                        .size(40.dp)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    ModeIcon("Bike", MaterialTheme.colorScheme.onPrimary, iconSize = 22.dp)
+                }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -137,6 +182,7 @@ private fun ActiveMotorcycleCard(
                     Text(
                         profile.displayName ?: "Unnamed motorcycle",
                         style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -147,7 +193,10 @@ private fun ActiveMotorcycleCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                TextButton(onClick = onOpenDetails) { Text(motoHubText("Options")) }
+                OutlinedButton(
+                    onClick = onOpenDetails,
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text(motoHubText("Manage")) }
             }
         }
     }
@@ -171,15 +220,27 @@ private fun SavedMotorcycleCard(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            MotorcyclePhoto(
-                path = profile.photoPath,
-                modifier = Modifier.size(width = 100.dp, height = 78.dp),
-                shape = RoundedCornerShape(14.dp)
-            )
+            Box {
+                MotorcyclePhoto(
+                    path = profile.photoPath,
+                    modifier = Modifier.size(width = 100.dp, height = 78.dp),
+                    shape = RoundedCornerShape(14.dp)
+                )
+                Box(
+                    modifier = Modifier
+                        .padding(4.dp)
+                        .size(24.dp)
+                        .background(MaterialTheme.colorScheme.surface, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    ModeIcon("Bike", MaterialTheme.colorScheme.onSurfaceVariant, iconSize = 15.dp)
+                }
+            }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     profile.displayName ?: "Unnamed motorcycle",
                     style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -191,10 +252,14 @@ private fun SavedMotorcycleCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                OutlinedButton(
+                Button(
                     onClick = onSelect,
                     modifier = Modifier.height(38.dp),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.14f),
+                        contentColor = MaterialTheme.colorScheme.primary
+                    )
                 ) { Text(motoHubText("Use this motorcycle")) }
             }
             TextButton(onClick = onOpenDetails) { Text(motoHubText("Edit")) }
@@ -203,32 +268,37 @@ private fun SavedMotorcycleCard(
 }
 
 @Composable
-private fun EmptyGarageCard(onAddMotorcycle: () -> Unit, onAddMotorcycleManually: () -> Unit) {
+private fun EmptyGarageHero() {
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)),
         shape = MaterialTheme.shapes.large
     ) {
         Column(
-            modifier = Modifier.padding(22.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(22.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(82.dp)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), RoundedCornerShape(26.dp)),
+                    .size(72.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Text("M", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
+                ModeIcon("Bike", MaterialTheme.colorScheme.onPrimary, iconSize = 38.dp)
             }
-            Text(motoHubText("Your garage is empty"), style = MaterialTheme.typography.titleLarge)
             Text(
-                motoHubText("Add a motorcycle by scanning its T-Box QR code."),
+                motoHubText("Your garage is empty"),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                motoHubText("Add your first motorcycle to get rolling."),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            OutlinedButton(onClick = onAddMotorcycle) { Text(motoHubText("Scan a QR code")) }
-            TextButton(onClick = onAddMotorcycleManually) { Text(motoHubText("No QR? Connect manually")) }
         }
     }
 }

@@ -314,11 +314,14 @@ private fun MotorcycleDetailsMainList(
                 description = motoHubText("Endpoint, geometry, protocol, and feature flags"),
                 onClick = onOpenCapabilities
             )
-            MotoHubActionRow(
-                title = motoHubText("Customize Dashboard"),
-                description = motoHubText("Choose widgets for each side panel"),
-                onClick = onCustomizeDashboard
-            )
+            // Ride Dashboard is Advanced-only. Core ships Mirror + Android Auto only.
+            if (io.motohub.android.BuildConfig.IS_PRO) {
+                MotoHubActionRow(
+                    title = motoHubText("Customize Dashboard"),
+                    description = motoHubText("Choose widgets for each side panel"),
+                    onClick = onCustomizeDashboard
+                )
+            }
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -349,8 +352,9 @@ private fun MotorcycleDetailsMainList(
     }
 }
 
+/** Also reused by [io.motohub.android.feature.garage.DefaultDashboardSettingsScreen]. */
 @Composable
-private fun AndroidAutoDisplayDetail(
+fun AndroidAutoDisplayDetail(
     displayMode: AndroidAutoDisplayMode,
     onDisplayModeChanged: (AndroidAutoDisplayMode) -> Unit,
     onBack: () -> Unit
@@ -389,8 +393,9 @@ private fun AndroidAutoDisplayDetail(
     }
 }
 
+/** Also reused by [io.motohub.android.feature.garage.DefaultDashboardSettingsScreen]. */
 @Composable
-private fun TftMarginsDetail(
+fun TftMarginsDetail(
     profile: MotorcycleProfile,
     screenMargins: TBoxScreenMargins,
     onScreenMarginsChanged: (TBoxScreenMargins) -> Unit,
@@ -472,7 +477,7 @@ private fun ProfileOverrideDetail(
     }
 }
 
-private val AndroidAutoDisplayMode.shortLabel: String
+val AndroidAutoDisplayMode.shortLabel: String
     get() = when (this) {
         AndroidAutoDisplayMode.LETTERBOX -> "FIT"
         AndroidAutoDisplayMode.STRETCH -> "STRETCH"

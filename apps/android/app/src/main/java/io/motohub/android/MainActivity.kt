@@ -42,6 +42,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import io.motohub.android.androidauto.AndroidAutoPreviewLaunchRequest
+import io.motohub.android.androidauto.PhoneOnlyAndroidAutoLaunchRequest
 import io.motohub.android.androidauto.AndroidAutoRuntime
 import io.motohub.android.androidauto.AndroidAutoRuntimeState
 import io.motohub.android.androidauto.AndroidAutoDisplayMode
@@ -49,18 +51,21 @@ import io.motohub.android.androidauto.AndroidAutoDisplayModeStore
 import io.motohub.android.androidauto.TBoxDisplayGeometryStore
 import io.motohub.android.androidauto.TBoxScreenMargins
 import io.motohub.android.androidauto.TBoxScreenMarginsStore
+import io.motohub.android.ipc.IpcBridgeContract
 import io.motohub.android.data.MotorcyclePhotoStore
 import io.motohub.android.data.MotorcycleProfileStore
 import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.feature.about.AboutScreen
 import io.motohub.android.feature.about.MOTO_HUB_DISCORD_URL
 import io.motohub.android.feature.about.MOTO_HUB_GITHUB_URL
+import io.motohub.android.feature.garage.DEFAULT_DASHBOARD_SETTINGS_PROFILE
+import io.motohub.android.feature.garage.DefaultDashboardSettingsScreen
 import io.motohub.android.feature.garage.GarageTabContent
 import io.motohub.android.feature.garage.MotorcycleDetailsScreen
 import io.motohub.android.feature.garage.TBoxCapabilityScreen
 import io.motohub.android.feature.home.HubHomeScreen
 import io.motohub.android.feature.home.HubViewModel
-import io.motohub.android.feature.navigation.NavigationTabContent
+import io.motohub.android.feature.navigation.NavTabContent
 import io.motohub.android.feature.androidauto.AndroidAutoPreviewScreen
 import io.motohub.android.feature.androidauto.OfficialCfmotoWarningDialog
 import io.motohub.android.feature.ridedashboard.RideDashboardPreviewScreen
@@ -87,7 +92,7 @@ import io.motohub.android.feature.settings.SettingsTabContent
 import io.motohub.android.feature.trips.TripRecordingRuntime
 import io.motohub.android.feature.trips.TripRecordingService
 import io.motohub.android.feature.trips.TripRecordingSource
-import io.motohub.android.feature.trips.TripsTabContent
+import io.motohub.android.feature.trips.TripsTabWrapper
 import io.motohub.android.feature.update.DownloadProgress
 import io.motohub.android.feature.update.GithubRelease
 import io.motohub.android.feature.update.GithubUpdateDialog
@@ -136,6 +141,16 @@ private val TBoxScreenMarginsSaver = listSaver<TBoxScreenMargins, Int>(
     }
 )
 
+/**
+ * Persists Advanced's own Android Auto Display default into Core's own store before Core starts
+ * a phone-only session - see IpcBridgeContract.EXTRA_ANDROID_AUTO_DISPLAY_MODE. No-op when
+ * [displayMode] is null (a purely Core-native trigger carries no such extra).
+ */
+private fun applyPhoneOnlyAndroidAutoDisplayMode(context: android.content.Context, displayMode: String?) {
+    val mode = displayMode?.let { runCatching { AndroidAutoDisplayMode.valueOf(it) }.getOrNull() } ?: return
+    AndroidAutoDisplayModeStore(context).save(DEFAULT_DASHBOARD_SETTINGS_PROFILE, mode)
+}
+
 class MainActivity : ComponentActivity() {
     private val viewModel: HubViewModel by viewModels()
     private val diagnosticsViewModel: NetworkDiagnosticsViewModel by viewModels()
@@ -154,6 +169,11 @@ class MainActivity : ComponentActivity() {
    private val rideDashboardLocalAndroidAutoTrigger by lazy {
        io.motohub.android.feature.ridedashboard.createRideDashboardLocalAndroidAutoTrigger(applicationContext)
    }
+   // Lets Android Auto run with no T-Box at all, visible only via the phone's own
+   // AndroidAutoPreviewScreen. CORE builds/runs the receiver itself; PRO deep-links into CORE.
+   private val androidAutoPhoneOnlyBridge by lazy {
+       io.motohub.android.androidauto.createAndroidAutoPhoneOnlyBridge(applicationContext)
+   }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -163,6 +183,7 @@ class MainActivity : ComponentActivity() {
             MotoHubSettings.showRecordedTrackOnDashboard(this)
         )
         refreshAoaAccessoryConnected(intent)
+        handleAndroidAutoPreviewLaunchIntent(intent)
 
         setContent {
             MotoHubTheme {
@@ -197,9 +218,48 @@ class MainActivity : ComponentActivity() {
                 var showNetworkDiagnostics by rememberSaveable { mutableStateOf(false) }
                 var showApplicationLogs by rememberSaveable { mutableStateOf(false) }
                 var showAbout by rememberSaveable { mutableStateOf(false) }
-                var showAndroidAutoPreview by rememberSaveable { mutableStateOf(false) }
-                var androidAutoPreviewStartFullscreen by rememberSaveable { mutableStateOf(false) }
+                // Read directly off the launching Intent (not just reactively via the
+                // LaunchedEffects below) for two reasons: (1) so a PRO-triggered session shows
+                // its screen from the very first frame, no flash of Core's normal Home UI first,
+                // and (2) correctness on a cold start - MutableSharedFlow with no replay drops an
+                // emission that happens (from onCreate, before setContent) with zero subscribers
+                // yet, so a LaunchedEffect(Unit) alone would silently miss it and get stuck on
+                // "Android Auto is not running."
+                val launchedAndroidAutoPreview =
+                    intent?.getBooleanExtra(IpcBridgeContract.EXTRA_OPEN_ANDROID_AUTO_PREVIEW, false) == true
+                val launchedAndroidAutoPreviewFullscreen =
+                    intent?.getBooleanExtra(IpcBridgeContract.EXTRA_OPEN_ANDROID_AUTO_PREVIEW_FULLSCREEN, false) == true
+                val launchedPhoneOnlyAa = !BuildConfig.IS_PRO &&
+                    intent?.getBooleanExtra(IpcBridgeContract.EXTRA_START_PHONE_ONLY_ANDROID_AUTO, false) == true
+                val launchedPhoneOnlyAaDisplayMode =
+                    intent?.getStringExtra(IpcBridgeContract.EXTRA_ANDROID_AUTO_DISPLAY_MODE)
+                var showAndroidAutoPreview by rememberSaveable {
+                    mutableStateOf(launchedAndroidAutoPreview || launchedPhoneOnlyAa)
+                }
+                var androidAutoPreviewStartFullscreen by rememberSaveable {
+                    mutableStateOf(launchedAndroidAutoPreview && launchedAndroidAutoPreviewFullscreen)
+                }
+                // true only for a phone-only session (no T-Box) - gates whether closing the
+                // screen should also stop androidAutoPhoneOnlyBridge (a real T-Box session keeps
+                // running in the background regardless of this screen).
+                var androidAutoPreviewIsPhoneOnly by rememberSaveable { mutableStateOf(launchedPhoneOnlyAa) }
+                // true only when Advanced deep-linked into this phone-only session - gates
+                // whether closing the screen should also finish() this Activity, returning
+                // control to Advanced automatically instead of leaving the rider in Core.
+                var androidAutoPhoneOnlyLaunchedFromPro by rememberSaveable { mutableStateOf(launchedPhoneOnlyAa) }
+                LaunchedEffect(Unit) {
+                    AndroidAutoPreviewLaunchRequest.requests.collect { fullscreen ->
+                        androidAutoPreviewStartFullscreen = fullscreen
+                        androidAutoPreviewIsPhoneOnly = false
+                        androidAutoPhoneOnlyLaunchedFromPro = false
+                        showAndroidAutoPreview = true
+                    }
+                }
                 var showRideDashboardPreview by rememberSaveable { mutableStateOf(false) }
+                // true only when the rider chose "Use Ride Dashboard without a T-Box" - the
+                // dashboard IS the whole session then, so RideDashboardPreviewScreen publishes
+                // into RideDashboardRuntime instead of just rendering a passive local peek.
+                var rideDashboardPreviewIsPhoneOnly by rememberSaveable { mutableStateOf(false) }
                 var showControls by rememberSaveable { mutableStateOf(false) }
                 var showUpdateDialog by rememberSaveable { mutableStateOf(false) }
                 var updateAutoCheckAttempted by rememberSaveable { mutableStateOf(false) }
@@ -212,10 +272,54 @@ class MainActivity : ComponentActivity() {
                 var editorProfileId by rememberSaveable { mutableStateOf<String?>(null) }
                 var capabilityProfileId by rememberSaveable { mutableStateOf<String?>(null) }
                 var dashboardCustomizationProfileId by rememberSaveable { mutableStateOf<String?>(null) }
+                // Phone-only Android Auto/Ride Dashboard already work with zero motorcycles
+                // paired - this is the standalone panel exposing their shared defaults
+                // (widgets, AA fit, TFT margins), none of which have a per-motorcycle profile
+                // to attach to. showDefaultDashboardWidgetPicker is the widget-picker drill-down
+                // reached from inside that panel.
+                var showDefaultDashboardSettings by rememberSaveable { mutableStateOf(false) }
+                var showDefaultDashboardWidgetPicker by rememberSaveable { mutableStateOf(false) }
+                var defaultDashboardDisplayMode by rememberSaveable {
+                    mutableStateOf(AndroidAutoDisplayMode.LETTERBOX)
+                }
+                var defaultDashboardScreenMargins by rememberSaveable(
+                    stateSaver = TBoxScreenMarginsSaver
+                ) {
+                    mutableStateOf(TBoxScreenMargins.NONE)
+                }
                 var returnToRideAfterDashboardCustomization by rememberSaveable { mutableStateOf(false) }
                 var photoTargetProfileId by rememberSaveable { mutableStateOf<String?>(null) }
                 var returnToGarageAfterPairing by rememberSaveable { mutableStateOf(false) }
                 val context = LocalContext.current
+                // Only ever fires in CORE (PRO never publishes to this - it deep-links into
+                // CORE's own app instead, see openPhoneOnlyAndroidAutoInCore).
+                LaunchedEffect(Unit) {
+                    // Cold start: the launching Intent already carried the extra, so start the
+                    // session directly here rather than relying only on the collector below -
+                    // handleAndroidAutoPreviewLaunchIntent() published to
+                    // PhoneOnlyAndroidAutoLaunchRequest from onCreate, BEFORE this composition (and
+                    // its collector) existed, and a SharedFlow with no replay drops an emission
+                    // that has zero subscribers at the time, so that first publish is never seen.
+                    if (launchedPhoneOnlyAa) {
+                        applyPhoneOnlyAndroidAutoDisplayMode(context, launchedPhoneOnlyAaDisplayMode)
+                        androidAutoPhoneOnlyBridge.start(onFailure = { message ->
+                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                        })
+                    }
+                    // Warm start: Core is already running (onNewIntent) - this collector is
+                    // already actively subscribed by the time the new Intent publishes, so no
+                    // replay is needed here.
+                    PhoneOnlyAndroidAutoLaunchRequest.requests.collect { displayMode ->
+                        applyPhoneOnlyAndroidAutoDisplayMode(context, displayMode)
+                        androidAutoPhoneOnlyBridge.start(onFailure = { message ->
+                            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                        })
+                        androidAutoPreviewStartFullscreen = false
+                        androidAutoPreviewIsPhoneOnly = true
+                        androidAutoPhoneOnlyLaunchedFromPro = true
+                        showAndroidAutoPreview = true
+                    }
+                }
                 var showSafetyDisclaimer by rememberSaveable {
                     mutableStateOf(!MotoHubSettings.safetyDisclaimerAcknowledged(context))
                 }
@@ -228,7 +332,15 @@ class MainActivity : ComponentActivity() {
                 var unknownSourcesAllowed by remember {
                     mutableStateOf(GithubUpdateInstaller.canInstallUnknownSources(this@MainActivity))
                 }
-                val updateRepository = remember { GithubUpdateRepository() }
+                // Advanced's own releases (no source, closed) live in a separate repo from
+                // Core's — pointing this at the default would offer Core's APK inside Advanced.
+                val updateRepository = remember {
+                    if (BuildConfig.IS_PRO) {
+                        GithubUpdateRepository(repository = "MOTO-HUB-PRO-releases")
+                    } else {
+                        GithubUpdateRepository()
+                    }
+                }
                 val updateScope = rememberCoroutineScope()
                 fun checkForUpdates(openDialog: Boolean) {
                     if (!openDialog) {
@@ -766,8 +878,18 @@ class MainActivity : ComponentActivity() {
                     AndroidAutoPreviewScreen(
                         onBack = {
                             ProjectionEventLog.record("UI", "Android Auto phone preview closed.")
+                            if (androidAutoPreviewIsPhoneOnly) {
+                                androidAutoPhoneOnlyBridge.stop()
+                            }
                             showAndroidAutoPreview = false
                             androidAutoPreviewStartFullscreen = false
+                            androidAutoPreviewIsPhoneOnly = false
+                            // Return control to Advanced automatically instead of leaving the
+                            // rider stuck in Core - Advanced's own task is still underneath.
+                            if (androidAutoPhoneOnlyLaunchedFromPro) {
+                                androidAutoPhoneOnlyLaunchedFromPro = false
+                                finish()
+                            }
                         },
                         startFullscreen = androidAutoPreviewStartFullscreen
                     )
@@ -776,7 +898,8 @@ class MainActivity : ComponentActivity() {
                         onBack = {
                             ProjectionEventLog.record("UI", "Ride Dashboard phone preview closed.")
                             showRideDashboardPreview = false
-                        }
+                        },
+                        publishRuntimeState = rideDashboardPreviewIsPhoneOnly
                     )
                 } else if (showControls) {
                     ControlsScreen(
@@ -880,7 +1003,8 @@ class MainActivity : ComponentActivity() {
                         selectedTab = HubTab.GARAGE
                     } else {
                         DashboardWidgetPickerScreen(
-                            profile = profile,
+                            layoutKey = profile.ssid,
+                            title = profile.displayName ?: profile.ssid,
                             onBack = {
                                 dashboardCustomizationProfileId = null
                                 if (returnToRideAfterDashboardCustomization) {
@@ -901,6 +1025,34 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
+                } else if (showDefaultDashboardWidgetPicker) {
+                    DashboardWidgetPickerScreen(
+                        layoutKey = io.motohub.android.feature.ridedashboard.widget.DashboardLayoutStore.PHONE_ONLY_KEY,
+                        title = motoHubText("Default (no motorcycle)"),
+                        onBack = { showDefaultDashboardWidgetPicker = false },
+                        onSave = {
+                            ProjectionEventLog.record(
+                                "DASHBOARD",
+                                "Default (phone-only) dashboard widget layout saved: left=${it.leftWidgetId}, right=${it.rightWidgetId}."
+                            )
+                        }
+                    )
+                } else if (showDefaultDashboardSettings) {
+                    DefaultDashboardSettingsScreen(
+                        displayMode = defaultDashboardDisplayMode,
+                        screenMargins = defaultDashboardScreenMargins,
+                        onBack = { showDefaultDashboardSettings = false },
+                        onCustomizeDashboard = { showDefaultDashboardWidgetPicker = true },
+                        onDisplayModeChanged = { mode ->
+                            defaultDashboardDisplayMode = mode
+                            displayModeStore.save(DEFAULT_DASHBOARD_SETTINGS_PROFILE, mode)
+                            ProjectionEventLog.record("SETTINGS", "Default Android Auto display mode changed to ${mode.name}.")
+                        },
+                        onScreenMarginsChanged = { margins ->
+                            defaultDashboardScreenMargins = margins
+                            screenMarginsStore.save(DEFAULT_DASHBOARD_SETTINGS_PROFILE, margins)
+                        }
+                    )
                 } else if (showNetworkDiagnostics) {
                     NetworkDiagnosticsScreen(
                         state = diagnosticsState,
@@ -1186,20 +1338,52 @@ class MainActivity : ComponentActivity() {
                         },
                         onOpenAndroidAutoPreview = {
                             ProjectionEventLog.record("UI", "Android Auto phone preview opened.")
-                            androidAutoPreviewStartFullscreen = false
-                            showAndroidAutoPreview = true
+                            if (BuildConfig.IS_PRO) {
+                                openAndroidAutoPreviewInCore(fullscreen = false)
+                            } else {
+                                androidAutoPreviewStartFullscreen = false
+                                androidAutoPreviewIsPhoneOnly = false
+                                androidAutoPhoneOnlyLaunchedFromPro = false
+                                showAndroidAutoPreview = true
+                            }
                         },
                         onOpenAndroidAutoFullscreenControls = {
                             ProjectionEventLog.record(
                                 "UI",
                                 "Android Auto fullscreen controls opened from Ride Dashboard."
                             )
-                            androidAutoPreviewStartFullscreen = true
-                            showAndroidAutoPreview = true
+                            if (BuildConfig.IS_PRO) {
+                                openAndroidAutoPreviewInCore(fullscreen = true)
+                            } else {
+                                androidAutoPreviewStartFullscreen = true
+                                androidAutoPreviewIsPhoneOnly = false
+                                androidAutoPhoneOnlyLaunchedFromPro = false
+                                showAndroidAutoPreview = true
+                            }
                         },
                         onOpenRideDashboardPreview = {
                             ProjectionEventLog.record("UI", "Ride Dashboard phone preview opened from active session.")
+                            rideDashboardPreviewIsPhoneOnly = false
                             showRideDashboardPreview = true
+                        },
+                        onStartPhoneOnlyRideDashboard = {
+                            ProjectionEventLog.record("UI", "Ride Dashboard started without a T-Box.")
+                            rideDashboardPreviewIsPhoneOnly = true
+                            showRideDashboardPreview = true
+                        },
+                        onStartPhoneOnlyAndroidAuto = {
+                            ProjectionEventLog.record("UI", "Android Auto started without a T-Box.")
+                            if (BuildConfig.IS_PRO) {
+                                openPhoneOnlyAndroidAutoInCore()
+                            } else {
+                                androidAutoPhoneOnlyBridge.start(onFailure = { message ->
+                                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                })
+                                androidAutoPreviewStartFullscreen = false
+                                androidAutoPreviewIsPhoneOnly = true
+                                androidAutoPhoneOnlyLaunchedFromPro = false
+                                showAndroidAutoPreview = true
+                            }
                         },
                         dimDisplayEnabled = dimDisplayEnabled,
                         onDimDisplayChanged = { enabled ->
@@ -1252,10 +1436,10 @@ class MainActivity : ComponentActivity() {
                             AoaRideDashboardService.stop(context)
                         },
                         navContent = {
-                            NavigationTabContent()
+                            NavTabContent()
                         },
                         tripsContent = {
-                            TripsTabContent(
+                            TripsTabWrapper(
                                 recordingState = tripRecordingState,
                                 onStartRecording = {
                                     val permissions = buildList {
@@ -1312,6 +1496,11 @@ class MainActivity : ComponentActivity() {
                                         )
                                        editorProfileId = profileId
                                     }
+                                },
+                                onOpenDefaultSettings = {
+                                    defaultDashboardDisplayMode = displayModeStore.load(DEFAULT_DASHBOARD_SETTINGS_PROFILE)
+                                    defaultDashboardScreenMargins = screenMarginsStore.load(DEFAULT_DASHBOARD_SETTINGS_PROFILE)
+                                    showDefaultDashboardSettings = true
                                 }
                             )
                         },
@@ -1335,6 +1524,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onOpenRideDashboardPreview = {
                                     ProjectionEventLog.record("UI", "Ride Dashboard phone preview opened.")
+                                    rideDashboardPreviewIsPhoneOnly = false
                                     showRideDashboardPreview = true
                                 },
                                 seamlessResumeEnabled = seamlessResumeEnabled,
@@ -1465,10 +1655,68 @@ class MainActivity : ComponentActivity() {
       rideDashboardLocalAndroidAutoTrigger.trigger()
     }
 
+    /**
+     * Advanced has no local Android Auto video — see AndroidAutoPreviewLaunchRequest's doc.
+     * Launches Core straight into its own (fully working, in-process) preview screen instead.
+     */
+    private fun openAndroidAutoPreviewInCore(fullscreen: Boolean) {
+        val intent = Intent().apply {
+            setClassName(IpcBridgeContract.CORE_PACKAGE_NAME, IpcBridgeContract.CORE_MAIN_ACTIVITY_CLASS_NAME)
+            putExtra(IpcBridgeContract.EXTRA_OPEN_ANDROID_AUTO_PREVIEW, true)
+            putExtra(IpcBridgeContract.EXTRA_OPEN_ANDROID_AUTO_PREVIEW_FULLSCREEN, fullscreen)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { startActivity(intent) }.onFailure {
+            ProjectionEventLog.warning("UI", "Failed to open Core's Android Auto preview: ${it.message}")
+            Toast.makeText(this, motoHubText("Couldn't open MOTO-HUB Core. Is it installed?"), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * Advanced has no local Android Auto code at all, so a T-Box-free session can't run here
+     * either — same reasoning as [openAndroidAutoPreviewInCore], just starting a fresh phone-only
+     * session in Core instead of previewing an existing one.
+     */
+    private fun openPhoneOnlyAndroidAutoInCore() {
+        val displayMode = AndroidAutoDisplayModeStore(applicationContext).load(DEFAULT_DASHBOARD_SETTINGS_PROFILE)
+        val intent = Intent().apply {
+            setClassName(IpcBridgeContract.CORE_PACKAGE_NAME, IpcBridgeContract.CORE_MAIN_ACTIVITY_CLASS_NAME)
+            putExtra(IpcBridgeContract.EXTRA_START_PHONE_ONLY_ANDROID_AUTO, true)
+            putExtra(IpcBridgeContract.EXTRA_ANDROID_AUTO_DISPLAY_MODE, displayMode.name)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { startActivity(intent) }.onFailure {
+            ProjectionEventLog.warning("UI", "Failed to start phone-only Android Auto in Core: ${it.message}")
+            Toast.makeText(this, motoHubText("Couldn't open MOTO-HUB Core. Is it installed?"), Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         refreshAoaAccessoryConnected(intent)
+        handleAndroidAutoPreviewLaunchIntent(intent)
+    }
+
+    /**
+     * Advanced has no local Android Auto video (see AndroidAutoPreviewLaunchRequest's doc) and
+     * instead launches Core straight into this screen. Core's MainActivity is singleTask, so this
+     * fires via onNewIntent when Core is already running, or via onCreate on a cold start.
+     */
+    private fun handleAndroidAutoPreviewLaunchIntent(intent: Intent?) {
+        if (BuildConfig.IS_PRO) return
+        if (intent?.getBooleanExtra(IpcBridgeContract.EXTRA_START_PHONE_ONLY_ANDROID_AUTO, false) == true) {
+            PhoneOnlyAndroidAutoLaunchRequest.publish(
+                intent.getStringExtra(IpcBridgeContract.EXTRA_ANDROID_AUTO_DISPLAY_MODE)
+            )
+            return
+        }
+        if (intent?.getBooleanExtra(IpcBridgeContract.EXTRA_OPEN_ANDROID_AUTO_PREVIEW, false) != true) return
+        val fullscreen = intent.getBooleanExtra(
+            IpcBridgeContract.EXTRA_OPEN_ANDROID_AUTO_PREVIEW_FULLSCREEN,
+            false
+        )
+        AndroidAutoPreviewLaunchRequest.publish(fullscreen)
     }
 
     /**

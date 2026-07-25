@@ -215,7 +215,10 @@ class TBoxNetworkConnector(context: Context) {
                 override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
                     val addresses = linkProperties.linkAddresses.mapNotNull { it.address.hostAddress }
                     val gateways = linkProperties.routes.mapNotNull { it.gateway?.hostAddress }.distinct()
-                    Log.d(TAG, "Wi-Fi addresses=$addresses")
+                    // Dev-only raw logcat line (leaks the phone's Wi-Fi IPs) - the real,
+                    // production diagnostic record is ProjectionEventLog.debug() below, gated
+                    // by the runtime "Enable logging" setting regardless of build type.
+                    if (io.motohub.android.BuildConfig.DEBUG) Log.d(TAG, "Wi-Fi addresses=$addresses")
                     ProjectionEventLog.debug(
                         "NETWORK",
                         "Link properties changed: network=$network, interface=${linkProperties.interfaceName}, " +

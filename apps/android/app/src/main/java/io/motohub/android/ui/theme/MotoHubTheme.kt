@@ -17,6 +17,9 @@ val MotoHubLive = Color(0xFF2DD881)
 val MotoHubMirror = Color(0xFF5BA8F0)
 val MotoHubDashboard = Color(0xFF2DD881)
 val MotoHubAndroidAuto = Color(0xFF3EC8D0)
+val MotoHubImport = Color(0xFFFFA84B)
+val MotoHubManual = Color(0xFFB388FF)
+val MotoHubFavorite = Color(0xFFFFD24C)
 
 private val MotoHubColors = darkColorScheme(
     primary = Color(0xFFC8F240),

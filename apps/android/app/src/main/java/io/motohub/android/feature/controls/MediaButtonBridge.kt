@@ -23,7 +23,7 @@ import android.provider.Settings
 import android.view.KeyEvent
 import io.motohub.android.R
 import io.motohub.android.androidauto.AndroidAutoInputCodes
-import io.motohub.android.androidauto.AaInputBridge
+import io.motohub.android.androidauto.AndroidAutoPreviewRuntime
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 
@@ -367,11 +367,14 @@ class MediaButtonBridge(
     }
 
     private fun sendKey(keycode: Int) {
-        if (!AaInputBridge.sendKey(keycode)) log("[BTN] Android Auto input is not ready; key=$keycode dropped")
+        // Routes through AndroidAutoPreviewRuntime (not AaInputBridge directly) so this reaches
+        // Core's live AA session over AIDL when Android Auto is delegated there (PRO), not just
+        // a local AaInput sink that only exists when AA runs in-process (CORE).
+        if (!AndroidAutoPreviewRuntime.sendKey(keycode)) log("[BTN] Android Auto input is not ready; key=$keycode dropped")
     }
 
     private fun sendScroll(delta: Int) {
-        if (!AaInputBridge.sendScroll(delta)) log("[BTN] Android Auto input is not ready; scroll=$delta dropped")
+        if (!AndroidAutoPreviewRuntime.sendScroll(delta)) log("[BTN] Android Auto input is not ready; scroll=$delta dropped")
     }
 
     private val callback = object : MediaSession.Callback() {

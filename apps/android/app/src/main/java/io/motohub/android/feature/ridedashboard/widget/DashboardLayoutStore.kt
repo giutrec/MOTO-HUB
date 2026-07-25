@@ -59,5 +59,9 @@ class DashboardLayoutStore(context: Context) {
 
     companion object {
         private const val PREFS_NAME = "motohub_dashboard_layout"
+
+        /** Storage key used when there's no paired motorcycle at all (phone-only Ride Dashboard) -
+         *  a single shared layout, since there's no SSID to key it by. */
+        const val PHONE_ONLY_KEY = "__phone_only__"
     }
 }

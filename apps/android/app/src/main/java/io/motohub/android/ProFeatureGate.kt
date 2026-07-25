@@ -23,7 +23,7 @@ internal fun proFeatureUnavailable(context: Context, featureLabel: String): Bool
     Handler(Looper.getMainLooper()).post {
         Toast.makeText(
             context.applicationContext,
-            "$featureLabel in MOTO-HUB Pro arriverà a breve (per ora usa MOTO-HUB Core).",
+            "$featureLabel in MOTO-HUB Advanced is coming soon (use MOTO-HUB Core for now).",
             Toast.LENGTH_LONG
         ).show()
     }

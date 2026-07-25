@@ -183,11 +183,14 @@ private fun SettingsMainList(
                 description = motoHubText("Network tests and application logs"),
                 onClick = { onOpenDetail(SettingsDetail.DIAGNOSTICS) }
             )
-            MotoHubActionRow(
-                title = motoHubText("Preview Ride Dashboard"),
-                description = motoHubText("See the TFT render on this phone, using its own GPS - no T-Box needed"),
-                onClick = onOpenRideDashboardPreview
-            )
+            // Ride Dashboard is an Advanced-only feature - Core ships Mirror + Android Auto only.
+            if (BuildConfig.IS_PRO) {
+                MotoHubActionRow(
+                    title = motoHubText("Preview Ride Dashboard"),
+                    description = motoHubText("See the TFT render on this phone, using its own GPS - no T-Box needed"),
+                    onClick = onOpenRideDashboardPreview
+                )
+            }
             MotoHubActionRow(
                 title = motoHubText("About MOTO-HUB"),
                 description = "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",

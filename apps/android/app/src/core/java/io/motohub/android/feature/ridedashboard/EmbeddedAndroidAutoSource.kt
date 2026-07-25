@@ -22,6 +22,7 @@ import io.motohub.android.androidauto.AndroidAutoDisplayMode
 import io.motohub.android.androidauto.AndroidAutoNightModeStore
 import io.motohub.android.androidauto.AndroidAutoPreviewController
 import io.motohub.android.androidauto.AndroidAutoPreviewRuntime
+import io.motohub.android.androidauto.AndroidAutoReceiverOwnership
 import io.motohub.android.androidauto.TBoxScreenMargins
 import io.motohub.android.session.ProjectionEventLog
 import java.util.concurrent.atomic.AtomicBoolean
@@ -101,6 +102,7 @@ class EmbeddedAndroidAutoSource(
                 },
                 capabilityProfile = capabilityProfile
             )
+            AndroidAutoReceiverOwnership.claim("embedded-dashboard") { stop() }
             check(activeReceiver.start()) { "Android Auto local port ${AaReceiver.PORT} is unavailable" }
             receiver = activeReceiver
             AndroidAutoPreviewRuntime.install(this)
@@ -149,6 +151,7 @@ class EmbeddedAndroidAutoSource(
 
     override fun stop() {
         acceptingFrames.set(false)
+        AndroidAutoReceiverOwnership.release("embedded-dashboard")
         AndroidAutoPreviewRuntime.clear(this)
         val activeReceiver = receiver
         receiver = null

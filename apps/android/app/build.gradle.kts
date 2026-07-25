@@ -8,6 +8,17 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Encrypts string literals in the compiled bytecode (XOR + per-build random key), decrypted at
+// runtime by the small `xor` library below - complements R8, which renames identifiers but
+// leaves string constants (URLs, log messages, SSIDs, error text) sitting in the clear for
+// anyone who unzips the APK and runs `strings` on classes.dex.
+apply(plugin = "stringfog")
+
+configure<com.github.megatronking.stringfog.plugin.StringFogExtension> {
+    implementation = "com.github.megatronking.stringfog.xor.StringFogImpl"
+    fogPackages = arrayOf("io.motohub.android")
+}
+
 val localSigningPropertiesFile = rootProject.projectDir.resolve(
     "../../tooling/private/android-auto/release-signing.properties"
 )
@@ -38,8 +49,8 @@ android {
         applicationId = "io.motohub.android"
         minSdk = 34
         targetSdk = 36
-        versionCode = 86
-        versionName = "0.9.0-beta.10-build.86-r1"
+        versionCode = 92
+        versionName = "1.1.0-build.92-r1"
     }
 
     // One codebase, two editions ("identica bit by bit ... con tutte le funzionalità
@@ -59,7 +70,10 @@ android {
             dimension = "edition"
             applicationId = "io.motohub.android.pro"
             buildConfigField("boolean", "IS_PRO", "true")
-            manifestPlaceholders["appLabel"] = "MOTO-HUB Pro"
+            // Internal flavor/package name stays "pro" — only the user-visible label is
+            // "Advanced" (rebranding is display-only, see proFeatureUnavailable()).
+            manifestPlaceholders["appLabel"] = "MOTO-HUB Advanced"
+            proguardFile("proguard-rules-pro-release.pro")
         }
     }
 
@@ -91,7 +105,14 @@ android {
             )
         }
         release {
-            isMinifyEnabled = false
+            // proRelease is the distributed closed-source artifact — full R8 shrink +
+            // obfuscation. The "pro" flavor layers proguard-rules-pro-release.pro on
+            // top (see productFlavors) for extra anti-decompilation hardening not
+            // wanted on coreRelease (which nobody currently ships — Core's public
+            // export is the "debug" variant above — but keeping it minified too is
+            // harmless since Core's source is public anyway).
+            isMinifyEnabled = true
+            isShrinkResources = true
             signingConfig = signingConfigs.findByName("localRelease")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -190,15 +211,24 @@ tasks.named("preBuild").configure {
 }
 
 val exportPublicApk by tasks.registering(Copy::class) {
-    dependsOn("assembleDebug")
-    from(layout.buildDirectory.file("outputs/apk/debug/app-debug.apk"))
+    // Core's public export is the "debug" buildType (see the comment on it above) - since
+    // product flavors were introduced, AGP no longer writes a flavor-less
+    // outputs/apk/debug/app-debug.apk (that path is a stale leftover from before the flavor
+    // split and silently went un-regenerated, which meant this task was copying a day-old APK
+    // into artifacts/ without any error - always target the real per-flavor output path).
+    dependsOn("assembleCoreDebug")
+    from(layout.buildDirectory.file("outputs/apk/core/debug/app-core-debug.apk"))
     into(rootProject.projectDir.resolve("../../artifacts"))
     rename { "MOTO-HUB-${android.defaultConfig.versionName}-${android.defaultConfig.versionCode}-public.apk" }
 }
 
 val exportPrivateAndroidAutoApk by tasks.registering(Copy::class) {
-    dependsOn("assembleRelease")
-    from(layout.buildDirectory.file("outputs/apk/release/app-release.apk"))
+    // "release" is Pro's distributed closed-source artifact (see the comment on it above) -
+    // same stale-path issue as exportPublicApk above: outputs/apk/release/app-release.apk
+    // hasn't existed since flavors were introduced, so this previously silently did nothing
+    // (NO-SOURCE) instead of producing an APK.
+    dependsOn("assembleProRelease")
+    from(layout.buildDirectory.file("outputs/apk/pro/release/app-pro-release.apk"))
     into(rootProject.projectDir.resolve("../../artifacts"))
     rename { "MOTO-HUB-${android.defaultConfig.versionName}-${android.defaultConfig.versionCode}-android-auto-private.apk" }
     doFirst {
@@ -218,6 +248,7 @@ val exportPrivateAndroidAutoApk by tasks.registering(Copy::class) {
 }
 
 dependencies {
+    implementation("com.github.megatronking.stringfog:xor:5.0.0")
     implementation(project(":ipc-contract"))
     // hudlib.aar is GPL-3.0 (the EasyConn/T-Box transport). CORE-only: PRO must not link it, so
     // PRO can be distributed closed-source. PRO reaches the transport through Core via AIDL.

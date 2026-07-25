@@ -51,7 +51,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.motohub.android.feature.ridedashboard.NowPlayingListenerService
-import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.ui.components.MonoLabel
 import io.motohub.android.ui.components.MotoHubBackground
 import io.motohub.android.ui.components.MotoHubHeader
@@ -71,13 +70,14 @@ private enum class DashboardPanel(val label: String) {
  */
 @Composable
 fun DashboardWidgetPickerScreen(
-    profile: MotorcycleProfile,
+    layoutKey: String,
+    title: String,
     onBack: () -> Unit,
     onSave: (DashboardLayoutConfig) -> Unit
 ) {
     val context = LocalContext.current
     val store = remember(context) { DashboardLayoutStore(context) }
-    val initialConfig = remember(profile.ssid) { store.load(profile.ssid) }
+    val initialConfig = remember(layoutKey) { store.load(layoutKey) }
     var selectedLeftId by remember { mutableStateOf(initialConfig.leftWidgetId) }
     var selectedRightId by remember { mutableStateOf(initialConfig.rightWidgetId) }
     var targetPanel by remember { mutableStateOf(DashboardPanel.LEFT) }
@@ -105,7 +105,7 @@ fun DashboardWidgetPickerScreen(
         selectedLeftId = leftId
         selectedRightId = rightId
         val config = DashboardLayoutConfig(leftId, rightId)
-        store.save(profile.ssid, config)
+        store.save(layoutKey, config)
         onSave(config)
     }
 
@@ -144,7 +144,7 @@ fun DashboardWidgetPickerScreen(
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 MonoLabel(motoHubText("DASHBOARD CUSTOMIZATION"))
                 Text(
-                    text = profile.displayName ?: profile.ssid,
+                    text = title,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold
                 )

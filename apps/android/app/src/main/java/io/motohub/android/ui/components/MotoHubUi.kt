@@ -3,11 +3,14 @@ package io.motohub.android.ui.components
 import io.motohub.android.i18n.motoHubText
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -22,6 +25,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -38,19 +42,24 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import io.motohub.android.ui.theme.MotoHubLive
 
 enum class ConnectionState { DISCONNECTED, CONNECTING, CONNECTED }
@@ -119,6 +128,47 @@ fun ConnectionRail(state: ConnectionState, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * "MOTO-HUB CORE"/"MOTO-HUB ADVANCED" drops in from above with a physical spring bounce every
+ * time Home mounts - a single bold accent color per edition (Core's brand lime, Advanced's
+ * racing red, matching its app icon) rather than a shifting rainbow: sober, but unmistakable.
+ */
+@Composable
+private fun EditionWaveText(modifier: Modifier = Modifier) {
+    val isPro = io.motohub.android.BuildConfig.IS_PRO
+    val label = if (isPro) "MOTO-HUB ADVANCED" else "MOTO-HUB CORE"
+    val accentColor = if (isPro) EDITION_ADVANCED_RED else MaterialTheme.colorScheme.primary
+
+    val offsetY = remember { Animatable(-64f) }
+    LaunchedEffect(Unit) {
+        offsetY.animateTo(
+            targetValue = 0f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessLow
+            )
+        )
+    }
+    Text(
+        text = label,
+        modifier = modifier.offset { IntOffset(0, offsetY.value.roundToInt()) },
+        style = MaterialTheme.typography.bodySmall.copy(
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = MaterialTheme.typography.labelMedium.letterSpacing,
+            color = accentColor,
+            shadow = Shadow(
+                color = accentColor.copy(alpha = 0.45f),
+                offset = Offset(0f, 3f),
+                blurRadius = 10f
+            )
+        )
+    )
+}
+
+/** Same bright center tone as the Advanced/PRO adaptive launcher icon's radial gradient. */
+private val EDITION_ADVANCED_RED = Color(0xFFFF4A38)
+
 @Composable
 fun HubAppBar(
     motorcycleName: String?,
@@ -133,14 +183,7 @@ fun HubAppBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = if (io.motohub.android.BuildConfig.IS_PRO) "MOTO-HUB PRO" else "MOTO-HUB",
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.bodySmall,
-            letterSpacing = MaterialTheme.typography.labelMedium.letterSpacing,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        EditionWaveText()
         Row(
             modifier = Modifier
                 .clip(RoundedCornerShape(20.dp))
@@ -284,14 +327,19 @@ private fun NavIcon(label: String, active: Boolean) {
 }
 
 @Composable
-fun MonoLabel(text: String, modifier: Modifier = Modifier) {
+fun MonoLabel(
+    text: String,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign? = null
+) {
     Text(
         text = text,
         modifier = modifier,
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.primary,
         fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.SemiBold
+        fontWeight = FontWeight.SemiBold,
+        textAlign = textAlign
     )
 }
 
@@ -367,7 +415,7 @@ fun MotoHubHeader(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = if (io.motohub.android.BuildConfig.IS_PRO) "MOTO-HUB PRO" else "MOTO-HUB",
+            text = if (io.motohub.android.BuildConfig.IS_PRO) "MOTO-HUB ADVANCED" else "MOTO-HUB",
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.bodySmall,

@@ -4,7 +4,6 @@ import io.motohub.android.i18n.motoHubText
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -48,14 +47,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -85,13 +78,18 @@ import io.motohub.android.ui.components.ConnectionRail
 import io.motohub.android.ui.components.ConnectionState
 import io.motohub.android.ui.components.HubAppBar
 import io.motohub.android.ui.components.HubBottomNavigation
+import io.motohub.android.ui.components.HeroPrimaryAction
+import io.motohub.android.ui.components.HeroTile
 import io.motohub.android.ui.components.HubTab
 import io.motohub.android.ui.components.LivePill
+import io.motohub.android.ui.components.ModeIcon
 import io.motohub.android.ui.components.MonoLabel
 import io.motohub.android.ui.components.MotoHubBackground
 import io.motohub.android.ui.components.MotoHubRadioRow
 import io.motohub.android.ui.theme.MotoHubAndroidAuto
 import io.motohub.android.ui.theme.MotoHubDashboard
+import io.motohub.android.ui.theme.MotoHubImport
+import io.motohub.android.ui.theme.MotoHubManual
 import io.motohub.android.ui.theme.MotoHubMirror
 import io.motohub.android.tbox.TBoxConflictDiagnostics
 import io.motohub.android.tbox.WifiGate
@@ -146,7 +144,10 @@ fun HubHomeScreen(
     externalDisplayActive: Boolean = false,
     externalDisplayStreaming: Boolean = false,
     onStartExternalDisplay: () -> Unit = {},
-    onStopExternalDisplay: () -> Unit = {}
+    onStopExternalDisplay: () -> Unit = {},
+    // ── Phone-only mode (no T-Box) ──
+    onStartPhoneOnlyAndroidAuto: () -> Unit = {},
+    onStartPhoneOnlyRideDashboard: () -> Unit = {}
 ) {
     val session = state.session
     val destination = resolveHubDestination(session, androidAutoActive, rideDashboardActive, externalDisplayActive)
@@ -170,6 +171,7 @@ fun HubHomeScreen(
                 isConnected = connectionState == ConnectionState.CONNECTED,
                 onMotorcycleTap = { onTabSelected(HubTab.GARAGE) }
             )
+            CoreMissingBanner()
 
             Box(Modifier.weight(1f)) {
                 Crossfade(targetState = selectedTab, label = "tab") { tab ->
@@ -214,7 +216,9 @@ fun HubHomeScreen(
                             externalDisplayActive = externalDisplayActive,
                             externalDisplayStreaming = externalDisplayStreaming,
                             onStartExternalDisplay = onStartExternalDisplay,
-                            onStopExternalDisplay = onStopExternalDisplay
+                            onStopExternalDisplay = onStopExternalDisplay,
+                            onStartPhoneOnlyAndroidAuto = onStartPhoneOnlyAndroidAuto,
+                            onStartPhoneOnlyRideDashboard = onStartPhoneOnlyRideDashboard
                         )
                         HubTab.NAV -> navContent()
                         HubTab.TRIPS -> tripsContent()
@@ -275,7 +279,10 @@ private fun RideTabContent(
     externalDisplayActive: Boolean = false,
     externalDisplayStreaming: Boolean = false,
     onStartExternalDisplay: () -> Unit = {},
-    onStopExternalDisplay: () -> Unit = {}
+    onStopExternalDisplay: () -> Unit = {},
+    // ── Phone-only mode (no T-Box) ──
+    onStartPhoneOnlyAndroidAuto: () -> Unit = {},
+    onStartPhoneOnlyRideDashboard: () -> Unit = {}
 ) {
     val session = state.session
     Column(
@@ -303,7 +310,9 @@ private fun RideTabContent(
             HubDestination.PAIRING -> PairingContent(
                 onScanQr = onScanQr,
                 onImportQrPhoto = onImportQrPhoto,
-                onManualPairing = onManualPairing
+                onManualPairing = onManualPairing,
+                onStartPhoneOnlyAndroidAuto = onStartPhoneOnlyAndroidAuto,
+                onStartPhoneOnlyRideDashboard = onStartPhoneOnlyRideDashboard
             )
             HubDestination.CONNECTING -> ConnectingContent(
                 phase = session.phase,
@@ -356,7 +365,9 @@ private fun RideTabContent(
                 onOpenWifiSettings = onOpenWifiSettings,
                 onScanQr = onScanQr,
                 onImportQrPhoto = onImportQrPhoto,
-                onManualPairing = onManualPairing
+                onManualPairing = onManualPairing,
+                onStartPhoneOnlyAndroidAuto = onStartPhoneOnlyAndroidAuto,
+                onStartPhoneOnlyRideDashboard = onStartPhoneOnlyRideDashboard
             )
         }
         Spacer(Modifier.height(10.dp))
@@ -460,9 +471,11 @@ private fun MotorcycleHero(motorcycle: MotorcycleProfile, compact: Boolean) {
 private fun PairingContent(
     onScanQr: () -> Unit,
     onImportQrPhoto: () -> Unit,
-    onManualPairing: () -> Unit
+    onManualPairing: () -> Unit,
+    onStartPhoneOnlyAndroidAuto: () -> Unit = {},
+    onStartPhoneOnlyRideDashboard: () -> Unit = {}
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             MonoLabel(motoHubText("FIRST-TIME SETUP"))
             Text(motoHubText("Connect your motorcycle."), style = MaterialTheme.typography.displaySmall)
@@ -472,9 +485,66 @@ private fun PairingContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        PrimaryAction("Scan motorcycle QR code", onScanQr)
-        LinkRow("Import QR from photo", onImportQrPhoto)
-        LinkRow("No QR? Connect manually", onManualPairing)
+        HeroPrimaryAction(
+            title = "Scan motorcycle QR code",
+            subtitle = "Point your camera at the T-Box sticker",
+            icon = "QrScan",
+            color = MaterialTheme.colorScheme.primary,
+            onClick = onScanQr
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            HeroTile(
+                title = "Import QR",
+                subtitle = "Pick a saved photo",
+                icon = "Import",
+                color = MotoHubImport,
+                modifier = Modifier.weight(1f),
+                onClick = onImportQrPhoto
+            )
+            HeroTile(
+                title = "Manual setup",
+                subtitle = "Type the network in",
+                icon = "Manual",
+                color = MotoHubManual,
+                modifier = Modifier.weight(1f),
+                onClick = onManualPairing
+            )
+        }
+        // No motorcycle needs to be paired at all to use either of these - both run entirely on
+        // the phone. Ride Dashboard is Advanced-only (see ModeGrid); Android Auto works in both.
+        MonoLabel(
+            motoHubText("OR RIGHT NOW, NO MOTORCYCLE NEEDED"),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp),
+            textAlign = TextAlign.Center
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            HeroTile(
+                title = "Android Auto",
+                subtitle = "Straight to your phone",
+                icon = "Auto",
+                color = MotoHubAndroidAuto,
+                modifier = Modifier.weight(1f),
+                onClick = onStartPhoneOnlyAndroidAuto
+            )
+            if (io.motohub.android.BuildConfig.IS_PRO) {
+                HeroTile(
+                    title = "Ride Dashboard",
+                    subtitle = "Live on your phone",
+                    icon = "Dashboard",
+                    color = MotoHubDashboard,
+                    modifier = Modifier.weight(1f),
+                    onClick = onStartPhoneOnlyRideDashboard
+                )
+            }
+        }
     }
 }
 
@@ -488,7 +558,9 @@ private fun ConnectionContent(
     onOpenWifiSettings: () -> Unit,
     onScanQr: () -> Unit,
     onImportQrPhoto: () -> Unit,
-    onManualPairing: () -> Unit
+    onManualPairing: () -> Unit,
+    onStartPhoneOnlyAndroidAuto: () -> Unit = {},
+    onStartPhoneOnlyRideDashboard: () -> Unit = {}
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         errorMessage?.let { message ->
@@ -511,6 +583,11 @@ private fun ConnectionContent(
             SecondaryAction("Import QR", onImportQrPhoto, modifier = Modifier.weight(1f))
         }
         LinkRow("No QR? Connect manually", onManualPairing)
+        LinkRow("Use Android Auto without a T-Box", onStartPhoneOnlyAndroidAuto)
+        // Ride Dashboard is a PRO-only feature. CORE ships Mirror + Auto only (see ModeGrid).
+        if (io.motohub.android.BuildConfig.IS_PRO) {
+            LinkRow("Use Ride Dashboard without a T-Box", onStartPhoneOnlyRideDashboard)
+        }
     }
 }
 
@@ -751,150 +828,6 @@ private fun ModeGridItem(name: String, color: Color, modifier: Modifier, onClick
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-        }
-    }
-}
-
-/** Hand-drawn line icons matching [io.motohub.android.ui.components.NavIcon]'s style - no icon-font dependency. */
-@Composable
-private fun ModeIcon(mode: String, color: Color, iconSize: Dp = 24.dp) {
-    Canvas(Modifier.size(iconSize)) {
-        val s = size.width
-        val stroke = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-        when (mode) {
-            "OSM" -> {
-                // Folded map with a location marker: recognizable even at compact sizes.
-                drawRoundRect(
-                    color = color,
-                    topLeft = Offset(s * 0.12f, s * 0.20f),
-                    size = Size(s * 0.76f, s * 0.58f),
-                    cornerRadius = CornerRadius(s * 0.05f),
-                    style = stroke
-                )
-                drawLine(color, Offset(s * 0.37f, s * 0.20f), Offset(s * 0.37f, s * 0.78f), stroke.width)
-                drawLine(color, Offset(s * 0.64f, s * 0.20f), Offset(s * 0.64f, s * 0.78f), stroke.width)
-                drawCircle(color, radius = s * 0.09f, center = Offset(s * 0.50f, s * 0.45f), style = stroke)
-                drawLine(color, Offset(s * 0.50f, s * 0.54f), Offset(s * 0.50f, s * 0.67f), stroke.width, cap = StrokeCap.Round)
-            }
-            "MapLibre" -> {
-                // Three connected vector nodes, reflecting MapLibre's vector-map engine.
-                drawLine(color, Offset(s * 0.20f, s * 0.72f), Offset(s * 0.46f, s * 0.28f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.46f, s * 0.28f), Offset(s * 0.78f, s * 0.60f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.20f, s * 0.72f), Offset(s * 0.78f, s * 0.60f), stroke.width, cap = StrokeCap.Round)
-                drawCircle(color, radius = s * 0.10f, center = Offset(s * 0.20f, s * 0.72f))
-                drawCircle(color, radius = s * 0.10f, center = Offset(s * 0.46f, s * 0.28f))
-                drawCircle(color, radius = s * 0.10f, center = Offset(s * 0.78f, s * 0.60f))
-            }
-            "Mirror" -> {
-                drawRoundRect(
-                    color = color,
-                    topLeft = Offset(s * 0.28f, s * 0.06f),
-                    size = Size(s * 0.44f, s * 0.88f),
-                    cornerRadius = CornerRadius(s * 0.08f),
-                    style = stroke
-                )
-                drawLine(color, Offset(s * 0.42f, s * 0.82f), Offset(s * 0.58f, s * 0.82f), stroke.width, cap = StrokeCap.Round)
-            }
-            "Dashboard" -> {
-                drawArc(
-                    color = color,
-                    startAngle = 150f,
-                    sweepAngle = 240f,
-                    useCenter = false,
-                    style = stroke,
-                    topLeft = Offset(s * 0.08f, s * 0.12f),
-                    size = Size(s * 0.84f, s * 0.84f)
-                )
-                drawLine(color, Offset(s * 0.5f, s * 0.54f), Offset(s * 0.7f, s * 0.32f), stroke.width, cap = StrokeCap.Round)
-                drawCircle(color, radius = s * 0.055f, center = Offset(s * 0.5f, s * 0.54f))
-            }
-            "Auto" -> {
-                drawLine(color, Offset(s * 0.12f, s * 0.6f), Offset(s * 0.22f, s * 0.38f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.22f, s * 0.38f), Offset(s * 0.38f, s * 0.28f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.38f, s * 0.28f), Offset(s * 0.62f, s * 0.28f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.62f, s * 0.28f), Offset(s * 0.78f, s * 0.38f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.78f, s * 0.38f), Offset(s * 0.88f, s * 0.6f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.12f, s * 0.6f), Offset(s * 0.88f, s * 0.6f), stroke.width, cap = StrokeCap.Round)
-                drawCircle(color, radius = s * 0.09f, center = Offset(s * 0.28f, s * 0.62f), style = stroke)
-                drawCircle(color, radius = s * 0.09f, center = Offset(s * 0.72f, s * 0.62f), style = stroke)
-            }
-            "External" -> {
-                // USB connector icon: a rectangle with a trident fork.
-                drawRoundRect(
-                    color = color,
-                    topLeft = Offset(s * 0.22f, s * 0.18f),
-                    size = Size(s * 0.56f, s * 0.44f),
-                    cornerRadius = CornerRadius(s * 0.06f),
-                    style = stroke
-                )
-                drawLine(color, Offset(s * 0.50f, s * 0.62f), Offset(s * 0.50f, s * 0.84f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.36f, s * 0.72f), Offset(s * 0.50f, s * 0.84f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.64f, s * 0.72f), Offset(s * 0.50f, s * 0.84f), stroke.width, cap = StrokeCap.Round)
-            }
-            "Preview" -> {
-                drawRoundRect(
-                    color = color,
-                    topLeft = Offset(s * 0.12f, s * 0.14f),
-                    size = Size(s * 0.76f, s * 0.58f),
-                    cornerRadius = CornerRadius(s * 0.08f),
-                    style = stroke
-                )
-                drawLine(color, Offset(s * 0.38f, s * 0.86f), Offset(s * 0.62f, s * 0.86f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.5f, s * 0.72f), Offset(s * 0.5f, s * 0.86f), stroke.width, cap = StrokeCap.Round)
-                // Play marker inside the screen makes this unmistakably a preview.
-                drawLine(color, Offset(s * 0.44f, s * 0.31f), Offset(s * 0.44f, s * 0.55f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.44f, s * 0.31f), Offset(s * 0.64f, s * 0.43f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.64f, s * 0.43f), Offset(s * 0.44f, s * 0.55f), stroke.width, cap = StrokeCap.Round)
-            }
-            "Controls" -> {
-                // Handlebar silhouette with two grips and a central control stem.
-                drawLine(color, Offset(s * 0.12f, s * 0.34f), Offset(s * 0.30f, s * 0.34f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.70f, s * 0.34f), Offset(s * 0.88f, s * 0.34f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.30f, s * 0.34f), Offset(s * 0.40f, s * 0.48f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.70f, s * 0.34f), Offset(s * 0.60f, s * 0.48f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.40f, s * 0.48f), Offset(s * 0.60f, s * 0.48f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.50f, s * 0.48f), Offset(s * 0.50f, s * 0.82f), stroke.width, cap = StrokeCap.Round)
-                drawCircle(color, radius = s * 0.045f, center = Offset(s * 0.28f, s * 0.34f))
-                drawCircle(color, radius = s * 0.045f, center = Offset(s * 0.72f, s * 0.34f))
-            }
-            "Customize" -> {
-                // Three adjustable layout sliders, representing dashboard setup.
-                val rows = floatArrayOf(0.28f, 0.50f, 0.72f)
-                val knobs = floatArrayOf(0.66f, 0.38f, 0.56f)
-                rows.forEachIndexed { index, row ->
-                    drawLine(color, Offset(s * 0.14f, s * row), Offset(s * 0.86f, s * row), stroke.width, cap = StrokeCap.Round)
-                    drawCircle(color, radius = s * 0.085f, center = Offset(s * knobs[index], s * row), style = stroke)
-                }
-            }
-            "Route" -> {
-                // Route polyline ending in a destination pin.
-                drawLine(color, Offset(s * 0.16f, s * 0.76f), Offset(s * 0.36f, s * 0.58f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.36f, s * 0.58f), Offset(s * 0.54f, s * 0.68f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.54f, s * 0.68f), Offset(s * 0.76f, s * 0.34f), stroke.width, cap = StrokeCap.Round)
-                drawCircle(color, radius = s * 0.075f, center = Offset(s * 0.16f, s * 0.76f), style = stroke)
-                drawCircle(color, radius = s * 0.10f, center = Offset(s * 0.76f, s * 0.28f), style = stroke)
-                drawLine(color, Offset(s * 0.76f, s * 0.38f), Offset(s * 0.76f, s * 0.52f), stroke.width, cap = StrokeCap.Round)
-            }
-            "Gps" -> {
-                // Generic GPS/navigation marker with a heading arrow.
-                drawCircle(color, radius = s * 0.30f, center = Offset(s * 0.5f, s * 0.52f), style = stroke)
-                drawLine(color, Offset(s * 0.5f, s * 0.10f), Offset(s * 0.5f, s * 0.25f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.5f, s * 0.10f), Offset(s * 0.40f, s * 0.20f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.5f, s * 0.10f), Offset(s * 0.60f, s * 0.20f), stroke.width, cap = StrokeCap.Round)
-                drawCircle(color, radius = s * 0.065f, center = Offset(s * 0.5f, s * 0.52f))
-            }
-            "Clear" -> {
-                // Map tile with a clear/remove cross.
-                drawRoundRect(
-                    color = color,
-                    topLeft = Offset(s * 0.16f, s * 0.16f),
-                    size = Size(s * 0.68f, s * 0.68f),
-                    cornerRadius = CornerRadius(s * 0.08f),
-                    style = stroke
-                )
-                drawLine(color, Offset(s * 0.30f, s * 0.30f), Offset(s * 0.70f, s * 0.70f), stroke.width, cap = StrokeCap.Round)
-                drawLine(color, Offset(s * 0.70f, s * 0.30f), Offset(s * 0.30f, s * 0.70f), stroke.width, cap = StrokeCap.Round)
-            }
         }
     }
 }
