@@ -289,13 +289,13 @@ The library implements EasyConn discovery, the T-Box handshake, control channels
 
 This section is intentionally explicit because the project combines original MOTO-HUB code with external components and research.
 
-- `ridedaemon-lib` and the reference Android project are distributed under GPL-3.0 according to their repositories and license files.
-- The generated `hudlib.aar` is derived from the GPL-3.0-only ridedaemon fork. A public distribution containing it must include the corresponding source and comply with the applicable GPL obligations.
+- **MOTO-HUB (this repository) is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0)** — see [`LICENSE`](LICENSE). AGPL-3.0 was chosen because the repository combines GPL-3.0 material (`hudlib.aar`, the T-Box transport) with AGPL-3.0-derived material (`aa/`, the Android Auto receiver technique ported from `headunit-revived`); AGPL-3.0 satisfies both components' obligations for a combined work and additionally covers network-facing use.
+- `ridedaemon-lib` and the reference Android project are distributed under AGPL-3.0 according to their repositories and license files; the generated `hudlib.aar` is derived from that fork. Redistributing it (including inside this repository) must comply with the applicable AGPL obligations — the corresponding source must remain available to anyone who interacts with it, including over a network.
 - The `open-cfmoto` project used for research does not contain a license file in the reviewed source snapshot. No code from that project should be published as part of MOTO-HUB until its redistribution terms and attribution requirements are verified.
-- The final MOTO-HUB license and repository notices must be selected before broader public distribution.
+- **MOTO-HUB Pro** is a separate, closed-source companion application maintained in a private repository. It contains no GPL-3.0 or AGPL-3.0 code — it reaches this repository's T-Box transport and Android Auto receiver exclusively through a documented Binder IPC boundary (`ipc-contract/`, `IpcBridgeService`), which is why it can be distributed under different terms. Pro requires Core to be installed to function; Core does not require Pro.
 - CFMOTO, EasyConn, MotoPlay, Android Auto, Google, and related names remain the property of their respective owners. MOTO-HUB is an independent project and must not imply official support.
 
-This README is a publication draft, not a legal opinion. The final repository should include the exact license texts and notices required by every distributed component.
+This README documents the project's licensing rationale; it is not a substitute for legal advice.
 
 ## Privacy Notes
 

@@ -196,6 +196,7 @@ func TestSessionStopDoesNotWaitForProtocolReadLock(t *testing.T) {
 	session := &session{pxc: peer}
 
 	session.pxcMu.Lock()
+	defer session.pxcMu.Unlock()
 	finished := make(chan struct{})
 	go func() {
 		session.stop()
@@ -207,5 +208,4 @@ func TestSessionStopDoesNotWaitForProtocolReadLock(t *testing.T) {
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("session.stop() waited for the protocol mutex")
 	}
-	session.pxcMu.Unlock()
 }

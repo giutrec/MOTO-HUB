@@ -140,7 +140,6 @@ fun HubHomeScreen(
     navContent: @Composable () -> Unit,
     tripsContent: @Composable () -> Unit,
     garageContent: @Composable () -> Unit,
-    cfContent: @Composable () -> Unit,
     settingsContent: @Composable () -> Unit,
     // ── External display (USB AOA) ──
     aoaAccessoryConnected: Boolean = false,
@@ -220,7 +219,6 @@ fun HubHomeScreen(
                         HubTab.NAV -> navContent()
                         HubTab.TRIPS -> tripsContent()
                         HubTab.GARAGE -> garageContent()
-                        HubTab.CF -> cfContent()
                         HubTab.SETTINGS -> settingsContent()
                     }
                 }
@@ -713,7 +711,10 @@ private fun ModeGrid(
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         ModeGridItem("Mirror", MotoHubMirror, Modifier.weight(1f), onMirror)
-        ModeGridItem("Dashboard", MotoHubDashboard, Modifier.weight(1f), onDashboard)
+        // Ride Dashboard is a PRO-only feature. CORE ships Mirror + Auto only.
+        if (io.motohub.android.BuildConfig.IS_PRO) {
+            ModeGridItem("Dashboard", MotoHubDashboard, Modifier.weight(1f), onDashboard)
+        }
         ModeGridItem("Auto", MotoHubAndroidAuto, Modifier.weight(1f), onAndroidAuto)
         if (onExternal != null) {
             ModeGridItem("External", MotoHubDashboard, Modifier.weight(1f), onExternal)
@@ -1167,7 +1168,11 @@ private fun ActiveSessionContent(
                     }
                 }
             }
-            if (!rideDashboardAndroidAutoActive) {
+            // Gated on the selected map source (same signal as the trip/route pickers above),
+            // not just on whether embedded AA is currently streaming — with Android Auto as the
+            // map source there is no track overlay possible at all, so the toggle must not
+            // appear the moment that source is selected, not only once AA starts streaming.
+            if (rideDashboardMapSource != RideDashboardMapSource.ANDROID_AUTO) {
                 ToggleCard(
                     title = motoHubText("Show GPS track"),
                     description = motoHubText("Draw recorded points on the dashboard map."),

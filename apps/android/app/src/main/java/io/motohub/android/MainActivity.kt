@@ -60,8 +60,6 @@ import io.motohub.android.feature.about.MOTO_HUB_GITHUB_URL
 import io.motohub.android.feature.garage.GarageTabContent
 import io.motohub.android.feature.garage.MotorcycleDetailsScreen
 import io.motohub.android.feature.garage.TBoxCapabilityScreen
-import io.motohub.android.feature.cfmoto.CfmotoCloudViewModel
-import io.motohub.android.feature.cfmoto.CfmotoTabContent
 import io.motohub.android.feature.home.HubHomeScreen
 import io.motohub.android.feature.home.HubViewModel
 import io.motohub.android.feature.navigation.NavigationTabContent
@@ -143,10 +141,19 @@ private val TBoxScreenMarginsSaver = listSaver<TBoxScreenMargins, Int>(
 
 class MainActivity : ComponentActivity() {
     private val viewModel: HubViewModel by viewModels()
-    private val cfmotoCloudViewModel: CfmotoCloudViewModel by viewModels()
     private val diagnosticsViewModel: NetworkDiagnosticsViewModel by viewModels()
    private val androidAutoLaunchPending = AtomicBoolean(false)
    private val rideDashboardAndroidAutoLaunchPending = AtomicBoolean(false)
+   // CORE runs Android Auto locally (no-op bridge); PRO delegates it to CORE over AIDL.
+   private val androidAutoCoreBridge by lazy {
+       io.motohub.android.androidauto.createAndroidAutoCoreBridge(applicationContext)
+   }
+   // CORE runs Ride Dashboard's embedded Android Auto panel locally (no-op bridge); PRO
+   // delegates the whole dashboard-with-AA session to Core over AIDL — same reasoning as
+   // androidAutoCoreBridge above (the AGPL receiver can only run in Core).
+   private val rideDashboardEmbeddedAaBridge by lazy {
+       io.motohub.android.feature.ridedashboard.createRideDashboardEmbeddedAaBridge(applicationContext)
+   }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -160,7 +167,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             MotoHubTheme {
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
-                val cfmotoCloudState by cfmotoCloudViewModel.state.collectAsStateWithLifecycle()
                 val diagnosticsState by diagnosticsViewModel.uiState.collectAsStateWithLifecycle()
                 val projectionEvents by ProjectionEventLog.events.collectAsStateWithLifecycle()
                 val androidAutoState by AndroidAutoRuntime.state.collectAsStateWithLifecycle()
@@ -1037,6 +1043,9 @@ class MainActivity : ComponentActivity() {
                         },
                         onStartProjection = {
                             ProjectionEventLog.record("MIRROR", "User selected mirroring mode.")
+                            // PRO has no local GPL transport, but Mirroring streams through Core over
+                            // AIDL (AidlTBoxTransport → Core's startVideoSession/offerAccessUnit), so
+                            // this runs identically in both flavors.
                             val notificationGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
                                 ContextCompat.checkSelfPermission(
                                     context,
@@ -1052,6 +1061,11 @@ class MainActivity : ComponentActivity() {
                         rideDashboardActive = rideDashboardActive,
                         rideDashboardStreaming = rideDashboardStreaming,
                         onStartRideDashboard = {
+                            // Runs in both flavors: PRO streams the dashboard through CORE over the
+                            // AIDL transport (same path as Mirroring). When the map panel is
+                            // Android Auto, PRO can't run that panel locally (AGPL receiver) and
+                            // instead delegates the ENTIRE dashboard session to Core — see
+                            // rideDashboardEmbeddedAaBridge below.
                             // Settings → Navigation is the canonical source for the map engine;
                             // refresh the remembered home-screen value before launching so a
                             // MapLibre selection made outside the home picker is honored.
@@ -1062,27 +1076,36 @@ class MainActivity : ComponentActivity() {
                             if (selectedMapSource == RideDashboardMapSource.ANDROID_AUTO) {
                                 RideDashboardTrackOverlayRuntime.setEnabled(false)
                             }
-                            val notificationGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                                ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.POST_NOTIFICATIONS
-                                ) == PackageManager.PERMISSION_GRANTED
-                            if (notificationGranted) {
-                                if (MotoHubSettings.autoRecordTrips(context)) {
-                                    TripRecordingService.startAuto(
-                                        context,
-                                        state.session.motorcycle?.id,
-                                        TripRecordingSource.RIDE_DASHBOARD
-                                    )
-                                }
+                            val delegateToCore = selectedMapSource == RideDashboardMapSource.ANDROID_AUTO &&
+                                rideDashboardEmbeddedAaBridge.delegatesToCore
+                            if (delegateToCore) {
                                 viewModel.onRideDashboardRequested()
-                               RideDashboardSessionService.start(context, selectedMapSource)
-                               if (selectedMapSource == RideDashboardMapSource.ANDROID_AUTO) {
-                                    requestMicAndStart("ride")
-                               }
+                                rideDashboardEmbeddedAaBridge.start { message ->
+                                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                                }
                             } else {
-                                rideDashboardPermissionPending = true
-                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                val notificationGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                                    ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.POST_NOTIFICATIONS
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                if (notificationGranted) {
+                                    if (MotoHubSettings.autoRecordTrips(context)) {
+                                        TripRecordingService.startAuto(
+                                            context,
+                                            state.session.motorcycle?.id,
+                                            TripRecordingSource.RIDE_DASHBOARD
+                                        )
+                                    }
+                                    viewModel.onRideDashboardRequested()
+                                    RideDashboardSessionService.start(context, selectedMapSource)
+                                    if (selectedMapSource == RideDashboardMapSource.ANDROID_AUTO) {
+                                        requestMicAndStart("ride")
+                                    }
+                                } else {
+                                    rideDashboardPermissionPending = true
+                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                }
                             }
                         },
                         onCustomizeRideDashboard = {
@@ -1122,7 +1145,13 @@ class MainActivity : ComponentActivity() {
                                 "User requested Ride Dashboard stop."
                             )
                             RideDashboardTrackOverlayRuntime.clearLoadedTrip()
-                            RideDashboardSessionService.stop(context)
+                            if (rideDashboardMapSource == RideDashboardMapSource.ANDROID_AUTO &&
+                                rideDashboardEmbeddedAaBridge.delegatesToCore
+                            ) {
+                                rideDashboardEmbeddedAaBridge.stop()
+                            } else {
+                                RideDashboardSessionService.stop(context)
+                            }
                             reconnectAfterModeStop("Ride Dashboard")
                         },
                         showRecordedTrackOnDashboard = showRecordedTrackOnDashboard,
@@ -1152,7 +1181,11 @@ class MainActivity : ComponentActivity() {
                         },
                         onStopAndroidAuto = {
                             ProjectionEventLog.record("ANDROID_AUTO", "User requested Android Auto stop.")
-                            AndroidAutoSessionService.stop(context)
+                            if (androidAutoCoreBridge.delegatesToCore) {
+                                androidAutoCoreBridge.stop()
+                            } else {
+                                AndroidAutoSessionService.stop(context)
+                            }
                             reconnectAfterModeStop("Android Auto")
                         },
                         onOpenAndroidAutoPreview = {
@@ -1284,15 +1317,6 @@ class MainActivity : ComponentActivity() {
                                        editorProfileId = profileId
                                     }
                                 }
-                            )
-                        },
-                        cfContent = {
-                            CfmotoTabContent(
-                                state = cfmotoCloudState,
-                                onLogin = cfmotoCloudViewModel::login,
-                                onRefresh = cfmotoCloudViewModel::refresh,
-                                onLogout = cfmotoCloudViewModel::logout,
-                                onSelectVehicle = cfmotoCloudViewModel::selectVehicle
                             )
                         },
                         settingsContent = {
@@ -1428,6 +1452,16 @@ class MainActivity : ComponentActivity() {
     }
 
   private fun startAndroidAuto() {
+      // PRO holds no AGPL AA code and no GPL transport, so it can't run the AA pipeline locally.
+      // It asks CORE to run its own full AA session over AIDL — the video is produced and pushed
+      // to the T-Box entirely inside CORE, never touching this process.
+      if (androidAutoCoreBridge.delegatesToCore) {
+          ProjectionEventLog.record("ANDROID_AUTO", "Delegating Android Auto startup to Core.")
+          androidAutoCoreBridge.start { message ->
+              android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_LONG).show()
+          }
+          return
+      }
       if (!androidAutoLaunchPending.compareAndSet(false, true)) {
             ProjectionEventLog.warning("ANDROID_AUTO", "Start request ignored because another launch is pending.")
             return
@@ -1537,6 +1571,10 @@ class MainActivity : ComponentActivity() {
 
    override fun onDestroy() {
         ProjectionEventLog.record("UI", "Main activity destroyed. changingConfigurations=$isChangingConfigurations")
+        if (!isChangingConfigurations) {
+            androidAutoCoreBridge.release()
+            rideDashboardEmbeddedAaBridge.release()
+        }
         super.onDestroy()
     }
 

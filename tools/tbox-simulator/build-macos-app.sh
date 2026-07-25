@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 APP="$ROOT/MOTO-HUB-TBox-Simulator.app"
 CORE="$ROOT/.build/tbox-simulator-core"
+ICON="$ROOT/MOTO-HUB-TBox-Simulator.icns"
 
 cd "$ROOT"
 go build -o "$CORE" ./cmd/tbox-simulator
@@ -13,6 +14,9 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$CORE" "$APP/Contents/MacOS/tbox-simulator-core"
 cp macos-app/.build/release/MOTO-HUB-TBox-Simulator "$APP/Contents/MacOS/MOTO-HUB-TBox-Simulator"
+if [ -f "$ICON" ]; then
+    cp "$ICON" "$APP/Contents/Resources/MOTO-HUB-TBox-Simulator.icns"
+fi
 chmod +x "$APP/Contents/MacOS/"*
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
@@ -21,6 +25,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <plist version="1.0">
 <dict>
 	<key>CFBundleExecutable</key>
+	<string>MOTO-HUB-TBox-Simulator</string>
+	<key>CFBundleIconFile</key>
 	<string>MOTO-HUB-TBox-Simulator</string>
 	<key>CFBundleIdentifier</key>
 	<string>io.motohub.tbox-simulator</string>

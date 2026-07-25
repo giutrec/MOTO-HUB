@@ -698,7 +698,16 @@ func (s *session) stop() {
 		}
 		if player != nil && player.Process != nil {
 			_ = player.Process.Kill()
-			_ = player.Wait()
+			done := make(chan struct{})
+			go func() {
+				_ = player.Wait()
+				close(done)
+			}()
+			select {
+			case <-done:
+			case <-time.After(time.Second):
+				s.log.Printf("ffplay did not exit within 1s after SIGKILL")
+			}
 		}
 		if s.onStop != nil {
 			s.onStop(s)
@@ -1188,6 +1197,8 @@ func (s *session) readStream() {
 		if s.stream == nil {
 			return
 		}
+		// 30s idle timeout detects phone disconnect without TCP RST.
+		_ = s.stream.SetDeadline(time.Now().Add(30 * time.Second))
 		poll := make([]byte, 8)
 		binary.LittleEndian.PutUint16(poll[0:2], streamPoll)
 		if _, err := s.stream.Write(poll); err != nil {
@@ -1257,7 +1268,7 @@ func (s *session) sendTouch(request touchRequest) error {
 	if err := writeMedia(s.media, mediaTouch, payload); err != nil {
 		return err
 	}
-	_ = s.media.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_ = s.media.SetReadDeadline(time.Now().Add(2 * time.Second))
 	_, _ = readMedia(s.media)
 	_ = s.media.SetReadDeadline(time.Time{})
 	s.log.Printf("touch %s p%d (%d,%d)", request.Action, request.PointerID, request.X, request.Y)
@@ -1501,7 +1512,7 @@ func encodeEasyConnFrame(code int, separator uint16, body []byte) []byte {
 	total := len(body) + 16
 	header := make([]byte, 16)
 	binary.LittleEndian.PutUint16(header[0:2], uint16(code))
-	binary.LittleEndian.PutUint16(header[3:5], separator)
+	binary.LittleEndian.PutUint16(header[2:4], separator)
 	binary.LittleEndian.PutUint16(header[4:6], uint16(total))
 	binary.LittleEndian.PutUint16(header[8:10], uint16(total^16))
 	binary.LittleEndian.PutUint16(header[11:13], separator)
@@ -1534,13 +1545,6 @@ func clamp(value, low, high int) int {
 		return high
 	}
 	return value
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func firstPositive(values ...int) int {

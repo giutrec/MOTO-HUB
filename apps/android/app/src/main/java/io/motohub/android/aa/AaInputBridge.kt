@@ -24,6 +24,16 @@ object AaInputBridge {
 
     fun isReady(): Boolean = activeInput != null
 
+    /**
+     * PRO flavor: Android Auto runs in CORE, so there is no local [AaInput] to install — but the
+     * shared preview UI gates its controls on [ready]. This lets the AIDL bridge mark the input
+     * channel ready/not-ready to reflect CORE's session. Keys/scroll/night are routed to CORE
+     * through the installed [AndroidAutoPreviewController], not through [activeInput].
+     */
+    fun setRemoteReady(ready: Boolean) {
+        mutableReady.value = ready
+    }
+
     fun sendKey(keycode: Int): Boolean {
         val input = activeInput ?: return false
         input.sendKey(keycode)

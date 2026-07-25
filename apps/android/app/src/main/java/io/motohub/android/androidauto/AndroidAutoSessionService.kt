@@ -942,6 +942,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         private const val WAKE_LOCK_TIMEOUT_MS = 4 * 60 * 60 * 1_000L
 
         fun start(context: Context) {
+            if (io.motohub.android.proFeatureUnavailable(context, "Android Auto")) return
             ContextCompat.startForegroundService(
                 context,
                 Intent(context, AndroidAutoSessionService::class.java)

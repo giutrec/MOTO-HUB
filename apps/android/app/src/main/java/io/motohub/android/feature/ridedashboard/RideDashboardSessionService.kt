@@ -270,7 +270,12 @@ class RideDashboardSessionService : Service() {
             } ?: handle.host.packageName.substringAfterLast('.').ifBlank { handle.motorcycle.ssid }
             val androidAutoDisplayMode = AndroidAutoDisplayModeStore(this).load(handle.motorcycle)
             val androidAutoResolutionMode = MotoHubSettings.androidAutoResolution(this)
-            val activeEmbeddedAndroidAuto = if (mapSource == RideDashboardMapSource.ANDROID_AUTO) {
+            // Embedded Android Auto as the dashboard map panel runs the AGPL AA receiver in-process.
+            // PRO holds none of that code (AA runs in CORE), so this stays CORE-only; in PRO an
+            // ANDROID_AUTO map source simply renders without the embedded AA panel.
+            val activeEmbeddedAndroidAuto = if (
+                mapSource == RideDashboardMapSource.ANDROID_AUTO && !io.motohub.android.BuildConfig.IS_PRO
+            ) {
                 EmbeddedAndroidAutoSource(
                     context = this,
                     capabilityProfile = AndroidAutoCapabilityProfiles.select(
