@@ -236,7 +236,6 @@ fun HubHomeScreen(
         }
     }
 }
-
 @Composable
 private fun RideTabContent(
     state: HubUiState,
@@ -308,6 +307,7 @@ private fun RideTabContent(
 
         when (destination) {
             HubDestination.PAIRING -> PairingContent(
+                errorMessage = session.message.takeIf { session.phase == SessionPhase.ERROR },
                 onScanQr = onScanQr,
                 onImportQrPhoto = onImportQrPhoto,
                 onManualPairing = onManualPairing,
@@ -469,6 +469,7 @@ private fun MotorcycleHero(motorcycle: MotorcycleProfile, compact: Boolean) {
 
 @Composable
 private fun PairingContent(
+    errorMessage: String? = null,
     onScanQr: () -> Unit,
     onImportQrPhoto: () -> Unit,
     onManualPairing: () -> Unit,
@@ -476,6 +477,31 @@ private fun PairingContent(
     onStartPhoneOnlyRideDashboard: () -> Unit = {}
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // Without a saved motorcycle yet, resolveHubDestination always stays on this screen
+        // (session.motorcycle == null takes priority over SessionPhase.ERROR) - so this is the
+        // ONLY place a failed "Import QR" (unreadable photo, or a photo with no valid EasyConn
+        // QR code in it) can ever be shown; it was previously silently dropped here.
+        errorMessage?.let { message ->
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)),
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        motoHubText("IMPORT FAILED"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                }
+            }
+        }
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             MonoLabel(motoHubText("FIRST-TIME SETUP"))
             Text(motoHubText("Connect your motorcycle."), style = MaterialTheme.typography.displaySmall)
@@ -574,19 +600,74 @@ private fun ConnectionContent(
                 onOpenWifiSettings = onOpenWifiSettings
             )
         }
-        PrimaryAction("Connect", onConnect)
+        HeroPrimaryAction(
+            title = "Connect",
+            subtitle = "Join the T-Box network and start",
+            icon = "External",
+            color = MaterialTheme.colorScheme.primary,
+            onClick = onConnect
+        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            SecondaryAction("Scan new QR", onScanQr, modifier = Modifier.weight(1f))
-            SecondaryAction("Import QR", onImportQrPhoto, modifier = Modifier.weight(1f))
+            HeroTile(
+                title = "Scan new QR",
+                subtitle = "A different motorcycle",
+                icon = "QrScan",
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f),
+                onClick = onScanQr
+            )
+            HeroTile(
+                title = "Import QR",
+                subtitle = "Pick a saved photo",
+                icon = "Import",
+                color = MotoHubImport,
+                modifier = Modifier.weight(1f),
+                onClick = onImportQrPhoto
+            )
         }
-        LinkRow("No QR? Connect manually", onManualPairing)
-        LinkRow("Use Android Auto without a T-Box", onStartPhoneOnlyAndroidAuto)
-        // Ride Dashboard is a PRO-only feature. CORE ships Mirror + Auto only (see ModeGrid).
-        if (io.motohub.android.BuildConfig.IS_PRO) {
-            LinkRow("Use Ride Dashboard without a T-Box", onStartPhoneOnlyRideDashboard)
+        HeroTile(
+            title = "No QR? Connect manually",
+            subtitle = "Type the network in",
+            icon = "Manual",
+            color = MotoHubManual,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onManualPairing
+        )
+        // No motorcycle needs to be connected at all to use either of these - both run entirely
+        // on the phone. Ride Dashboard is Advanced-only (see ModeGrid); Android Auto works in both.
+        MonoLabel(
+            motoHubText("OR RIGHT NOW, WITHOUT THE T-BOX"),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp),
+            textAlign = TextAlign.Center
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            HeroTile(
+                title = "Android Auto",
+                subtitle = "Straight to your phone",
+                icon = "Auto",
+                color = MotoHubAndroidAuto,
+                modifier = Modifier.weight(1f),
+                onClick = onStartPhoneOnlyAndroidAuto
+            )
+            // Ride Dashboard is a PRO-only feature. CORE ships Mirror + Auto only (see ModeGrid).
+            if (io.motohub.android.BuildConfig.IS_PRO) {
+                HeroTile(
+                    title = "Ride Dashboard",
+                    subtitle = "Live on your phone",
+                    icon = "Dashboard",
+                    color = MotoHubDashboard,
+                    modifier = Modifier.weight(1f),
+                    onClick = onStartPhoneOnlyRideDashboard
+                )
+            }
         }
     }
 }
@@ -776,6 +857,14 @@ private fun ModeSelectionContent(
     }
 }
 
+private data class ModeChoice(
+    val title: String,
+    val subtitle: String,
+    val icon: String,
+    val color: Color,
+    val onClick: () -> Unit
+)
+
 @Composable
 private fun ModeGrid(
     onMirror: () -> Unit,
@@ -783,51 +872,38 @@ private fun ModeGrid(
     onAndroidAuto: () -> Unit,
     onExternal: (() -> Unit)? = null
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        ModeGridItem("Mirror", MotoHubMirror, Modifier.weight(1f), onMirror)
+    val modes = buildList {
+        add(ModeChoice("Mirror", "Mirror your phone screen", "Mirror", MotoHubMirror, onMirror))
         // Ride Dashboard is a PRO-only feature. CORE ships Mirror + Auto only.
         if (io.motohub.android.BuildConfig.IS_PRO) {
-            ModeGridItem("Dashboard", MotoHubDashboard, Modifier.weight(1f), onDashboard)
+            add(ModeChoice("Dashboard", "Gauges, map, and widgets", "Dashboard", MotoHubDashboard, onDashboard))
         }
-        ModeGridItem("Auto", MotoHubAndroidAuto, Modifier.weight(1f), onAndroidAuto)
+        add(ModeChoice("Android Auto", "The full Google Android Auto", "Auto", MotoHubAndroidAuto, onAndroidAuto))
         if (onExternal != null) {
-            ModeGridItem("External", MotoHubDashboard, Modifier.weight(1f), onExternal)
+            add(ModeChoice("External", "Show on a connected USB display", "External", MotoHubImport, onExternal))
         }
     }
-}
-
-@Composable
-private fun ModeGridItem(name: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
-    Card(
-        modifier = modifier.clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        shape = MaterialTheme.shapes.large
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 26.dp, horizontal = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .background(color.copy(alpha = 0.1f), RoundedCornerShape(18.dp)),
-                contentAlignment = Alignment.Center
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        modes.chunked(2).forEach { rowModes ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                ModeIcon(name, color, iconSize = 32.dp)
+                rowModes.forEach { mode ->
+                    HeroTile(
+                        title = mode.title,
+                        subtitle = mode.subtitle,
+                        icon = mode.icon,
+                        color = mode.color,
+                        modifier = Modifier.weight(1f),
+                        onClick = mode.onClick
+                    )
+                }
+                // Keeps a lone last item at half width instead of stretching it full-width,
+                // so the grid reads as consistent 2-up tiles regardless of how many modes
+                // are available (2, 3, or 4 depending on flavor/AOA accessory state).
+                if (rowModes.size == 1) Spacer(Modifier.weight(1f))
             }
-            Text(
-                name,
-                style = MaterialTheme.typography.titleMedium,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
     }
 }
@@ -1005,15 +1081,6 @@ private fun ActiveSessionContent(
                         accentColor = MotoHubAndroidAuto,
                         icon = "Auto",
                         onClick = onOpenControls
-                    )
-                }
-                if (rideDashboardAndroidAutoActive && rideDashboardAndroidAutoStreaming) {
-                    ActiveSessionAction(
-                        title = motoHubText("AA fullscreen controls"),
-                        description = motoHubText("Open Android Auto's touch controls full-screen."),
-                        accentColor = MotoHubAndroidAuto,
-                        icon = "Auto",
-                        onClick = onOpenAndroidAutoFullscreenControls
                     )
                 }
             }
@@ -1512,16 +1579,4 @@ private fun StopAction(text: String, onClick: () -> Unit) {
     ) {
         Text(text, fontWeight = FontWeight.Bold)
     }
-}
-
-@Composable
-private fun LinkRow(text: String, onClick: () -> Unit) {
-    Text(
-        text = text,
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .padding(vertical = 6.dp),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
-    )
 }

@@ -63,7 +63,12 @@ fun AndroidAutoPreviewScreen(onBack: () -> Unit, startFullscreen: Boolean = fals
     val fullRuntimeState by AndroidAutoRuntime.state.collectAsStateWithLifecycle()
     val embeddedRuntimeState by RideDashboardAndroidAutoRuntime.state.collectAsStateWithLifecycle()
     val inputReady by AaInputBridge.ready.collectAsStateWithLifecycle()
-    var fullscreen by rememberSaveable { mutableStateOf(startFullscreen) }
+    // Keyed by startFullscreen: when Core is already running and Advanced fires a second
+    // deep-link with a different value (e.g. windowed "Preview & touch" right after fullscreen
+    // "AA fullscreen controls"), singleTask can reuse this same Activity/composition rather than
+    // recreating it - an unkeyed rememberSaveable would silently keep the FIRST value forever,
+    // making the second button behave identically to the first.
+    var fullscreen by rememberSaveable(startFullscreen) { mutableStateOf(startFullscreen) }
     // Not reset to false on every fullscreen entry: a direct "open fullscreen controls"
     // shortcut (startFullscreen=true) needs the D-pad visible immediately, and the
     // windowed "Fullscreen" button below sets this explicitly itself when the rider is

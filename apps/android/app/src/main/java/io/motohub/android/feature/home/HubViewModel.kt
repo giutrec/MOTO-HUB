@@ -17,6 +17,7 @@ import io.motohub.android.feature.pairing.TBoxQrPayload
 import io.motohub.android.feature.ridedashboard.RideDashboardRuntime
 import io.motohub.android.feature.ridedashboard.RideDashboardRuntimeState
 import io.motohub.android.androidauto.AndroidAutoRuntime
+import io.motohub.android.androidauto.AndroidAutoRuntimeState
 import io.motohub.android.tbox.createTBoxSessionEstablisher
 import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxModelProfile
@@ -130,6 +131,31 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                     )
                     is RideDashboardRuntimeState.Failed -> showError(runtime.message)
                     RideDashboardRuntimeState.Idle -> Unit
+                }
+            }
+        }
+        viewModelScope.launch {
+            AndroidAutoRuntime.state.collect { runtime ->
+                when (runtime) {
+                    AndroidAutoRuntimeState.Preparing, AndroidAutoRuntimeState.ReceiverReady -> updateProjectionState(
+                        SessionPhase.REQUESTING_PROJECTION,
+                        motoHubText("Starting the Android Auto pipeline.")
+                    )
+                    AndroidAutoRuntimeState.Streaming -> updateProjectionState(
+                        SessionPhase.CAPTURING,
+                        motoHubText("Android Auto streaming is active on the motorcycle TFT.")
+                    )
+                    // A T-Box mode's stop tears down the whole session (transport + registry), so
+                    // the next AA start needs a fresh Connect. Without this, ProjectionRuntime and
+                    // RideDashboardRuntime already fall back to NETWORK_SETUP_REQUIRED on Stopped
+                    // (forcing the Connect screen); AA never did, so the Home screen kept showing a
+                    // now-dead AA button that failed with "No T-Box is ready" on every retry.
+                    is AndroidAutoRuntimeState.Stopped -> updateProjectionState(
+                        SessionPhase.NETWORK_SETUP_REQUIRED,
+                        runtime.reason
+                    )
+                    is AndroidAutoRuntimeState.Failed -> showError(runtime.message)
+                    AndroidAutoRuntimeState.Idle -> Unit
                 }
             }
         }

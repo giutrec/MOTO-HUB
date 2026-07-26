@@ -89,12 +89,42 @@ class IpcBridgeService : Service() {
         // starts delivering frames only after this returns non-null.
         override fun startVideoSession(): EncoderProfileParcel? =
             kotlinx.coroutines.runBlocking {
-                val handle = TBoxSessionRegistry.current() ?: return@runBlocking null
-                val result = handle.transport.negotiateVideoConfiguration(
+                var handle = TBoxSessionRegistry.current() ?: return@runBlocking null
+                var result = handle.transport.negotiateVideoConfiguration(
                     host = handle.host,
                     savedArea = null,
                     timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
                 )
+                if (result.isFailure) {
+                    // NOT a timing issue - RideDaemonTransport.stop() (called whenever ANY mode's
+                    // session ends, e.g. Android Auto) fully tears down the underlying
+                    // MobileSession (session = null), so a bare retry of start(host) fails
+                    // identically every time with "Call discover() with an active T-Box link
+                    // before starting the session". A rider's manual "Connect" again works only
+                    // because it re-runs discover() from scratch - do that here instead of a
+                    // pointless delayed retry of the exact same broken call.
+                    ProjectionEventLog.warning(
+                        "IPC_TBOX",
+                        "startVideoSession negotiation failed (first attempt): " +
+                            "${result.exceptionOrNull()?.message}. Re-discovering the T-Box before retrying."
+                    )
+                    val rediscovered = handle.transport.discover(handle.link, handle.motorcycle.modelId)
+                    val freshHost = rediscovered.getOrNull()
+                    if (freshHost == null) {
+                        ProjectionEventLog.warning(
+                            "IPC_TBOX",
+                            "Re-discovery failed: ${rediscovered.exceptionOrNull()?.message}"
+                        )
+                    } else {
+                        handle = handle.copy(host = freshHost)
+                        TBoxSessionRegistry.install(handle)
+                        result = handle.transport.negotiateVideoConfiguration(
+                            host = handle.host,
+                            savedArea = null,
+                            timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
+                        )
+                    }
+                }
                 val configuration = result.getOrElse {
                     ProjectionEventLog.warning(
                         "IPC_TBOX",
@@ -611,7 +641,7 @@ class IpcBridgeService : Service() {
 
     private companion object {
         const val SESSION_POLL_INTERVAL_MS = 1_000L
-        const val VIDEO_CONFIGURATION_TIMEOUT_MS = 8_000L
+        const val VIDEO_CONFIGURATION_TIMEOUT_MS = 10_000L
         const val SELF_MODE_READY_TIMEOUT_MS = 10_000L
         const val ANDROID_AUTO_RECEIVER_SETTLE_MS = 900L
         const val CHANNEL_ID = "core_bridge_v1"

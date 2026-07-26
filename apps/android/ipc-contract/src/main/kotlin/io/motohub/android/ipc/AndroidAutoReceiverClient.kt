@@ -53,7 +53,18 @@ class AndroidAutoReceiverClient(
             setPackage(corePackage)
         }
         return try {
-            val ok = context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
+            // BIND_ALLOW_ACTIVITY_STARTS: without it, Core's process sits at BOUND_TOP (bound by
+            // Pro, which is foreground) rather than PROC_STATE_TOP itself, and modern Android
+            // treats those differently - RideDashboardTrampolineActivity (needed to promote the
+            // dashboard to a location-typed foreground service) gets silently killed by the
+            // background-activity-launch guard, so startEmbeddedDashboardSession() reports
+            // success but nothing ever actually starts. This flag grants Core that exemption for
+            // as long as Pro stays bound.
+            val ok = context.bindService(
+                intent,
+                connection,
+                Context.BIND_AUTO_CREATE or Context.BIND_ALLOW_ACTIVITY_STARTS
+            )
             bound = ok
             ok
         } catch (e: SecurityException) {

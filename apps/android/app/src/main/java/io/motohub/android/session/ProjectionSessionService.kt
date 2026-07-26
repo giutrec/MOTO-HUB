@@ -151,7 +151,7 @@ class ProjectionSessionService : Service() {
         ProjectionRuntime.publish(ProjectionRuntimeState.Starting)
         ProjectionEventLog.record("SERVICE", "Starting EasyConn handshake.")
 
-        val handle = TBoxSessionRegistry.current()
+        var handle = TBoxSessionRegistry.current()
             ?: return fail("No T-Box session is ready. Reconnect the motorcycle before sharing.")
         tBoxHandle = handle
         observeActiveSession(handle)
@@ -159,11 +159,34 @@ class ProjectionSessionService : Service() {
         val savedArea = geometryStore.load(handle.motorcycle.ssid)?.let { geometry ->
             TBoxEvent.VideoArea(geometry.width, geometry.height)
         }
-        val configurationResult = handle.transport.negotiateVideoConfiguration(
+        var configurationResult = handle.transport.negotiateVideoConfiguration(
             host = handle.host,
             savedArea = savedArea,
             timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
         )
+        if (configurationResult.isFailure) {
+            // Whichever mode ran before this one called transport.stop() on end, which for the
+            // real GPL transport fully tears down the underlying session, so a bare retry of
+            // negotiateVideoConfiguration fails identically every time. Re-run discover() from
+            // scratch instead, exactly like a rider's manual "Connect" retry does.
+            ProjectionEventLog.warning(
+                "T-BOX",
+                "Video negotiation failed (first attempt): ${configurationResult.exceptionOrNull()?.message}. " +
+                    "Re-discovering the T-Box before retrying."
+            )
+            val rediscovered = handle.transport.discover(handle.link, handle.motorcycle.modelId)
+            val freshHost = rediscovered.getOrNull()
+            if (freshHost != null) {
+                handle = handle.copy(host = freshHost)
+                tBoxHandle = handle
+                TBoxSessionRegistry.install(handle)
+                configurationResult = handle.transport.negotiateVideoConfiguration(
+                    host = handle.host,
+                    savedArea = savedArea,
+                    timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
+                )
+            }
+        }
         configurationResult.exceptionOrNull()?.let {
             return fail("T-Box video negotiation failed: ${it.message}")
         }

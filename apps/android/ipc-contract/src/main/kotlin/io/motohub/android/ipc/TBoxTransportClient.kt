@@ -45,7 +45,15 @@ class TBoxTransportClient(
             setPackage(corePackage)
         }
         return try {
-            val ok = context.bindService(intent, connection, Context.BIND_AUTO_CREATE)
+            // See the identical flag on AndroidAutoReceiverClient.bind() - Pro and Core share one
+            // process-wide background-activity-launch exemption while Pro stays bound, needed for
+            // RideDashboardTrampolineActivity regardless of which client happens to be bound when
+            // Core's IpcBridgeService is asked to promote the dashboard to a location-typed FGS.
+            val ok = context.bindService(
+                intent,
+                connection,
+                Context.BIND_AUTO_CREATE or Context.BIND_ALLOW_ACTIVITY_STARTS
+            )
             bound = ok
             ok
         } catch (e: SecurityException) {

@@ -317,6 +317,8 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
     }
 
     private suspend fun startBikeStream(handle: TBoxSessionHandle) {
+        @Suppress("NAME_SHADOWING")
+        var handle = handle
         if (stopping) return
         if (handle.link.network != null) {
             val rebound = handle.networkConnector.rebindProcessToTBoxWhenAvailable(
@@ -336,11 +338,35 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         val savedArea = displayGeometryStore.load(handle.motorcycle.ssid)?.let { geometry ->
             TBoxEvent.VideoArea(geometry.width, geometry.height)
         }
-        val configurationResult = handle.transport.negotiateVideoConfiguration(
+        var configurationResult = handle.transport.negotiateVideoConfiguration(
             host = handle.host,
             savedArea = savedArea,
             timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
         )
+        if (configurationResult.isFailure) {
+            // Same root cause as the Ride Dashboard fix: whichever mode ran before this one
+            // called transport.stop() on end, which for the real GPL transport fully tears down
+            // the underlying session, so a bare retry of negotiateVideoConfiguration fails
+            // identically every time. Re-run discover() from scratch instead, exactly like a
+            // rider's manual "Connect" retry does.
+            ProjectionEventLog.warning(
+                "ANDROID AUTO",
+                "T-Box handshake failed (first attempt): ${configurationResult.exceptionOrNull()?.message}. " +
+                    "Re-discovering the T-Box before retrying."
+            )
+            val rediscovered = handle.transport.discover(handle.link, handle.motorcycle.modelId)
+            val freshHost = rediscovered.getOrNull()
+            if (freshHost != null) {
+                handle = handle.copy(host = freshHost)
+                tBoxHandle = handle
+                TBoxSessionRegistry.install(handle)
+                configurationResult = handle.transport.negotiateVideoConfiguration(
+                    host = handle.host,
+                    savedArea = savedArea,
+                    timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
+                )
+            }
+        }
         configurationResult.exceptionOrNull()?.let {
             return fail("T-Box handshake for Android Auto failed: ${it.message}")
         }

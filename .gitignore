@@ -11,5 +11,6 @@ local.properties
 *.zip
 /artifacts/
 /tooling/private/
+/archive/cfmoto-cloud-client-poc/
 apps/android/app/src/main/res/raw/aa_cert
 apps/android/app/src/main/res/raw/aa_identity_data

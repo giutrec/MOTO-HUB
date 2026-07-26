@@ -39,6 +39,16 @@ object IpcBridgeContract {
         "io.motohub.android.extra.OPEN_ANDROID_AUTO_PREVIEW_FULLSCREEN"
 
     /**
+     * Same reasoning as [EXTRA_OPEN_ANDROID_AUTO_PREVIEW]: Ride Dashboard's pan/zoom/panel
+     * controls (RideDashboardControlBridge) and widget customization (DashboardLayoutStore) only
+     * exist inside whichever process actually runs RideDashboardSessionService. When Advanced
+     * delegates the dashboard to Core (embedded Android Auto map source), Advanced's own copies of
+     * those screens have nothing real to control - only Core's copies do.
+     */
+    const val EXTRA_OPEN_RIDE_DASHBOARD_CONTROLS = "io.motohub.android.extra.OPEN_RIDE_DASHBOARD_CONTROLS"
+    const val EXTRA_OPEN_RIDE_DASHBOARD_CUSTOMIZE = "io.motohub.android.extra.OPEN_RIDE_DASHBOARD_CUSTOMIZE"
+
+    /**
      * Same idea as [EXTRA_OPEN_ANDROID_AUTO_PREVIEW], but for a session with no T-Box at all:
      * Advanced asks Core to both START a phone-only Android Auto session (Core builds/runs the AA
      * receiver itself, bound only to the phone's own preview Surface) AND open the screen that

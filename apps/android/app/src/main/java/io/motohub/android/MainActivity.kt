@@ -84,6 +84,8 @@ import io.motohub.android.feature.ridedashboard.RideDashboardAndroidAutoState
 import io.motohub.android.feature.ridedashboard.RideDashboardMapSource
 import io.motohub.android.feature.ridedashboard.RideDashboardMapSourceStore
 import io.motohub.android.feature.ridedashboard.RideDashboardSessionService
+import io.motohub.android.feature.ridedashboard.RideDashboardScreen
+import io.motohub.android.feature.ridedashboard.RideDashboardScreenLaunchRequest
 import io.motohub.android.feature.ridedashboard.RideDashboardTrackOverlayRuntime
 import io.motohub.android.feature.ridedashboard.widget.DashboardWidgetPickerScreen
 import io.motohub.android.feature.safety.SafetyDisclaimerDialog
@@ -110,6 +112,7 @@ import io.motohub.android.externaldisplay.AoaExternalRuntime
 import io.motohub.android.externaldisplay.AoaExternalRuntimeState
 import io.motohub.android.externaldisplay.AoaRideDashboardService
 import io.motohub.android.tbox.TBoxCapabilityStore
+import io.motohub.android.tbox.TBoxSessionRegistry
 import io.motohub.android.tbox.TBoxModelProfile
 import io.motohub.android.tbox.TBoxPortScanResult
 import io.motohub.android.tbox.TBoxPortScanner
@@ -233,6 +236,10 @@ class MainActivity : ComponentActivity() {
                     intent?.getBooleanExtra(IpcBridgeContract.EXTRA_START_PHONE_ONLY_ANDROID_AUTO, false) == true
                 val launchedPhoneOnlyAaDisplayMode =
                     intent?.getStringExtra(IpcBridgeContract.EXTRA_ANDROID_AUTO_DISPLAY_MODE)
+                val launchedRideDashboardControls =
+                    intent?.getBooleanExtra(IpcBridgeContract.EXTRA_OPEN_RIDE_DASHBOARD_CONTROLS, false) == true
+                val launchedRideDashboardCustomize =
+                    intent?.getBooleanExtra(IpcBridgeContract.EXTRA_OPEN_RIDE_DASHBOARD_CUSTOMIZE, false) == true
                 var showAndroidAutoPreview by rememberSaveable {
                     mutableStateOf(launchedAndroidAutoPreview || launchedPhoneOnlyAa)
                 }
@@ -247,20 +254,22 @@ class MainActivity : ComponentActivity() {
                 // whether closing the screen should also finish() this Activity, returning
                 // control to Advanced automatically instead of leaving the rider in Core.
                 var androidAutoPhoneOnlyLaunchedFromPro by rememberSaveable { mutableStateOf(launchedPhoneOnlyAa) }
-                LaunchedEffect(Unit) {
-                    AndroidAutoPreviewLaunchRequest.requests.collect { fullscreen ->
-                        androidAutoPreviewStartFullscreen = fullscreen
-                        androidAutoPreviewIsPhoneOnly = false
-                        androidAutoPhoneOnlyLaunchedFromPro = false
-                        showAndroidAutoPreview = true
-                    }
-                }
+                // Same idea as androidAutoPhoneOnlyLaunchedFromPro, but for the regular
+                // "Preview & touch"/"AA fullscreen controls" deep-link (openAndroidAutoPreviewInCore
+                // in Advanced) - covers both full Android Auto and Ride Dashboard's embedded AA
+                // panel, since both route through this same screen and this same Intent extra.
+                var androidAutoPreviewLaunchedFromPro by rememberSaveable { mutableStateOf(launchedAndroidAutoPreview) }
                 var showRideDashboardPreview by rememberSaveable { mutableStateOf(false) }
                 // true only when the rider chose "Use Ride Dashboard without a T-Box" - the
                 // dashboard IS the whole session then, so RideDashboardPreviewScreen publishes
                 // into RideDashboardRuntime instead of just rendering a passive local peek.
                 var rideDashboardPreviewIsPhoneOnly by rememberSaveable { mutableStateOf(false) }
-                var showControls by rememberSaveable { mutableStateOf(false) }
+                var showControls by rememberSaveable { mutableStateOf(launchedRideDashboardControls) }
+                // true only when Advanced deep-linked into this screen (RideDashboardControlBridge
+                // only exists in whichever process actually runs RideDashboardSessionService) -
+                // gates whether closing should finish() this Activity and return to Advanced,
+                // same pattern as androidAutoPreviewLaunchedFromPro.
+                var showControlsLaunchedFromPro by rememberSaveable { mutableStateOf(launchedRideDashboardControls) }
                 var showUpdateDialog by rememberSaveable { mutableStateOf(false) }
                 var updateAutoCheckAttempted by rememberSaveable { mutableStateOf(false) }
                 var updateLoading by remember { mutableStateOf(false) }
@@ -271,7 +280,9 @@ class MainActivity : ComponentActivity() {
                 var lastAutoConnectAttemptAt by remember { mutableStateOf(0L) }
                 var editorProfileId by rememberSaveable { mutableStateOf<String?>(null) }
                 var capabilityProfileId by rememberSaveable { mutableStateOf<String?>(null) }
-                var dashboardCustomizationProfileId by rememberSaveable { mutableStateOf<String?>(null) }
+                var dashboardCustomizationProfileId by rememberSaveable {
+                    mutableStateOf(if (launchedRideDashboardCustomize) TBoxSessionRegistry.current()?.motorcycle?.id else null)
+                }
                 // Phone-only Android Auto/Ride Dashboard already work with zero motorcycles
                 // paired - this is the standalone panel exposing their shared defaults
                 // (widgets, AA fit, TFT margins), none of which have a per-motorcycle profile
@@ -288,6 +299,86 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(TBoxScreenMargins.NONE)
                 }
                 var returnToRideAfterDashboardCustomization by rememberSaveable { mutableStateOf(false) }
+                // Same idea as showControlsLaunchedFromPro, for the widget-customization screen.
+                var dashboardCustomizeLaunchedFromPro by rememberSaveable {
+                    mutableStateOf(launchedRideDashboardCustomize)
+                }
+                // These three deep-link requests (Preview & touch/fullscreen controls, Controls,
+                // Customize) all share the same screen-selection if/else-if chain below, and each
+                // one must WIN over whatever was showing before - if the rider switched away from
+                // Core with the home/recents button instead of tapping that screen's own Close/Back
+                // (never running its onBack, so its "showX" flag never resets), a later request
+                // would otherwise silently render the stale screen instead, since it's checked
+                // first in that chain. Explicitly clearing the other two here makes each request
+                // authoritative regardless of how the previous screen was left.
+                // The full screen-selector chain below is a single if/else-if with ~13 branches
+                // (showApplicationLogs, showAbout, showAndroidAutoPreview, showRideDashboardPreview,
+                // showControls, capabilityProfileId, editorProfileId, dashboardCustomizationProfileId,
+                // showDefaultDashboardWidgetPicker, showDefaultDashboardSettings,
+                // showNetworkDiagnostics, showQrScanner, showManualPairing) - ANY of them left
+                // non-default from whatever Core was doing before (the rider left it on the Garage
+                // details screen, backgrounded it instead of tapping Close, etc.) wins over a fresh
+                // deep-link request from Advanced, since it's checked earlier in the chain. Clearing
+                // all of them here - not just the three actually involved in this request - is what
+                // makes a Preview/Controls/Customize deep-link land on the right screen every time.
+                val clearOtherScreensForDeepLink = {
+                    showApplicationLogs = false
+                    showAbout = false
+                    showAndroidAutoPreview = false
+                    androidAutoPreviewLaunchedFromPro = false
+                    showRideDashboardPreview = false
+                    showControls = false
+                    showControlsLaunchedFromPro = false
+                    capabilityProfileId = null
+                    editorProfileId = null
+                    dashboardCustomizationProfileId = null
+                    dashboardCustomizeLaunchedFromPro = false
+                    showDefaultDashboardWidgetPicker = false
+                    showDefaultDashboardSettings = false
+                    showNetworkDiagnostics = false
+                    showQrScanner = false
+                    showManualPairing = false
+                }
+                LaunchedEffect(Unit) {
+                    AndroidAutoPreviewLaunchRequest.requests.collect { fullscreen ->
+                        clearOtherScreensForDeepLink()
+                        androidAutoPreviewStartFullscreen = fullscreen
+                        androidAutoPreviewIsPhoneOnly = false
+                        androidAutoPhoneOnlyLaunchedFromPro = false
+                        androidAutoPreviewLaunchedFromPro = true
+                        showAndroidAutoPreview = true
+                    }
+                }
+                // Only ever fires in Core, in response to Advanced deep-linking into the Controls
+                // or Customize screen for a Ride-Dashboard-with-embedded-AA session it can't
+                // control locally itself (see EXTRA_OPEN_RIDE_DASHBOARD_CONTROLS/CUSTOMIZE).
+                LaunchedEffect(Unit) {
+                    RideDashboardScreenLaunchRequest.requests.collect { screen ->
+                        when (screen) {
+                            RideDashboardScreen.CONTROLS -> {
+                                clearOtherScreensForDeepLink()
+                                showControlsLaunchedFromPro = true
+                                showControls = true
+                            }
+                            RideDashboardScreen.CUSTOMIZE -> {
+                                // NOT state.session.motorcycle: when Advanced connects using a
+                                // motorcycle that only exists in ITS OWN Garage (Garages are
+                                // deliberately kept separate, not synced), Core's own HubViewModel
+                                // never learns about it - the AIDL connect installs straight into
+                                // TBoxSessionRegistry without touching Core's ViewModel state at
+                                // all. The registry is the only place that actually has the
+                                // profile that's really connected right now.
+                                val activeProfile = TBoxSessionRegistry.current()?.motorcycle
+                                if (activeProfile != null) {
+                                    clearOtherScreensForDeepLink()
+                                    dashboardCustomizeLaunchedFromPro = true
+                                    returnToRideAfterDashboardCustomization = false
+                                    dashboardCustomizationProfileId = activeProfile.id
+                                }
+                            }
+                        }
+                    }
+                }
                 var photoTargetProfileId by rememberSaveable { mutableStateOf<String?>(null) }
                 var returnToGarageAfterPairing by rememberSaveable { mutableStateOf(false) }
                 val context = LocalContext.current
@@ -886,8 +977,9 @@ class MainActivity : ComponentActivity() {
                             androidAutoPreviewIsPhoneOnly = false
                             // Return control to Advanced automatically instead of leaving the
                             // rider stuck in Core - Advanced's own task is still underneath.
-                            if (androidAutoPhoneOnlyLaunchedFromPro) {
+                            if (androidAutoPhoneOnlyLaunchedFromPro || androidAutoPreviewLaunchedFromPro) {
                                 androidAutoPhoneOnlyLaunchedFromPro = false
+                                androidAutoPreviewLaunchedFromPro = false
                                 finish()
                             }
                         },
@@ -908,6 +1000,10 @@ class MainActivity : ComponentActivity() {
                         onBack = {
                             ProjectionEventLog.record("UI", "Controls screen closed.")
                             showControls = false
+                            if (showControlsLaunchedFromPro) {
+                                showControlsLaunchedFromPro = false
+                                finish()
+                            }
                         }
                     )
                 } else if (capabilityProfileId != null) {
@@ -997,7 +1093,11 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 } else if (dashboardCustomizationProfileId != null) {
+                    // Falls back to the live T-Box session's motorcycle when the id isn't in
+                    // Core's own Garage - true whenever Advanced connected using a motorcycle
+                    // that only exists in ITS OWN Garage (see the CUSTOMIZE deep-link handler).
                     val profile = state.motorcycles.firstOrNull { it.id == dashboardCustomizationProfileId }
+                        ?: TBoxSessionRegistry.current()?.motorcycle?.takeIf { it.id == dashboardCustomizationProfileId }
                     if (profile == null) {
                         dashboardCustomizationProfileId = null
                         selectedTab = HubTab.GARAGE
@@ -1007,7 +1107,10 @@ class MainActivity : ComponentActivity() {
                             title = profile.displayName ?: profile.ssid,
                             onBack = {
                                 dashboardCustomizationProfileId = null
-                                if (returnToRideAfterDashboardCustomization) {
+                                if (dashboardCustomizeLaunchedFromPro) {
+                                    dashboardCustomizeLaunchedFromPro = false
+                                    finish()
+                                } else if (returnToRideAfterDashboardCustomization) {
                                     returnToRideAfterDashboardCustomization = false
                                     selectedTab = HubTab.RIDE
                                 } else {
@@ -1191,7 +1294,13 @@ class MainActivity : ComponentActivity() {
                         onDisconnect = viewModel::disconnect,
                         onOpenControls = {
                             ProjectionEventLog.record("UI", "Controls screen opened.")
-                            showControls = true
+                            if (BuildConfig.IS_PRO && rideDashboardActive &&
+                                rideDashboardMapSource == RideDashboardMapSource.ANDROID_AUTO
+                            ) {
+                                openRideDashboardControlsInCore()
+                            } else {
+                                showControls = true
+                            }
                         },
                         onStartProjection = {
                             ProjectionEventLog.record("MIRROR", "User selected mirroring mode.")
@@ -1268,6 +1377,10 @@ class MainActivity : ComponentActivity() {
                                     motoHubText("Connect a motorcycle before customizing its dashboard."),
                                     Toast.LENGTH_SHORT
                                 ).show()
+                            } else if (BuildConfig.IS_PRO &&
+                                rideDashboardMapSource == RideDashboardMapSource.ANDROID_AUTO
+                            ) {
+                                openRideDashboardCustomizeInCore()
                             } else {
                                 returnToRideAfterDashboardCustomization = true
                                 dashboardCustomizationProfileId = activeProfile.id
@@ -1344,6 +1457,7 @@ class MainActivity : ComponentActivity() {
                                 androidAutoPreviewStartFullscreen = false
                                 androidAutoPreviewIsPhoneOnly = false
                                 androidAutoPhoneOnlyLaunchedFromPro = false
+                                androidAutoPreviewLaunchedFromPro = false
                                 showAndroidAutoPreview = true
                             }
                         },
@@ -1358,6 +1472,7 @@ class MainActivity : ComponentActivity() {
                                 androidAutoPreviewStartFullscreen = true
                                 androidAutoPreviewIsPhoneOnly = false
                                 androidAutoPhoneOnlyLaunchedFromPro = false
+                                androidAutoPreviewLaunchedFromPro = false
                                 showAndroidAutoPreview = true
                             }
                         },
@@ -1382,6 +1497,7 @@ class MainActivity : ComponentActivity() {
                                 androidAutoPreviewStartFullscreen = false
                                 androidAutoPreviewIsPhoneOnly = true
                                 androidAutoPhoneOnlyLaunchedFromPro = false
+                                androidAutoPreviewLaunchedFromPro = false
                                 showAndroidAutoPreview = true
                             }
                         },
@@ -1508,7 +1624,13 @@ class MainActivity : ComponentActivity() {
                             SettingsTabContent(
                                 onOpenControls = {
                                     ProjectionEventLog.record("UI", "Controls screen opened.")
-                                    showControls = true
+                                    if (BuildConfig.IS_PRO && rideDashboardActive &&
+                                        rideDashboardMapSource == RideDashboardMapSource.ANDROID_AUTO
+                                    ) {
+                                        openRideDashboardControlsInCore()
+                                    } else {
+                                        showControls = true
+                                    }
                                 },
                                 onOpenNetworkDiagnostics = {
                                     ProjectionEventLog.record("UI", "Network diagnostics screen opened.")
@@ -1673,6 +1795,37 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
+     * Same reasoning as [openAndroidAutoPreviewInCore]: RideDashboardControlBridge only exists in
+     * whichever process actually runs RideDashboardSessionService, which for the embedded-AA map
+     * source is always Core. Launches Core straight into its own (fully working, in-process)
+     * Controls screen instead of Advanced's own, which has nothing real to control.
+     */
+    private fun openRideDashboardControlsInCore() {
+        val intent = Intent().apply {
+            setClassName(IpcBridgeContract.CORE_PACKAGE_NAME, IpcBridgeContract.CORE_MAIN_ACTIVITY_CLASS_NAME)
+            putExtra(IpcBridgeContract.EXTRA_OPEN_RIDE_DASHBOARD_CONTROLS, true)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { startActivity(intent) }.onFailure {
+            ProjectionEventLog.warning("UI", "Failed to open Core's Ride Dashboard controls: ${it.message}")
+            Toast.makeText(this, motoHubText("Couldn't open MOTO-HUB Core. Is it installed?"), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /** Same reasoning as [openRideDashboardControlsInCore], for widget customization. */
+    private fun openRideDashboardCustomizeInCore() {
+        val intent = Intent().apply {
+            setClassName(IpcBridgeContract.CORE_PACKAGE_NAME, IpcBridgeContract.CORE_MAIN_ACTIVITY_CLASS_NAME)
+            putExtra(IpcBridgeContract.EXTRA_OPEN_RIDE_DASHBOARD_CUSTOMIZE, true)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        runCatching { startActivity(intent) }.onFailure {
+            ProjectionEventLog.warning("UI", "Failed to open Core's Ride Dashboard customization: ${it.message}")
+            Toast.makeText(this, motoHubText("Couldn't open MOTO-HUB Core. Is it installed?"), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
      * Advanced has no local Android Auto code at all, so a T-Box-free session can't run here
      * either — same reasoning as [openAndroidAutoPreviewInCore], just starting a fresh phone-only
      * session in Core instead of previewing an existing one.
@@ -1709,6 +1862,14 @@ class MainActivity : ComponentActivity() {
             PhoneOnlyAndroidAutoLaunchRequest.publish(
                 intent.getStringExtra(IpcBridgeContract.EXTRA_ANDROID_AUTO_DISPLAY_MODE)
             )
+            return
+        }
+        if (intent?.getBooleanExtra(IpcBridgeContract.EXTRA_OPEN_RIDE_DASHBOARD_CONTROLS, false) == true) {
+            RideDashboardScreenLaunchRequest.publish(RideDashboardScreen.CONTROLS)
+            return
+        }
+        if (intent?.getBooleanExtra(IpcBridgeContract.EXTRA_OPEN_RIDE_DASHBOARD_CUSTOMIZE, false) == true) {
+            RideDashboardScreenLaunchRequest.publish(RideDashboardScreen.CUSTOMIZE)
             return
         }
         if (intent?.getBooleanExtra(IpcBridgeContract.EXTRA_OPEN_ANDROID_AUTO_PREVIEW, false) != true) return

@@ -180,7 +180,7 @@ class RideDashboardSessionService : Service() {
             "RIDE_DASHBOARD",
             "Starting EasyConn dashboard handshake with map source=${mapSource.name}."
         )
-        val handle = TBoxSessionRegistry.current()
+        var handle = TBoxSessionRegistry.current()
             ?: return fail("No T-Box session is ready. Reconnect the motorcycle before starting the dashboard.")
         tBoxHandle = handle
         startSimulatorHandlebarBridgeIfNeeded(handle)
@@ -232,11 +232,38 @@ class RideDashboardSessionService : Service() {
         val savedArea = geometryStore.load(handle.motorcycle.ssid)?.let { geometry ->
             TBoxEvent.VideoArea(geometry.width, geometry.height)
         }
-        val configurationResult = handle.transport.negotiateVideoConfiguration(
+        var configurationResult = handle.transport.negotiateVideoConfiguration(
             host = handle.host,
             savedArea = savedArea,
             timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MILLIS
         )
+        if (configurationResult.isFailure) {
+            // NOT a timing issue - whichever mode was active before this one (e.g. Android Auto)
+            // called transport.stop() on end, which for the real GPL transport fully tears down
+            // the underlying session, so a bare retry of negotiateVideoConfiguration fails
+            // identically every time ("Call discover() with an active T-Box link before starting
+            // the session"). A rider's manual "Connect" retry only works because it re-runs
+            // discover() from scratch - do that here instead of surfacing the transient failure.
+            // handle is reassigned (not just a local copy) so every downstream use in this
+            // function - and the registry, for any other caller - sees the fresh host too.
+            ProjectionEventLog.warning(
+                "RIDE_DASHBOARD",
+                "Video negotiation failed (first attempt): ${configurationResult.exceptionOrNull()?.message}. " +
+                    "Re-discovering the T-Box before retrying."
+            )
+            val rediscovered = handle.transport.discover(handle.link, handle.motorcycle.modelId)
+            val freshHost = rediscovered.getOrNull()
+            if (freshHost != null) {
+                handle = handle.copy(host = freshHost)
+                tBoxHandle = handle
+                TBoxSessionRegistry.install(handle)
+                configurationResult = handle.transport.negotiateVideoConfiguration(
+                    host = handle.host,
+                    savedArea = savedArea,
+                    timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MILLIS
+                )
+            }
+        }
         configurationResult.exceptionOrNull()?.let {
             return fail("T-Box video negotiation failed: ${it.message}")
         }
