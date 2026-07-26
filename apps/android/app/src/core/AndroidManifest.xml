@@ -8,16 +8,6 @@
         android:protectionLevel="signature" />
 
     <application>
-        <!-- Invisible trampoline that lets IpcBridgeService start RideDashboardSessionService's
-             location-typed foreground service on Android 14+ — see the class doc for why this
-             exists. Never shown to the user: no history, excluded from recents, no display. -->
-        <activity
-            android:name=".ipc.RideDashboardTrampolineActivity"
-            android:exported="false"
-            android:theme="@style/TrampolineTheme"
-            android:excludeFromRecents="true"
-            android:noHistory="true"
-            android:launchMode="singleInstance" />
         <service
             android:name=".ipc.IpcBridgeService"
             android:exported="true"

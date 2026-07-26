@@ -55,23 +55,4 @@ interface IAndroidAutoReceiverService {
 
     void registerStateListener(IAndroidAutoStateListener listener);
     void unregisterStateListener(IAndroidAutoStateListener listener);
-
-    /**
-     * Starts/stops Core's own Ride Dashboard session with Android Auto as the embedded map
-     * panel (io.motohub.android.feature.ridedashboard.RideDashboardSessionService, map source
-     * ANDROID_AUTO) — the composited dashboard+AA video is rendered and pushed to the real T-Box
-     * entirely inside Core, exactly as when Core's own UI runs it. A caller with no local GPL/AGPL
-     * code (Pro) cannot run this panel itself: embedded AA needs the same AGPL receiver as
-     * startFullSession, decoding into the SAME compositor used by the dashboard's own renderer,
-     * which only exists in Core. Guarded against the same port-5288 resource as startFullSession —
-     * only one of startFullSession/startEmbeddedDashboardSession can be active at a time.
-     * State is reported on a listener channel separate from registerStateListener's (that one is
-     * full-AA-screen state; conflating the two would make Pro's Android Auto screen react to a
-     * Ride Dashboard session it didn't start, or vice versa).
-     */
-    boolean startEmbeddedDashboardSession();
-    void stopEmbeddedDashboardSession();
-
-    void registerEmbeddedDashboardStateListener(IAndroidAutoStateListener listener);
-    void unregisterEmbeddedDashboardStateListener(IAndroidAutoStateListener listener);
 }

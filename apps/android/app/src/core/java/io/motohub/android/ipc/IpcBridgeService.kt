@@ -27,11 +27,6 @@ import io.motohub.android.androidauto.AndroidAutoRuntime
 import io.motohub.android.androidauto.AndroidAutoRuntimeState
 import io.motohub.android.androidauto.AndroidAutoSessionService
 import io.motohub.android.androidauto.withFullVideoTargetForDashboard
-import io.motohub.android.feature.ridedashboard.RideDashboardAndroidAutoRuntime
-import io.motohub.android.feature.ridedashboard.RideDashboardAndroidAutoState
-import io.motohub.android.feature.ridedashboard.RideDashboardRuntime
-import io.motohub.android.feature.ridedashboard.RideDashboardRuntimeState
-import io.motohub.android.feature.ridedashboard.RideDashboardSessionService
 import io.motohub.android.feature.settings.AndroidAutoAspectMatchingMode
 import io.motohub.android.feature.settings.AndroidAutoResolutionMode
 import io.motohub.android.feature.settings.MotoHubSettings
@@ -220,7 +215,6 @@ class IpcBridgeService : Service() {
     // ── Android Auto receiver ────────────────────────────────────────
 
     private val stateListeners = RemoteCallbackList<IAndroidAutoStateListener>()
-    private val embeddedDashboardStateListeners = RemoteCallbackList<IAndroidAutoStateListener>()
     private var compositor: AaCompositor? = null
     private var receiver: AaReceiver? = null
 
@@ -382,60 +376,6 @@ class IpcBridgeService : Service() {
             stateListeners.unregister(listener)
         }
 
-        // Triggers Core's own Ride Dashboard with Android Auto as the embedded map panel —
-        // decoded AA video, dashboard widgets and telemetry are composited and pushed to the
-        // real T-Box entirely inside Core, exactly as Core's own UI runs it today. A companion
-        // app with no local GPL/AGPL code cannot run this panel itself. Guarded against the same
-        // fixed AA port both this and startFullSession ultimately depend on.
-        override fun startEmbeddedDashboardSession(): Boolean {
-            val current = RideDashboardRuntime.state.value
-            if (current is RideDashboardRuntimeState.Starting || current is RideDashboardRuntimeState.Streaming) {
-                return true
-            }
-            if (receiver != null) {
-                publishEmbeddedDashboardState(AndroidAutoIpcState.FAILED, "An embedded preview session is already attached.")
-                return false
-            }
-            if (AndroidAutoRuntime.isActive()) {
-                publishEmbeddedDashboardState(
-                    AndroidAutoIpcState.FAILED,
-                    "Core's full Android Auto session is already active; stop it before starting the dashboard."
-                )
-                return false
-            }
-            ensureEmbeddedDashboardStateForwarding()
-            // Not a direct RideDashboardSessionService.start() call: that service declares
-            // FOREGROUND_SERVICE_TYPE_LOCATION, which Android 14+ refuses to promote from a
-            // background bound-service context like this one — only from a momentarily-visible
-            // Activity. RideDashboardTrampolineActivity provides exactly that, invisibly.
-            startActivity(
-                android.content.Intent(this@IpcBridgeService, RideDashboardTrampolineActivity::class.java)
-                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-            // Core's own UI normally fires the self-mode trigger once the embedded AA receiver is
-            // ready (MainActivity.startRideDashboardAndroidAuto). When Pro drives this remotely,
-            // that Activity isn't in the loop, so nothing ever asks Google Android Auto to
-            // connect — the dashboard renders but the AA panel never receives video. Trigger it
-            // here instead, exactly like startFullSession's triggerSelfModeWhenReady.
-            triggerEmbeddedDashboardSelfModeWhenReady()
-            return true
-        }
-
-        override fun stopEmbeddedDashboardSession() {
-            // Cancel any pending self-mode trigger first — same reasoning as stopFullSession.
-            embeddedDashboardSelfModeJob?.cancel()
-            embeddedDashboardSelfModeJob = null
-            RideDashboardSessionService.stop(this@IpcBridgeService)
-        }
-
-        override fun registerEmbeddedDashboardStateListener(listener: IAndroidAutoStateListener) {
-            embeddedDashboardStateListeners.register(listener)
-            ensureEmbeddedDashboardStateForwarding()
-        }
-
-        override fun unregisterEmbeddedDashboardStateListener(listener: IAndroidAutoStateListener) {
-            embeddedDashboardStateListeners.unregister(listener)
-        }
     }
 
     private var selfModeJob: Job? = null
@@ -461,34 +401,6 @@ class IpcBridgeService : Service() {
                 delay(ANDROID_AUTO_RECEIVER_SETTLE_MS)
                 if (AndroidAutoRuntime.state.value is AndroidAutoRuntimeState.ReceiverReady) {
                     AaSelfMode.trigger(applicationContext) { ProjectionEventLog.record("AAP", it) }
-                }
-            }
-        }
-    }
-
-    private var embeddedDashboardSelfModeJob: Job? = null
-
-    /** Mirrors MainActivity.startRideDashboardAndroidAuto's coordinator, for when Ride Dashboard's
-     *  embedded AA panel is driven remotely by a companion app with no Activity of its own in the
-     *  loop to fire the trigger. */
-    private fun triggerEmbeddedDashboardSelfModeWhenReady() {
-        embeddedDashboardSelfModeJob?.cancel()
-        embeddedDashboardSelfModeJob = serviceScope.launch {
-            val state = kotlinx.coroutines.withTimeoutOrNull(SELF_MODE_READY_TIMEOUT_MS) {
-                RideDashboardAndroidAutoRuntime.state
-                    .dropWhile {
-                        it is RideDashboardAndroidAutoState.Idle ||
-                            it is RideDashboardAndroidAutoState.Failed
-                    }
-                    .first {
-                        it is RideDashboardAndroidAutoState.ReceiverReady ||
-                            it is RideDashboardAndroidAutoState.Failed
-                    }
-            }
-            if (state is RideDashboardAndroidAutoState.ReceiverReady) {
-                delay(ANDROID_AUTO_RECEIVER_SETTLE_MS)
-                if (RideDashboardAndroidAutoRuntime.state.value is RideDashboardAndroidAutoState.ReceiverReady) {
-                    AaSelfMode.trigger(applicationContext) { ProjectionEventLog.record("RIDE_AA", it) }
                 }
             }
         }
@@ -547,45 +459,6 @@ class IpcBridgeService : Service() {
         stateListeners.finishBroadcast()
     }
 
-    private var embeddedDashboardForwardingJob: Job? = null
-
-    /** Forwards Core's own RideDashboardRuntime.state (used by RideDashboardSessionService,
-     *  already Core's shipping feature) to remote listeners — same first-emission-guard pattern
-     *  as ensureFullSessionStateForwarding, so a stale Failed/Stopped from before this listener
-     *  existed isn't surfaced as if it just happened. */
-    private fun ensureEmbeddedDashboardStateForwarding() {
-        if (embeddedDashboardForwardingJob?.isActive == true) return
-        embeddedDashboardForwardingJob = serviceScope.launch {
-            var firstEmission = true
-            RideDashboardRuntime.state.collectLatest { state ->
-                if (firstEmission) {
-                    firstEmission = false
-                    if (state is RideDashboardRuntimeState.Failed || state is RideDashboardRuntimeState.Stopped) {
-                        publishEmbeddedDashboardState(AndroidAutoIpcState.IDLE, "")
-                        return@collectLatest
-                    }
-                }
-                val (ipcState, message) = when (state) {
-                    RideDashboardRuntimeState.Idle -> AndroidAutoIpcState.IDLE to ""
-                    RideDashboardRuntimeState.Starting -> AndroidAutoIpcState.PREPARING to ""
-                    RideDashboardRuntimeState.Streaming -> AndroidAutoIpcState.STREAMING to ""
-                    is RideDashboardRuntimeState.Stopped -> AndroidAutoIpcState.STOPPED to state.reason
-                    is RideDashboardRuntimeState.Failed -> AndroidAutoIpcState.FAILED to state.message
-                }
-                publishEmbeddedDashboardState(ipcState, message)
-            }
-        }
-    }
-
-    private fun publishEmbeddedDashboardState(state: Int, message: String) {
-        ProjectionEventLog.debug("IPC_RIDE_AA", "state=$state message=$message")
-        val count = embeddedDashboardStateListeners.beginBroadcast()
-        for (i in 0 until count) {
-            runCatching { embeddedDashboardStateListeners.getBroadcastItem(i).onStateChanged(state, message) }
-        }
-        embeddedDashboardStateListeners.finishBroadcast()
-    }
-
     // ── Service lifecycle ────────────────────────────────────────────
 
     // This service only exists while a companion app (PRO) is bound to it — but a plain bound
@@ -627,13 +500,10 @@ class IpcBridgeService : Service() {
     override fun onDestroy() {
         sessionPollJob?.cancel()
         fullSessionForwardingJob?.cancel()
-        embeddedDashboardForwardingJob?.cancel()
         selfModeJob?.cancel()
-        embeddedDashboardSelfModeJob?.cancel()
         releaseReceiver()
         sessionListeners.kill()
         stateListeners.kill()
-        embeddedDashboardStateListeners.kill()
         serviceScope.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()

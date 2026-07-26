@@ -6,10 +6,12 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
 import android.util.Log
+import android.view.Surface
 
 /**
- * Binds to Core's IpcBridgeService for Android Auto control (full session → real T-Box, see
- * IAndroidAutoReceiverService.aidl). The caller's OWN manifest must still declare (neither can
+ * Binds to Core's IpcBridgeService for Android Auto control (full session → real T-Box or a
+ * decoded output Surface for PRO's embedded Dashboard, see IAndroidAutoReceiverService.aidl).
+ * The caller's OWN manifest must still declare (neither can
  * be enforced from here — omitting either fails differently):
  *   <queries><package android:name="io.motohub.android"/></queries>            (or bindService() silently returns false)
  *   <uses-permission android:name="io.motohub.android.permission.BIND_CORE_SERVICE"/>  (or bindService() throws SecurityException)
@@ -17,10 +19,7 @@ import android.util.Log
 class AndroidAutoReceiverClient(
     private val context: Context,
     private val corePackage: String = "io.motohub.android",
-    private val onStateChanged: (state: Int, message: String) -> Unit = { _, _ -> },
-    /** Separate from [onStateChanged]: reports Core's Ride-Dashboard-with-embedded-AA session
-     *  state (startEmbeddedDashboardSession), not the full-AA-screen state. */
-    private val onEmbeddedDashboardStateChanged: (state: Int, message: String) -> Unit = { _, _ -> }
+    private val onStateChanged: (state: Int, message: String) -> Unit = { _, _ -> }
 ) {
     private var service: IAndroidAutoReceiverService? = null
     private var bound = false
@@ -30,17 +29,11 @@ class AndroidAutoReceiverClient(
             this@AndroidAutoReceiverClient.onStateChanged(state, message)
     }
 
-    private val embeddedDashboardStateListener = object : IAndroidAutoStateListener.Stub() {
-        override fun onStateChanged(state: Int, message: String) =
-            this@AndroidAutoReceiverClient.onEmbeddedDashboardStateChanged(state, message)
-    }
-
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
             val bound = IAndroidAutoReceiverService.Stub.asInterface(binder)
             service = bound
             bound.registerStateListener(stateListener)
-            bound.registerEmbeddedDashboardStateListener(embeddedDashboardStateListener)
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
@@ -53,13 +46,8 @@ class AndroidAutoReceiverClient(
             setPackage(corePackage)
         }
         return try {
-            // BIND_ALLOW_ACTIVITY_STARTS: without it, Core's process sits at BOUND_TOP (bound by
-            // Pro, which is foreground) rather than PROC_STATE_TOP itself, and modern Android
-            // treats those differently - RideDashboardTrampolineActivity (needed to promote the
-            // dashboard to a location-typed foreground service) gets silently killed by the
-            // background-activity-launch guard, so startEmbeddedDashboardSession() reports
-            // success but nothing ever actually starts. This flag grants Core that exemption for
-            // as long as Pro stays bound.
+            // BIND_ALLOW_ACTIVITY_STARTS keeps Core eligible to start its Android Auto receiver
+            // while PRO is foreground and the output Surface is being attached.
             val ok = context.bindService(
                 intent,
                 connection,
@@ -76,7 +64,6 @@ class AndroidAutoReceiverClient(
     fun unbind() {
         if (!bound) return
         service?.unregisterStateListener(stateListener)
-        service?.unregisterEmbeddedDashboardStateListener(embeddedDashboardStateListener)
         context.unbindService(connection)
         service = null
         bound = false
@@ -84,6 +71,14 @@ class AndroidAutoReceiverClient(
 
     /** True once the bound-service connection is established (bind() is async). */
     val isConnected: Boolean get() = service != null
+
+    /** Asks Core to decode Android Auto into a caller-owned Surface. */
+    fun attachOutputSurface(surface: Surface, width: Int, height: Int): Boolean =
+        service?.attachOutputSurface(surface, width, height) ?: false
+
+    fun detachOutputSurface() {
+        service?.detachOutputSurface()
+    }
 
     fun applyAndroidAutoSettings(settings: AndroidAutoSettingsParcel) {
         service?.applyAndroidAutoSettings(settings)
@@ -101,12 +96,6 @@ class AndroidAutoReceiverClient(
 
     fun stopFullSession() {
         service?.stopFullSession()
-    }
-
-    fun startEmbeddedDashboardSession(): Boolean = service?.startEmbeddedDashboardSession() ?: false
-
-    fun stopEmbeddedDashboardSession() {
-        service?.stopEmbeddedDashboardSession()
     }
 
     private companion object {

@@ -4,10 +4,9 @@ import android.content.Context
 import io.motohub.android.androidauto.AndroidAutoCapabilityProfile
 import io.motohub.android.androidauto.AndroidAutoDisplayMode
 
-/** CORE flavor factory: builds the real AGPL-backed embedded AA source. */
+/** CORE has no Ride Dashboard implementation; embedded AA frames are consumed by PRO via IPC. */
 fun createEmbeddedAndroidAutoSource(
     context: Context,
     capabilityProfile: AndroidAutoCapabilityProfile,
     displayMode: AndroidAutoDisplayMode
-): EmbeddedAndroidAutoVideoSource =
-    EmbeddedAndroidAutoSource(context, capabilityProfile, displayMode)
+): EmbeddedAndroidAutoVideoSource? = null

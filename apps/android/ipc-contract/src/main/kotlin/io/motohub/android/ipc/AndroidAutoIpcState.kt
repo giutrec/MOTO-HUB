@@ -27,24 +27,12 @@ object IpcBridgeContract {
     const val CORE_PACKAGE_NAME = "io.motohub.android"
     const val CORE_MAIN_ACTIVITY_CLASS_NAME = "io.motohub.android.MainActivity"
 
-    /**
-     * Advanced has no local Android Auto video (Core can't fan its compositor into a
-     * cross-process Surface while also driving the T-Box), but Core's own preview screen already
-     * works perfectly in-process regardless of who triggered the session. Rather than extending
-     * the AIDL surface, Advanced's "Preview & touch" button launches Core directly into that
-     * screen via an explicit Intent carrying these extras.
-     */
+    /** Core-side deep-link used by the full Android Auto preview controls. */
     const val EXTRA_OPEN_ANDROID_AUTO_PREVIEW = "io.motohub.android.extra.OPEN_ANDROID_AUTO_PREVIEW"
     const val EXTRA_OPEN_ANDROID_AUTO_PREVIEW_FULLSCREEN =
         "io.motohub.android.extra.OPEN_ANDROID_AUTO_PREVIEW_FULLSCREEN"
 
-    /**
-     * Same reasoning as [EXTRA_OPEN_ANDROID_AUTO_PREVIEW]: Ride Dashboard's pan/zoom/panel
-     * controls (RideDashboardControlBridge) and widget customization (DashboardLayoutStore) only
-     * exist inside whichever process actually runs RideDashboardSessionService. When Advanced
-     * delegates the dashboard to Core (embedded Android Auto map source), Advanced's own copies of
-     * those screens have nothing real to control - only Core's copies do.
-     */
+    /** Legacy Core deep-links retained only for settings migration compatibility. */
     const val EXTRA_OPEN_RIDE_DASHBOARD_CONTROLS = "io.motohub.android.extra.OPEN_RIDE_DASHBOARD_CONTROLS"
     const val EXTRA_OPEN_RIDE_DASHBOARD_CUSTOMIZE = "io.motohub.android.extra.OPEN_RIDE_DASHBOARD_CUSTOMIZE"
 
