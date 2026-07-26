@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- The BIND_CORE_SERVICE permission and the IpcBridgeService that enforces it are declared
-         in the CORE flavor only (src/core/AndroidManifest.xml) — PRO binds to CORE's service, it
-         doesn't host its own. -->
+    <permission
+        android:name="io.motohub.android.permission.BIND_CORE_SERVICE"
+        android:protectionLevel="signature" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.usb.accessory" android:required="false" />
@@ -65,20 +65,33 @@
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
-        <!-- AndroidAutoSessionService (AGPL AA receiver) is declared in the CORE flavor only —
-             see src/core/AndroidManifest.xml. -->
+        <service
+            android:name=".androidauto.AndroidAutoSessionService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice|microphone" />
 
         <service
             android:name=".externaldisplay.AoaExternalService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
-        <!-- AapAccessoryProbeService (AGPL AAP probe) is declared in the CORE flavor only —
-             see src/core/AndroidManifest.xml. -->
+        <service
+            android:name=".externaldisplay.AapAccessoryProbeService"
+            android:exported="true"
+            android:foregroundServiceType="connectedDevice" />
 
-        <!-- IpcBridgeService (the Core/Pro AIDL boundary) is declared in the CORE flavor only —
-             see src/core/AndroidManifest.xml. It contains GPL code (transport + AA receiver) so
-             it must not exist in the PRO APK. -->
+        <service
+            android:name=".ipc.IpcBridgeService"
+            android:exported="true"
+            android:foregroundServiceType="connectedDevice"
+            android:permission="io.motohub.android.permission.BIND_CORE_SERVICE">
+            <intent-filter>
+                <action android:name="io.motohub.android.ipc.BIND_TBOX_TRANSPORT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="io.motohub.android.ipc.BIND_ANDROID_AUTO_RECEIVER" />
+            </intent-filter>
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"
