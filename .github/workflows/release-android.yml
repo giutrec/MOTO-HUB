@@ -95,6 +95,8 @@ jobs:
 
       - name: Test and build release APK
         working-directory: apps/android
+        env:
+          SENTRY_CORE_DSN: ${{ secrets.SENTRY_CORE_DSN }}
         run: |
           set -euo pipefail
           ./gradlew \
