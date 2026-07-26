@@ -47,6 +47,14 @@ object AndroidAutoPreviewRuntime {
         }
     }
 
+    /** Detaches the currently registered preview when a remote caller cannot pass its Surface back. */
+    fun detachAttachedPreview() {
+        attachedSurface.getAndSet(null)
+        attachedWidth = 0
+        attachedHeight = 0
+        controller.get()?.detachPreview()
+    }
+
     fun sendTouch(action: Int, pointerId: Int, x: Int, y: Int) {
         controller.get()?.sendPreviewTouch(action, pointerId, x, y)
     }

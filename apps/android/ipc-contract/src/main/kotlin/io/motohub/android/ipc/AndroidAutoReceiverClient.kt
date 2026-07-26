@@ -80,6 +80,13 @@ class AndroidAutoReceiverClient(
         service?.detachOutputSurface()
     }
 
+    fun attachPreviewSurface(surface: Surface, width: Int, height: Int): Boolean =
+        service?.attachPreviewSurface(surface, width, height) ?: false
+
+    fun detachPreviewSurface() {
+        service?.detachPreviewSurface()
+    }
+
     fun applyAndroidAutoSettings(settings: AndroidAutoSettingsParcel) {
         service?.applyAndroidAutoSettings(settings)
     }
@@ -91,6 +98,9 @@ class AndroidAutoReceiverClient(
     fun sendScroll(delta: Int): Boolean = service?.sendScroll(delta) ?: false
 
     fun sendTouch(action: Int, x: Int, y: Int): Boolean = service?.sendTouch(action, x, y) ?: false
+
+    fun sendPreviewTouch(action: Int, x: Int, y: Int): Boolean =
+        service?.sendPreviewTouch(action, x, y) ?: false
 
     fun startFullSession(): Boolean = service?.startFullSession() ?: false
 

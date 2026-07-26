@@ -288,9 +288,38 @@ class IpcBridgeService : Service() {
             releaseReceiver()
         }
 
+        override fun attachPreviewSurface(surface: Surface, width: Int, height: Int): Boolean {
+            compositor?.let {
+                it.setPreview(surface, width, height)
+                return true
+            }
+            if (!AndroidAutoRuntime.isActive()) return false
+            AndroidAutoPreviewRuntime.attach(surface, width, height)
+            return true
+        }
+
+        override fun detachPreviewSurface() {
+            compositor?.let {
+                it.clearPreview()
+                return
+            }
+            AndroidAutoPreviewRuntime.detachAttachedPreview()
+        }
+
         override fun sendTouch(action: Int, x: Int, y: Int): Boolean {
             val activeReceiver = receiver ?: return false
             activeReceiver.sendTouch(action, x, y)
+            return true
+        }
+
+        override fun sendPreviewTouch(action: Int, x: Int, y: Int): Boolean {
+            compositor?.let { activeCompositor ->
+                val mapped = activeCompositor.mapPreviewToUi(x, y) ?: return false
+                receiver?.sendTouch(action, mapped.first, mapped.second) ?: return false
+                return true
+            }
+            if (!AndroidAutoRuntime.isActive()) return false
+            AndroidAutoPreviewRuntime.sendTouch(action, 0, x, y)
             return true
         }
 

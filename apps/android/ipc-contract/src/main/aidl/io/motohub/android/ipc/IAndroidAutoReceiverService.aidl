@@ -18,6 +18,9 @@ import io.motohub.android.ipc.AndroidAutoSettingsParcel;
  *   into it directly (Surface is Parcelable and shareable across processes
  *   for exactly this purpose). No T-Box involved — this is for an
  *   embedded/local preview inside the caller's own UI.
+ * - attachPreviewSurface/detachPreviewSurface: attaches an additional phone
+ *   preview to the same compositor, for both the full session and the
+ *   embedded Dashboard session. The two targets are rendered concurrently.
  * - startFullSession/stopFullSession: triggers Core's own existing
  *   full-Android-Auto pipeline (io.motohub.android.androidauto.
  *   AndroidAutoSessionService) exactly as Core's own UI does today —
@@ -25,17 +28,18 @@ import io.motohub.android.ipc.AndroidAutoSettingsParcel;
  *   caller does not supply a Surface; it only starts/stops the session and
  *   observes state via the listener below.
  *
- * sendKey/sendScroll are declared for forward compatibility but return false
- * today: Core's current public AA input channel only implements touch
- * (see io.motohub.android.aa.AaInput). Key/scroll dispatch needs its own
- * public implementation before these do anything.
+ * sendTouch uses output/source coordinates. sendPreviewTouch maps phone
+ * preview coordinates through Core's compositor before forwarding them.
  */
 interface IAndroidAutoReceiverService {
     boolean attachOutputSurface(in Surface surface, int width, int height);
     void detachOutputSurface();
+    boolean attachPreviewSurface(in Surface surface, int width, int height);
+    void detachPreviewSurface();
 
     /** action: 0=DOWN, 1=UP, 2=MOVE (see io.motohub.android.aa.AaInput). Coordinates in the surface's own space. */
     boolean sendTouch(int action, int x, int y);
+    boolean sendPreviewTouch(int action, int x, int y);
     boolean sendKey(int keycode);
     boolean sendScroll(int delta);
 

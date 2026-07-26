@@ -161,12 +161,6 @@ class MainActivity : ComponentActivity() {
    private val androidAutoCoreBridge by lazy {
        io.motohub.android.androidauto.createAndroidAutoCoreBridge(applicationContext)
    }
-   // CORE runs Ride Dashboard's embedded Android Auto panel locally (no-op bridge); PRO
-   // delegates the whole dashboard-with-AA session to Core over AIDL — same reasoning as
-   // androidAutoCoreBridge above (the AGPL receiver can only run in Core).
-   private val rideDashboardEmbeddedAaBridge by lazy {
-       io.motohub.android.feature.ridedashboard.createRideDashboardEmbeddedAaBridge(applicationContext)
-   }
    // CORE's local self-mode trigger for Ride Dashboard's embedded AA panel (see
    // RideDashboardLocalAndroidAutoTrigger doc — a no-op in PRO, which never runs it locally).
    private val rideDashboardLocalAndroidAutoTrigger by lazy {
@@ -254,10 +248,8 @@ class MainActivity : ComponentActivity() {
                 // whether closing the screen should also finish() this Activity, returning
                 // control to Advanced automatically instead of leaving the rider in Core.
                 var androidAutoPhoneOnlyLaunchedFromPro by rememberSaveable { mutableStateOf(launchedPhoneOnlyAa) }
-                // Same idea as androidAutoPhoneOnlyLaunchedFromPro, but for the regular
-                // "Preview & touch"/"AA fullscreen controls" deep-link (openAndroidAutoPreviewInCore
-                // in Advanced) - covers both full Android Auto and Ride Dashboard's embedded AA
-                // panel, since both route through this same screen and this same Intent extra.
+                // Same idea as androidAutoPhoneOnlyLaunchedFromPro, retained for Core-side
+                // deep-links; PRO opens its own preview screen directly.
                 var androidAutoPreviewLaunchedFromPro by rememberSaveable { mutableStateOf(launchedAndroidAutoPreview) }
                 var showRideDashboardPreview by rememberSaveable { mutableStateOf(false) }
                 // true only when the rider chose "Use Ride Dashboard without a T-Box" - the
@@ -1294,13 +1286,7 @@ class MainActivity : ComponentActivity() {
                         onDisconnect = viewModel::disconnect,
                         onOpenControls = {
                             ProjectionEventLog.record("UI", "Controls screen opened.")
-                            if (BuildConfig.IS_PRO && rideDashboardActive &&
-                                rideDashboardMapSource == RideDashboardMapSource.ANDROID_AUTO
-                            ) {
-                                openRideDashboardControlsInCore()
-                            } else {
-                                showControls = true
-                            }
+                            showControls = true
                         },
                         onStartProjection = {
                             ProjectionEventLog.record("MIRROR", "User selected mirroring mode.")
@@ -1322,11 +1308,8 @@ class MainActivity : ComponentActivity() {
                         rideDashboardActive = rideDashboardActive,
                         rideDashboardStreaming = rideDashboardStreaming,
                         onStartRideDashboard = {
-                            // Runs in both flavors: PRO streams the dashboard through CORE over the
-                            // AIDL transport (same path as Mirroring). When the map panel is
-                            // Android Auto, PRO can't run that panel locally (AGPL receiver) and
-                            // instead delegates the ENTIRE dashboard session to Core — see
-                            // rideDashboardEmbeddedAaBridge below.
+                            // PRO renders the complete dashboard locally. For an Android Auto map,
+                            // CORE supplies only decoded frames through the Surface IPC path.
                             // Settings → Navigation is the canonical source for the map engine;
                             // refresh the remembered home-screen value before launching so a
                             // MapLibre selection made outside the home picker is honored.
@@ -1337,37 +1320,7 @@ class MainActivity : ComponentActivity() {
                             if (selectedMapSource == RideDashboardMapSource.ANDROID_AUTO) {
                                 RideDashboardTrackOverlayRuntime.setEnabled(false)
                             }
-                            val delegateToCore = selectedMapSource == RideDashboardMapSource.ANDROID_AUTO &&
-                                rideDashboardEmbeddedAaBridge.delegatesToCore
-                            if (delegateToCore) {
-                                viewModel.onRideDashboardRequested()
-                                rideDashboardEmbeddedAaBridge.start { message ->
-                                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
-                                }
-                            } else {
-                                val notificationGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                                    ContextCompat.checkSelfPermission(
-                                        context,
-                                        Manifest.permission.POST_NOTIFICATIONS
-                                    ) == PackageManager.PERMISSION_GRANTED
-                                if (notificationGranted) {
-                                    if (MotoHubSettings.autoRecordTrips(context)) {
-                                        TripRecordingService.startAuto(
-                                            context,
-                                            state.session.motorcycle?.id,
-                                            TripRecordingSource.RIDE_DASHBOARD
-                                        )
-                                    }
-                                    viewModel.onRideDashboardRequested()
-                                    RideDashboardSessionService.start(context, selectedMapSource)
-                                    if (selectedMapSource == RideDashboardMapSource.ANDROID_AUTO) {
-                                        requestMicAndStart("ride")
-                                    }
-                                } else {
-                                    rideDashboardPermissionPending = true
-                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                }
-                            }
+                            startRideDashboardWithPermissions(selectedMapSource)
                         },
                         onCustomizeRideDashboard = {
                             val activeProfile = state.session.motorcycle
@@ -1377,10 +1330,6 @@ class MainActivity : ComponentActivity() {
                                     motoHubText("Connect a motorcycle before customizing its dashboard."),
                                     Toast.LENGTH_SHORT
                                 ).show()
-                            } else if (BuildConfig.IS_PRO &&
-                                rideDashboardMapSource == RideDashboardMapSource.ANDROID_AUTO
-                            ) {
-                                openRideDashboardCustomizeInCore()
                             } else {
                                 returnToRideAfterDashboardCustomization = true
                                 dashboardCustomizationProfileId = activeProfile.id
@@ -1410,13 +1359,7 @@ class MainActivity : ComponentActivity() {
                                 "User requested Ride Dashboard stop."
                             )
                             RideDashboardTrackOverlayRuntime.clearLoadedTrip()
-                            if (rideDashboardMapSource == RideDashboardMapSource.ANDROID_AUTO &&
-                                rideDashboardEmbeddedAaBridge.delegatesToCore
-                            ) {
-                                rideDashboardEmbeddedAaBridge.stop()
-                            } else {
-                                RideDashboardSessionService.stop(context)
-                            }
+                            RideDashboardSessionService.stop(context)
                             reconnectAfterModeStop("Ride Dashboard")
                         },
                         showRecordedTrackOnDashboard = showRecordedTrackOnDashboard,
@@ -1451,30 +1394,22 @@ class MainActivity : ComponentActivity() {
                         },
                         onOpenAndroidAutoPreview = {
                             ProjectionEventLog.record("UI", "Android Auto phone preview opened.")
-                            if (BuildConfig.IS_PRO) {
-                                openAndroidAutoPreviewInCore(fullscreen = false)
-                            } else {
-                                androidAutoPreviewStartFullscreen = false
-                                androidAutoPreviewIsPhoneOnly = false
-                                androidAutoPhoneOnlyLaunchedFromPro = false
-                                androidAutoPreviewLaunchedFromPro = false
-                                showAndroidAutoPreview = true
-                            }
+                            androidAutoPreviewStartFullscreen = false
+                            androidAutoPreviewIsPhoneOnly = false
+                            androidAutoPhoneOnlyLaunchedFromPro = false
+                            androidAutoPreviewLaunchedFromPro = false
+                            showAndroidAutoPreview = true
                         },
                         onOpenAndroidAutoFullscreenControls = {
                             ProjectionEventLog.record(
                                 "UI",
                                 "Android Auto fullscreen controls opened from Ride Dashboard."
                             )
-                            if (BuildConfig.IS_PRO) {
-                                openAndroidAutoPreviewInCore(fullscreen = true)
-                            } else {
-                                androidAutoPreviewStartFullscreen = true
-                                androidAutoPreviewIsPhoneOnly = false
-                                androidAutoPhoneOnlyLaunchedFromPro = false
-                                androidAutoPreviewLaunchedFromPro = false
-                                showAndroidAutoPreview = true
-                            }
+                            androidAutoPreviewStartFullscreen = true
+                            androidAutoPreviewIsPhoneOnly = false
+                            androidAutoPhoneOnlyLaunchedFromPro = false
+                            androidAutoPreviewLaunchedFromPro = false
+                            showAndroidAutoPreview = true
                         },
                         onOpenRideDashboardPreview = {
                             ProjectionEventLog.record("UI", "Ride Dashboard phone preview opened from active session.")
@@ -1624,13 +1559,7 @@ class MainActivity : ComponentActivity() {
                             SettingsTabContent(
                                 onOpenControls = {
                                     ProjectionEventLog.record("UI", "Controls screen opened.")
-                                    if (BuildConfig.IS_PRO && rideDashboardActive &&
-                                        rideDashboardMapSource == RideDashboardMapSource.ANDROID_AUTO
-                                    ) {
-                                        openRideDashboardControlsInCore()
-                                    } else {
-                                        showControls = true
-                                    }
+                                    showControls = true
                                 },
                                 onOpenNetworkDiagnostics = {
                                     ProjectionEventLog.record("UI", "Network diagnostics screen opened.")
@@ -1777,59 +1706,7 @@ class MainActivity : ComponentActivity() {
       rideDashboardLocalAndroidAutoTrigger.trigger()
     }
 
-    /**
-     * Advanced has no local Android Auto video — see AndroidAutoPreviewLaunchRequest's doc.
-     * Launches Core straight into its own (fully working, in-process) preview screen instead.
-     */
-    private fun openAndroidAutoPreviewInCore(fullscreen: Boolean) {
-        val intent = Intent().apply {
-            setClassName(IpcBridgeContract.CORE_PACKAGE_NAME, IpcBridgeContract.CORE_MAIN_ACTIVITY_CLASS_NAME)
-            putExtra(IpcBridgeContract.EXTRA_OPEN_ANDROID_AUTO_PREVIEW, true)
-            putExtra(IpcBridgeContract.EXTRA_OPEN_ANDROID_AUTO_PREVIEW_FULLSCREEN, fullscreen)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        runCatching { startActivity(intent) }.onFailure {
-            ProjectionEventLog.warning("UI", "Failed to open Core's Android Auto preview: ${it.message}")
-            Toast.makeText(this, motoHubText("Couldn't open MOTO-HUB Core. Is it installed?"), Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    /**
-     * Same reasoning as [openAndroidAutoPreviewInCore]: RideDashboardControlBridge only exists in
-     * whichever process actually runs RideDashboardSessionService, which for the embedded-AA map
-     * source is always Core. Launches Core straight into its own (fully working, in-process)
-     * Controls screen instead of Advanced's own, which has nothing real to control.
-     */
-    private fun openRideDashboardControlsInCore() {
-        val intent = Intent().apply {
-            setClassName(IpcBridgeContract.CORE_PACKAGE_NAME, IpcBridgeContract.CORE_MAIN_ACTIVITY_CLASS_NAME)
-            putExtra(IpcBridgeContract.EXTRA_OPEN_RIDE_DASHBOARD_CONTROLS, true)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        runCatching { startActivity(intent) }.onFailure {
-            ProjectionEventLog.warning("UI", "Failed to open Core's Ride Dashboard controls: ${it.message}")
-            Toast.makeText(this, motoHubText("Couldn't open MOTO-HUB Core. Is it installed?"), Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    /** Same reasoning as [openRideDashboardControlsInCore], for widget customization. */
-    private fun openRideDashboardCustomizeInCore() {
-        val intent = Intent().apply {
-            setClassName(IpcBridgeContract.CORE_PACKAGE_NAME, IpcBridgeContract.CORE_MAIN_ACTIVITY_CLASS_NAME)
-            putExtra(IpcBridgeContract.EXTRA_OPEN_RIDE_DASHBOARD_CUSTOMIZE, true)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        runCatching { startActivity(intent) }.onFailure {
-            ProjectionEventLog.warning("UI", "Failed to open Core's Ride Dashboard customization: ${it.message}")
-            Toast.makeText(this, motoHubText("Couldn't open MOTO-HUB Core. Is it installed?"), Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    /**
-     * Advanced has no local Android Auto code at all, so a T-Box-free session can't run here
-     * either — same reasoning as [openAndroidAutoPreviewInCore], just starting a fresh phone-only
-     * session in Core instead of previewing an existing one.
-     */
+    /** Starts the phone-only Android Auto session in CORE, which owns the receiver implementation. */
     private fun openPhoneOnlyAndroidAutoInCore() {
         val displayMode = AndroidAutoDisplayModeStore(applicationContext).load(DEFAULT_DASHBOARD_SETTINGS_PROFILE)
         val intent = Intent().apply {
@@ -1851,11 +1728,7 @@ class MainActivity : ComponentActivity() {
         handleAndroidAutoPreviewLaunchIntent(intent)
     }
 
-    /**
-     * Advanced has no local Android Auto video (see AndroidAutoPreviewLaunchRequest's doc) and
-     * instead launches Core straight into this screen. Core's MainActivity is singleTask, so this
-     * fires via onNewIntent when Core is already running, or via onCreate on a cold start.
-     */
+    /** Handles Core-only deep-links; PRO opens its active preview screen locally. */
     private fun handleAndroidAutoPreviewLaunchIntent(intent: Intent?) {
         if (BuildConfig.IS_PRO) return
         if (intent?.getBooleanExtra(IpcBridgeContract.EXTRA_START_PHONE_ONLY_ANDROID_AUTO, false) == true) {
@@ -1897,7 +1770,6 @@ class MainActivity : ComponentActivity() {
         ProjectionEventLog.record("UI", "Main activity destroyed. changingConfigurations=$isChangingConfigurations")
         if (!isChangingConfigurations) {
             androidAutoCoreBridge.release()
-            rideDashboardEmbeddedAaBridge.release()
         }
         super.onDestroy()
     }

@@ -110,13 +110,7 @@ fun AndroidAutoPreviewScreen(onBack: () -> Unit, startFullscreen: Boolean = fals
                 "Session preparing. Waiting for Android Auto to connect."
             AndroidAutoRuntimeState.ReceiverReady ->
                 "Receiver ready. Waiting for the first Android Auto frame."
-            AndroidAutoRuntimeState.Streaming -> if (io.motohub.android.BuildConfig.IS_PRO) {
-                // Advanced delegates the whole AA session to Core, which draws it straight to
-                // the T-Box — it cannot also mirror the video into Advanced's own Surface at the
-                // same time (see ProAndroidAutoPreviewController). The old "Live preview
-                // available" copy claimed video that never existed; be honest instead.
-                "Streaming to the T-Box. Phone video preview isn't available yet — the controls below still work."
-            } else if (inputReady) {
+            AndroidAutoRuntimeState.Streaming -> if (inputReady) {
                 "Live preview and touch control available."
             } else {
                 "Live video. Input channel is still pending."
@@ -128,9 +122,7 @@ fun AndroidAutoPreviewScreen(onBack: () -> Unit, startFullscreen: Boolean = fals
                 "Ride Dashboard Android Auto is preparing."
             RideDashboardAndroidAutoState.ReceiverReady ->
                 "Receiver ready. Waiting for the first Android Auto frame."
-            RideDashboardAndroidAutoState.Streaming -> if (io.motohub.android.BuildConfig.IS_PRO) {
-                "Ride Dashboard streaming to the T-Box. Phone video preview isn't available yet — the controls below still work."
-            } else if (inputReady) {
+            RideDashboardAndroidAutoState.Streaming -> if (inputReady) {
                 "Ride Dashboard: live preview and touch control available."
             } else {
                 "Ride Dashboard: live video. Input channel is still pending."
