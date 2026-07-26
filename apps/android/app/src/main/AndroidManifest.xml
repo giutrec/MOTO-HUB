@@ -44,6 +44,11 @@
         android:localeConfig="@xml/locales_config"
         android:supportsRtl="true"
         android:theme="@style/Theme.MotoHub">
+        <!-- Sentry is initialized explicitly by MotoHubApplication after the DSN has been
+             loaded from BuildConfig. Prevent the SDK provider from initializing first. -->
+        <meta-data
+            android:name="io.sentry.auto-init"
+            android:value="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
