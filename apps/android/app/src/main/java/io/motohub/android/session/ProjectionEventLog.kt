@@ -95,6 +95,9 @@ object ProjectionEventLog {
                 append(Log.getStackTraceString(throwable))
             }
         })
+        if (level == LogLevel.ERROR) {
+            SentryIntegration.captureDiagnosticError(source, detail)
+        }
         when (level) {
             LogLevel.DEBUG -> Log.d(LOG_TAG, "$source: $detail")
             LogLevel.INFO -> Log.i(LOG_TAG, "$source: $detail")

@@ -41,6 +41,24 @@ val hasLocalReleaseSigning = localSigningStore?.isFile == true &&
     localSigningProperties.getProperty("keyAlias") != null &&
     localSigningProperties.getProperty("keyPassword") != null
 
+val localSentryPropertiesFile = rootProject.projectDir.resolve("../../tooling/private/sentry.properties")
+val localSentryProperties = Properties().apply {
+    if (localSentryPropertiesFile.isFile) {
+        localSentryPropertiesFile.inputStream().use { stream -> load(stream) }
+    }
+}
+
+fun sentryDsn(propertyName: String, environmentName: String): String =
+    providers.gradleProperty(propertyName).orNull
+        ?: providers.environmentVariable(environmentName).orNull
+        ?: localSentryProperties.getProperty(propertyName)
+        ?: ""
+
+fun asBuildConfigString(value: String): String =
+    "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
+val coreSentryDsn = sentryDsn("sentryCoreDsn", "SENTRY_CORE_DSN")
+
 android {
     namespace = "io.motohub.android"
     compileSdk = 36
@@ -52,6 +70,7 @@ android {
         versionCode = 94
         versionName = "1.1.0-build.94-r1"
         buildConfigField("boolean", "IS_PRO", "false")
+        buildConfigField("String", "SENTRY_DSN", asBuildConfigString(coreSentryDsn))
         manifestPlaceholders["appLabel"] = "MOTO-HUB"
     }
 
@@ -237,6 +256,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.maplibre.android)
     implementation(libs.okhttp)
+    implementation(libs.sentry.android)
 
     testImplementation(libs.junit)
 

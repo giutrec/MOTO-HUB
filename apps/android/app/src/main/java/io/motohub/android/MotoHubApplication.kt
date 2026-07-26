@@ -4,11 +4,13 @@ import android.app.Application
 import io.motohub.android.i18n.MotoHubStrings
 import io.motohub.android.session.CrashRecovery
 import io.motohub.android.session.ProjectionEventLog
+import io.motohub.android.session.SentryIntegration
 
 class MotoHubApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         MotoHubStrings.initialize(this)
+        SentryIntegration.initialize(this)
         ProjectionEventLog.initialize(this)
         CrashRecovery.install(this)
         CrashRecovery.restorePreviousCrash(this)
