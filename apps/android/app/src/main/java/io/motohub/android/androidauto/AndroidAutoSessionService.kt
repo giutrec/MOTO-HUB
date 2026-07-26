@@ -975,9 +975,16 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         }
 
         fun stop(context: Context) {
-            context.startService(
-                Intent(context, AndroidAutoSessionService::class.java).setAction(ACTION_STOP)
-            )
+            // Stop the already-running foreground service explicitly. The previous implementation
+            // started the service again with ACTION_STOP; that request could be ignored when it
+            // came through the PRO AIDL bridge or the notification action. Android calls
+            // onDestroy() for an explicit stop, where the complete session cleanup already lives.
+            val intent = Intent(context, AndroidAutoSessionService::class.java)
+            if (!context.stopService(intent)) {
+                // If the service is still in its startup window, deliver the action as a fallback
+                // so onStartCommand() can terminate the pending session as well.
+                context.startService(intent.setAction(ACTION_STOP))
+            }
         }
     }
 }
