@@ -7,8 +7,8 @@ import android.widget.Toast
 
 /**
  * Stage 1 of the Core/Pro split removed the GPL T-Box transport (hudlib) from the PRO flavor — it
- * now reaches Core's transport only over the AIDL bridge. The streaming features (Android Auto,
- * Mirroring, Ride Dashboard) still run their pipelines locally, but in PRO those pipelines hit the
+ * now reaches Core's transport only over the AIDL bridge. The streaming features still run their
+ * pipelines locally, but in PRO those pipelines hit the
  * AIDL stub transport (empty discovery/negotiation) and crash with `NoSuchElementException`.
  *
  * Until Stage 2 routes each of these through Core, PRO must not run the local path. This is the

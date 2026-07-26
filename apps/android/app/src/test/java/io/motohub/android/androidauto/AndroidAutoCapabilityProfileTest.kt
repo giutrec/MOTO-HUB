@@ -80,7 +80,7 @@ class AndroidAutoCapabilityProfileTest {
         val target = DisplayGeometry(800, 384)
 
         val profile = AndroidAutoCapabilityProfiles.select(target)
-            .withFullVideoTargetForDashboard()
+            .withFullVideoTarget()
 
         assertEquals(AndroidAutoVideoPreset.LANDSCAPE_800X480, profile.videoPreset)
         assertEquals(DisplayGeometry(800, 480), profile.target)

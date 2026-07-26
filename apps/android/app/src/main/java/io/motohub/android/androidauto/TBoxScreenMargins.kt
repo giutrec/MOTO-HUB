@@ -69,7 +69,7 @@ class TBoxScreenMarginsStore(context: Context) {
     /**
      * Notifies [listener] whenever [save] or [reset] changes any margin for any SSID -
      * callers should use [belongsToMotorcycle] to filter for the SSID they care about. Lets
-     * an active Android Auto/Ride Dashboard session apply a margin change picked in
+     * an active projection session apply a margin change picked in
      * [io.motohub.android.feature.garage.MotorcycleDetailsScreen] without restarting.
      */
     fun addListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {

@@ -47,14 +47,14 @@ data class AndroidAutoCapabilityProfile(
 }
 
 /**
- * Do not tell Android Auto that part of the negotiated source is reserved panel furniture.
+ * Do not tell Android Auto that part of the negotiated source is reserved output furniture.
  * This is deliberately independent of the learned T-Box encoder area: that area can be
  * smaller than the physical panel even when the panel itself has no Android Auto margins.
  */
-internal fun AndroidAutoCapabilityProfile.withFullVideoTargetForDashboard(): AndroidAutoCapabilityProfile =
+internal fun AndroidAutoCapabilityProfile.withFullVideoTarget(): AndroidAutoCapabilityProfile =
     copy(
         target = video,
-        reason = reason + " Ride Dashboard composes the full AA source into its dynamic panel."
+        reason = reason + " The full negotiated AA source is used by the output compositor."
     )
 
 object AndroidAutoCapabilityProfiles {

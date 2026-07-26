@@ -314,7 +314,6 @@ private fun MotorcycleDetailsMainList(
                 description = motoHubText("Endpoint, geometry, protocol, and feature flags"),
                 onClick = onOpenCapabilities
             )
-            // Ride Dashboard is Advanced-only. Core ships Mirror + Android Auto only.
             if (io.motohub.android.BuildConfig.IS_PRO) {
                 MotoHubActionRow(
                     title = motoHubText("Customize Dashboard"),

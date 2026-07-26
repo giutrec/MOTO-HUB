@@ -1,0 +1,60 @@
+package io.motohub.android.feature.pairing
+
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.unit.dp
+
+@Composable
+fun TBoxQrPhotoProcessingDialog(
+    completedAttempts: Int,
+    totalAttempts: Int
+) {
+    val progress = if (totalAttempts > 0) {
+        (completedAttempts.toFloat() / totalAttempts.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+
+    Dialog(onDismissRequest = {}) {
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(24.dp)) {
+                CircularProgressIndicator()
+                Text(
+                    text = "Analyzing QR photo…",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 18.dp)
+                )
+                Text(
+                    text = "Removing display patterns and trying QR recognition",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 18.dp)
+                )
+                Text(
+                    text = "Attempt $completedAttempts of $totalAttempts",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        }
+    }
+}

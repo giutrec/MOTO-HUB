@@ -5,7 +5,7 @@ import android.view.Surface
 import io.motohub.android.aa.AaReceiver
 import io.motohub.android.aa.AaSelfMode
 import io.motohub.android.aa.SingleKeyKeyManager
-import io.motohub.android.feature.garage.DEFAULT_DASHBOARD_SETTINGS_PROFILE
+import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.session.ProjectionEventLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -56,14 +56,13 @@ class PhoneOnlyAndroidAutoBridge(private val context: Context) :
             return
         }
         AndroidAutoRuntime.publish(AndroidAutoRuntimeState.Preparing)
-        AndroidAutoPreviewRuntime.install(this)
 
-        val profile = AndroidAutoCapabilityProfiles.fallback().withFullVideoTargetForDashboard()
+        val profile = AndroidAutoCapabilityProfiles.fallback().withFullVideoTarget()
         videoWidth = profile.video.width
         videoHeight = profile.video.height
         val activeCompositor = AaCompositor(
             log = { ProjectionEventLog.debug("PHONE_ONLY_AA", it) },
-            displayMode = AndroidAutoDisplayModeStore(context).load(DEFAULT_DASHBOARD_SETTINGS_PROFILE),
+            displayMode = AndroidAutoDisplayModeStore(context).load(PHONE_ONLY_ANDROID_AUTO_PROFILE),
             sourceGeometry = profile.video
         )
         if (!activeCompositor.start()) {
@@ -77,6 +76,10 @@ class PhoneOnlyAndroidAutoBridge(private val context: Context) :
             return
         }
         compositor = activeCompositor
+        // Install only after the compositor exists. If the SurfaceView is already attached,
+        // install() immediately reattaches that surface; installing earlier would drop that
+        // callback while compositor is still null and leave the phone preview blank forever.
+        AndroidAutoPreviewRuntime.install(this)
 
         val activeReceiver = AaReceiver(
             context = context,
@@ -185,3 +188,9 @@ class PhoneOnlyAndroidAutoBridge(private val context: Context) :
         const val RECEIVER_SETTLE_MS = 900L
     }
 }
+
+private val PHONE_ONLY_ANDROID_AUTO_PROFILE = MotorcycleProfile(
+    ssid = "phone-only-android-auto",
+    password = "",
+    id = "phone-only-android-auto"
+)

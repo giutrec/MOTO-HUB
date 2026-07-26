@@ -26,7 +26,7 @@ import io.motohub.android.androidauto.AndroidAutoPreviewRuntime
 import io.motohub.android.androidauto.AndroidAutoRuntime
 import io.motohub.android.androidauto.AndroidAutoRuntimeState
 import io.motohub.android.androidauto.AndroidAutoSessionService
-import io.motohub.android.androidauto.withFullVideoTargetForDashboard
+import io.motohub.android.androidauto.withFullVideoTarget
 import io.motohub.android.feature.settings.AndroidAutoAspectMatchingMode
 import io.motohub.android.feature.settings.AndroidAutoResolutionMode
 import io.motohub.android.feature.settings.MotoHubSettings
@@ -236,7 +236,7 @@ class IpcBridgeService : Service() {
                 return false
             }
             publishState(AndroidAutoIpcState.PREPARING, "")
-            val profile = AndroidAutoCapabilityProfiles.fallback().withFullVideoTargetForDashboard()
+            val profile = AndroidAutoCapabilityProfiles.fallback().withFullVideoTarget()
             val activeCompositor = AaCompositor(
                 log = { ProjectionEventLog.debug("IPC_AA", it) },
                 displayMode = AndroidAutoDisplayMode.STRETCH,
@@ -497,7 +497,7 @@ class IpcBridgeService : Service() {
     // (in-memory only) and any active AA session, surfacing as "No T-Box is ready" or a session
     // that stops working until the rider disconnects and reconnects. Run in the foreground for
     // this service's whole lifetime (bind-to-unbind) so it survives like Core's own AA/Mirroring/
-    // Ride Dashboard sessions already do.
+    // Advanced streaming sessions already do.
     override fun onCreate() {
         super.onCreate()
         val manager = getSystemService(NotificationManager::class.java)

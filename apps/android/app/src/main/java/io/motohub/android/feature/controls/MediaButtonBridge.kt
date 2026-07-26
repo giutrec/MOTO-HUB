@@ -553,7 +553,6 @@ class MediaButtonBridge(
 
     companion object {
         const val TARGET_ANDROID_AUTO = "Android Auto"
-        const val TARGET_RIDE_DASHBOARD = "Ride Dashboard"
 
         private const val CHANNEL_ID = "motohub_handlebar_controls"
         private const val NOTIFICATION_ID = 4203

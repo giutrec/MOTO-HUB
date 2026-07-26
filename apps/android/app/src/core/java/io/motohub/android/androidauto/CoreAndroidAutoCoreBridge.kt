@@ -2,10 +2,7 @@ package io.motohub.android.androidauto
 
 import android.content.Context
 import io.motohub.android.aa.AaSelfMode
-import io.motohub.android.data.MotorcycleProfileStore
 import io.motohub.android.feature.settings.MotoHubSettings
-import io.motohub.android.feature.trips.TripRecordingService
-import io.motohub.android.feature.trips.TripRecordingSource
 import io.motohub.android.session.ProjectionEventLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,13 +35,6 @@ class CoreAndroidAutoCoreBridge(private val context: Context) : AndroidAutoCoreB
             return
         }
         ProjectionEventLog.record("ANDROID_AUTO", "User requested Android Auto startup.")
-        if (MotoHubSettings.autoRecordTrips(context)) {
-            TripRecordingService.startAuto(
-                context,
-                MotorcycleProfileStore(context).load()?.id,
-                TripRecordingSource.ANDROID_AUTO
-            )
-        }
         AndroidAutoSessionService.start(context)
         scope.launch {
             val state = withTimeoutOrNull(RECEIVER_READY_TIMEOUT_MS) {
@@ -93,7 +83,7 @@ class CoreAndroidAutoCoreBridge(private val context: Context) : AndroidAutoCoreB
     }
 }
 
-/** Used where a feature doesn't need Core-side delegation at all — e.g. Ride Dashboard's embedded
+/** Used where a feature doesn't need Core-side delegation at all — e.g. an embedded
  *  AA panel, which Core already runs directly (not via this bridge shape). */
 object NoopAndroidAutoCoreBridge : AndroidAutoCoreBridge {
     override val delegatesToCore: Boolean = false

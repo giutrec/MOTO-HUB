@@ -129,7 +129,6 @@ object MotoHubSettings {
     private const val KEY_SKIPPED_UPDATE_TAG = "skipped_update_tag"
     private const val KEY_AUTO_UPDATE_CHECKS = "auto_update_checks"
     private const val KEY_LAST_AUTO_UPDATE_CHECK_AT = "last_auto_update_check_at_millis"
-    private const val KEY_RIDE_DASHBOARD_STARTUP_SCREEN = "ride_dashboard_startup_screen"
     private const val KEY_SAFETY_DISCLAIMER_ACKNOWLEDGED = "safety_disclaimer_acknowledged"
     private const val KEY_VERBOSE_TBOX_LOGGING = "verbose_tbox_logging"
     private const val KEY_LOGGING_ENABLED = "logging_enabled"
@@ -164,7 +163,7 @@ object MotoHubSettings {
     /**
      * Route with FOSSGIS's free public Valhalla demo server instead of
      * requiring a personal Stadia Maps key. Only takes effect while no key is
-     * configured - see [io.motohub.android.feature.ridedashboard.nav.DemoValhallaRoutingClient].
+     * configured - see the advanced routing implementation.
      */
     fun useDemoRoutingServer(context: Context): Boolean =
         preferences(context).getBoolean(KEY_USE_DEMO_ROUTING_SERVER, false)
@@ -304,14 +303,6 @@ object MotoHubSettings {
 
     fun setLastAutoUpdateCheckAtMillis(context: Context, epochMillis: Long) {
         preferences(context).edit().putLong(KEY_LAST_AUTO_UPDATE_CHECK_AT, epochMillis).apply()
-    }
-
-    /** Shows the motorcycle-photo puzzle and MOTO-HUB logo before the dashboard. Off by default. */
-    fun rideDashboardStartupScreen(context: Context): Boolean =
-        preferences(context).getBoolean(KEY_RIDE_DASHBOARD_STARTUP_SCREEN, false)
-
-    fun setRideDashboardStartupScreen(context: Context, enabled: Boolean) {
-        preferences(context).edit().putBoolean(KEY_RIDE_DASHBOARD_STARTUP_SCREEN, enabled).apply()
     }
 
     /** True after the rider chose not to see the startup safety warning again. */

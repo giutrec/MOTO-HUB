@@ -6,7 +6,7 @@ import io.motohub.android.session.ProjectionEventLog
  * Port 5288 (AaReceiver.PORT) is a single fixed local socket, so only one AaReceiver can be
  * bound at a time - but three independent features each build their own instance:
  * AndroidAutoSessionService (a real T-Box session), PhoneOnlyAndroidAutoBridge (no T-Box), and
- * EmbeddedAndroidAutoSource (Ride Dashboard's embedded AA panel). None of them previously knew
+ * EmbeddedAndroidAutoSource (an embedded AA panel). None of them previously knew
  * about the others, so if one was left running (e.g. a phone-only session backgrounded without
  * being stopped) and a second one tried to start, `AaReceiver.start()` failed outright with
  * "Android Auto local port 5288 is unavailable" - a raw bind failure with no recovery except

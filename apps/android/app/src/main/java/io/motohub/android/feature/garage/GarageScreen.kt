@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.motohub.android.BuildConfig
 import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.ui.components.HeroPrimaryAction
 import io.motohub.android.ui.components.HeroTile
@@ -121,19 +122,17 @@ fun GarageTabContent(
             }
         }
 
-        // Phone-only Android Auto/Ride Dashboard (no T-Box) already work with zero motorcycles
-        // paired - this is where their shared defaults (AA fit, TFT margins, and - Advanced only -
-        // dashboard widgets) live, since none of those have a per-motorcycle profile to attach to.
-        // Not gated to Advanced: Core's own phone-only Android Auto needs this too.
-        MonoLabel(motoHubText("NO MOTORCYCLE? NO PROBLEM"))
-        HeroTile(
-            title = "Default settings",
-            subtitle = "Used by Android Auto & Ride Dashboard without a T-Box",
-            icon = "Customize",
-            color = MotoHubDashboard,
-            modifier = Modifier.fillMaxWidth(),
-            onClick = onOpenDefaultSettings
-        )
+        if (BuildConfig.IS_PRO) {
+            MonoLabel(motoHubText("NO MOTORCYCLE? NO PROBLEM"))
+            HeroTile(
+                title = "Default settings",
+                subtitle = "Used by phone-only display modes without a T-Box",
+                icon = "Customize",
+                color = MotoHubDashboard,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onOpenDefaultSettings
+            )
+        }
         Spacer(Modifier.height(8.dp))
     }
 }

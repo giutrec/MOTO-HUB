@@ -69,36 +69,12 @@
              see src/core/AndroidManifest.xml. -->
 
         <service
-            android:name=".feature.ridedashboard.RideDashboardSessionService"
-            android:exported="false"
-            android:foregroundServiceType="connectedDevice|location" />
-
-        <service
             android:name=".externaldisplay.AoaExternalService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
-        <service
-            android:name=".externaldisplay.AoaRideDashboardService"
-            android:exported="false"
-            android:foregroundServiceType="connectedDevice|location" />
-
         <!-- AapAccessoryProbeService (AGPL AAP probe) is declared in the CORE flavor only —
              see src/core/AndroidManifest.xml. -->
-
-        <service
-            android:name=".feature.trips.TripRecordingService"
-            android:exported="false"
-            android:foregroundServiceType="location" />
-
-        <service
-            android:name=".feature.ridedashboard.NowPlayingListenerService"
-            android:exported="false"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
 
         <!-- IpcBridgeService (the Core/Pro AIDL boundary) is declared in the CORE flavor only —
              see src/core/AndroidManifest.xml. It contains GPL code (transport + AA receiver) so

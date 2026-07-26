@@ -27,8 +27,6 @@ import io.motohub.android.feature.controls.MediaButtonBridge
 import io.motohub.android.feature.controls.SimulatorHandlebarBridge
 import io.motohub.android.feature.settings.MotoHubSettings
 import io.motohub.android.feature.settings.AndroidAutoAspectMatchingMode
-import io.motohub.android.feature.trips.TripRecordingService
-import io.motohub.android.feature.trips.TripRecordingSource
 import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.session.ProjectionRuntime
@@ -344,7 +342,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
             timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
         )
         if (configurationResult.isFailure) {
-            // Same root cause as the Ride Dashboard fix: whichever mode ran before this one
+            // Same root cause as the other streaming-mode fix: whichever mode ran before this one
             // called transport.stop() on end, which for the real GPL transport fully tears down
             // the underlying session, so a bare retry of negotiateVideoConfiguration fails
             // identically every time. Re-run discover() from scratch instead, exactly like a
@@ -667,7 +665,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
      * Retries [recoverTBoxStream] within a [RECOVERY_GIVE_UP_MILLIS] budget before giving
      * up and tearing the session down, instead of failing the whole Android Auto session
      * on the first transient error (a discovery timeout, a momentary Wi-Fi hiccup). This
-     * mirrors [io.motohub.android.feature.ridedashboard.RideDashboardSessionService]'s
+     * mirrors the advanced streaming service's
      * `requestRecovery`, which already retries this way - Android Auto's own recovery was
      * previously a single attempt, contradicting the "Reconnecting" retry-budget state
      * ARCHITECTURE.md documents. [recoveryRequested] stays true for the whole multi-attempt
@@ -801,7 +799,6 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         touchFilter = null
         if (stopping) return
         stopping = true
-        TripRecordingService.stopAuto(this, TripRecordingSource.ANDROID_AUTO)
         ProjectionEventLog.record(
             "ANDROID AUTO",
             "Stopping session: reason=$reason, framesSent=${framesAccepted.get()}."

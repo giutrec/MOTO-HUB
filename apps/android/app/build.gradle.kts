@@ -49,14 +49,14 @@ android {
         applicationId = "io.motohub.android"
         minSdk = 34
         targetSdk = 36
-        versionCode = 92
-        versionName = "1.1.0-build.92-r1"
+        versionCode = 94
+        versionName = "1.1.0-build.94-r1"
     }
 
     // One codebase, two editions ("identica bit by bit ... con tutte le funzionalità
     // abilitate"): CORE = the open, reduced app (Home/Connessioni/Mirroring/Android Auto/
-    // Settings); PRO = the same code with every feature enabled (adds Ride Dashboard,
-    // Navigation, Trips). The only difference at runtime is BuildConfig.IS_PRO, which gates
+    // Settings); PRO = the same code with additional advanced features. The only difference at
+    // runtime is BuildConfig.IS_PRO, which gates
     // the extra tabs/modes — see HubBottomNavigation and ModeSelectionContent.
     flavorDimensions += "edition"
     productFlavors {
@@ -269,6 +269,7 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.barcode.scanning)
+    implementation(libs.zxing.core)
     implementation(libs.protobuf.java)
     implementation(libs.conscrypt.android)
     implementation(libs.kotlinx.serialization.json)

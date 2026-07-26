@@ -45,7 +45,7 @@ fun isCoreMissing(context: Context): Boolean {
 
 /**
  * Shown at the top of Home in Advanced when Core isn't installed, so the rider learns this
- * immediately instead of only on the first connect/Android-Auto/Ride-Dashboard attempt (those
+ * immediately instead of only on the first connection or projection attempt (those
  * still show their own error too, since a rider could uninstall Core mid-session). Rechecks on
  * every resume so it clears itself if Core gets installed and the rider switches back to
  * Advanced without a restart.
