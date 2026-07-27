@@ -1,11 +1,19 @@
 package io.motohub.android.tbox
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.net.Network
 import android.net.nsd.NsdManager
+import android.net.wifi.p2p.WifiP2pInfo
+import android.net.wifi.p2p.WifiP2pManager
 import java.net.Inet4Address
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.Executor
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * The transport-independent view of an established link to a T-Box, so discovery, the EasyConn
@@ -70,11 +78,61 @@ sealed interface TBoxLink {
     class WifiDirect(
         val bindIp: Inet4Address,
         val gatewayIp: Inet4Address,
-        private val leaveGroup: () -> Unit
+        private val leaveGroup: () -> Unit,
+        private val appContext: Context? = null
     ) : TBoxLink {
         override val network: Network? = null
         override val peerHint: Inet4Address = gatewayIp
         override val label: String get() = "p2p ${bindIp.hostAddress}->${gatewayIp.hostAddress}"
+        private val groupWatchers = CopyOnWriteArrayList<AutoCloseable>()
+
+        /**
+         * Notifies [onLost] once when the P2P group dissolves (dash off, out of range, P2P
+         * disabled). A P2P group has no ConnectivityManager network, so without this the only
+         * loss signal was the video watchdog's 10s frame stall. Returns a handle to stop
+         * watching; [disconnect] also closes any watcher still open.
+         */
+        fun watchGroupLost(onLost: () -> Unit): AutoCloseable {
+            val context = appContext
+                ?: return AutoCloseable { }
+            val fired = AtomicBoolean(false)
+            fun fire() {
+                if (fired.compareAndSet(false, true)) onLost()
+            }
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(receiverContext: Context, intent: Intent) {
+                    when (intent.action) {
+                        WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION -> {
+                            val info = intent.getParcelableExtra(
+                                WifiP2pManager.EXTRA_WIFI_P2P_INFO,
+                                WifiP2pInfo::class.java
+                            )
+                            if (info != null && !info.groupFormed) fire()
+                        }
+                        WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION -> {
+                            val enabled = intent.getIntExtra(WifiP2pManager.EXTRA_WIFI_STATE, -1) ==
+                                WifiP2pManager.WIFI_P2P_STATE_ENABLED
+                            if (!enabled) fire()
+                        }
+                    }
+                }
+            }
+            val filter = IntentFilter().apply {
+                addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION)
+                addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION)
+            }
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            val closer = object : AutoCloseable {
+                private val closed = AtomicBoolean(false)
+                override fun close() {
+                    if (!closed.compareAndSet(false, true)) return
+                    runCatching { context.unregisterReceiver(receiver) }
+                    groupWatchers.remove(this)
+                }
+            }
+            groupWatchers += closer
+            return closer
+        }
 
         override fun createSocket(): Socket {
             // The group's 192.168.49.0/24 subnet is on-link on the p2p interface, so even an
@@ -84,12 +142,21 @@ sealed interface TBoxLink {
             // pinning is not possible, an unbound socket still reaches 192.168.49.1.
             val source = currentP2pSourceIp()
             if (source != null) {
-                runCatching { return Socket().apply { bind(InetSocketAddress(source, 0)) } }
+                val pinned = Socket()
+                try {
+                    pinned.bind(InetSocketAddress(source, 0))
+                    return pinned
+                } catch (_: Exception) {
+                    runCatching { pinned.close() }
+                }
             }
             return Socket()
         }
 
-        override fun disconnect() = leaveGroup()
+        override fun disconnect() {
+            groupWatchers.toList().forEach { runCatching { it.close() } }
+            leaveGroup()
+        }
 
         /** The p2p source address assigned right now — the captured one if still present, else any. */
         private fun currentP2pSourceIp(): Inet4Address? = runCatching {

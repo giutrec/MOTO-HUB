@@ -62,6 +62,13 @@ class TBoxNetworkConnector(context: Context) {
     private var activeProfile: MotorcycleProfile? = null
     @Volatile
     private var connectedOnce = false
+    /**
+     * True between [releaseProcessBinding] and [rebindProcessToTBox]: the route was released on
+     * purpose (a local projection start needs the internet route for Google's servers) and the
+     * persistent callback must not re-bind it on ordinary DHCP/IPv6 link updates.
+     */
+    @Volatile
+    private var processBindingSuspended = false
     @Volatile
     private var rejoinJob: Job? = null
     @Volatile
@@ -71,6 +78,7 @@ class TBoxNetworkConnector(context: Context) {
         disconnect()
         activeProfile = profile
         connectedOnce = false
+        processBindingSuspended = false
         return try {
         if (TBoxModelProfile.fromModelId(profile.modelId) == TBoxModelProfile.MOTO_HUB_SIMULATOR) {
             ProjectionEventLog.record(
@@ -97,7 +105,8 @@ class TBoxNetworkConnector(context: Context) {
                 "with a usable IPv4 address."
         } else {
             "Android did not obtain a usable IPv4 address from the requested T-Box AP within " +
-                "${CONNECTION_TIMEOUT_MS}ms."
+                "${CONNECTION_TIMEOUT_MS}ms. If Android showed a dialog asking to connect to " +
+                "the ${profile.ssid} network, accept it and retry."
         }
         ProjectionEventLog.error("NETWORK", "Wi-Fi setup timed out after ${CONNECTION_TIMEOUT_MS}ms.")
         disconnect()
@@ -159,12 +168,14 @@ class TBoxNetworkConnector(context: Context) {
         if (processBoundNetwork == null) return
         val released = connectivityManager.bindProcessToNetwork(null)
         processBoundNetwork = null
+        processBindingSuspended = true
         ProjectionEventLog.record("NETWORK", "Process binding released; result=$released. T-Box request remains active.")
     }
 
     /** Rebinds reverse EasyConn sockets to the still-requested T-Box network. */
     @Synchronized
     fun rebindProcessToTBox(): Result<Network> = runCatching {
+        processBindingSuspended = false
         val network = checkNotNull(activeNetwork) { "The T-Box network is no longer available." }
         check(connectivityManager.bindProcessToNetwork(network)) {
             "Android cannot restore the binding to the T-Box network."
@@ -229,6 +240,21 @@ class TBoxNetworkConnector(context: Context) {
                     val isTBoxNetwork = linkProperties.linkAddresses
                         .any { isUsableTBoxIpv4Address(it.address) }
                     if (isTBoxNetwork) {
+                        if (processBindingSuspended) {
+                            // The binding was released on purpose while a local projection
+                            // starts. Re-binding here on a routine DHCP/IPv6 link update would
+                            // cut Google Android Auto off the internet mid-handshake; the
+                            // projection flow rebinds explicitly when it is ready.
+                            activeNetwork = network
+                            connectedOnce = true
+                            ProjectionEventLog.debug(
+                                "NETWORK",
+                                "T-Box link update accepted without re-binding: the process " +
+                                    "binding is deliberately released."
+                            )
+                            finish(Result.success(network), keepCallback = true)
+                            return
+                        }
                         val bindFailure = runCatching {
                             check(connectivityManager.bindProcessToNetwork(network)) {
                                 "Android cannot bind MOTO-HUB to the T-Box network."

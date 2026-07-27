@@ -17,6 +17,7 @@ import java.net.NetworkInterface
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -80,6 +81,10 @@ class TBoxWifiDirectConnector(
                             "Make sure the dash screen is on and, if the phone shows a Wi-Fi Direct invitation, accept it."
                     )
                 )
+            } catch (cancelled: CancellationException) {
+                // A user cancel or scope teardown must stay a cancellation - turning it into a
+                // Result.failure made the UI flash a spurious error after "Annulla".
+                throw cancelled
             } catch (failure: Throwable) {
                 Result.failure(failure)
             } finally {
@@ -87,8 +92,9 @@ class TBoxWifiDirectConnector(
                 // The group must outlive connect(): EasyConn discovery and the three reverse
                 // sockets run over it. Removing it here made every successful P2P join look like
                 // a dead dash a few milliseconds later. Failed/cancelled joins are still cleaned
-                // up immediately; successful ones are released by TBoxSessionRegistry.clear().
-                if (!handedOff) removeGroup(manager, channel)
+                // up immediately; successful ones are released by TBoxSessionRegistry.clear(),
+                // whose leaveGroup closure also closes the channel.
+                if (!handedOff) removeGroup(manager, channel, closeChannelAfter = true)
             }
         }
 
@@ -128,7 +134,7 @@ class TBoxWifiDirectConnector(
                         }
                     }
                     WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION -> {
-                        checkForFormedGroup(manager, channel, ::settle)
+                        checkForFormedGroup(manager, channel, profile, ::settle)
                     }
                 }
             }
@@ -144,7 +150,7 @@ class TBoxWifiDirectConnector(
         })
 
         // A leftover/persistent group may already be formed before this receiver saw any broadcast.
-        checkForFormedGroup(manager, channel, ::settle)
+        checkForFormedGroup(manager, channel, profile, ::settle)
 
         log("Joining Wi-Fi Direct group ${profile.ssid} as a legacy client.")
         val config = try {
@@ -191,6 +197,7 @@ class TBoxWifiDirectConnector(
     private fun checkForFormedGroup(
         manager: WifiP2pManager,
         channel: WifiP2pManager.Channel,
+        profile: MotorcycleProfile,
         settle: (Result<TBoxLink.WifiDirect>) -> Unit
     ) {
         manager.requestConnectionInfo(channel) { info ->
@@ -201,13 +208,38 @@ class TBoxWifiDirectConnector(
                 return@requestConnectionInfo
             }
             if (info.isGroupOwner) {
-                log("Warning: the phone became the Group Owner; the dash was expected to be the GO.")
+                // The dash must be the GO: with the roles inverted, 192.168.49.1 is the phone
+                // itself and every probe would just talk to the phone. Fail loudly; the caller's
+                // cleanup removes the inverted group so the next attempt negotiates fresh.
+                settle(
+                    Result.failure(
+                        IllegalStateException(
+                            "The phone became the Wi-Fi Direct Group Owner instead of joining " +
+                                "${profile.ssid}. The group was released; retry the connection " +
+                                "with the dash screen on."
+                        )
+                    )
+                )
+                return@requestConnectionInfo
             }
             manager.requestGroupInfo(channel) { group ->
+                // A formed group is not necessarily OUR group: a leftover/persistent group
+                // toward another DIRECT- device (a different bike, a cast dongle) also reports
+                // groupFormed. Joining it would make discovery fail with a misleading "dash did
+                // not answer". Remove the stale group and keep waiting for the requested one.
+                val groupName = group?.networkName
+                if (!groupNameMatchesProfile(groupName, profile.ssid)) {
+                    log(
+                        "Ignoring formed Wi-Fi Direct group '$groupName': it is not " +
+                            "${profile.ssid}. Removing the stale group and waiting for the join."
+                    )
+                    removeGroup(manager, channel, closeChannelAfter = false)
+                    return@requestGroupInfo
+                }
                 resolveLocalAddress(
                     iface = group?.`interface`,
                     gateway = gateway,
-                    leaveGroup = { removeGroup(manager, channel) },
+                    leaveGroup = { removeGroup(manager, channel, closeChannelAfter = true) },
                     settle = settle
                 )
             }
@@ -238,7 +270,8 @@ class TBoxWifiDirectConnector(
                         TBoxLink.WifiDirect(
                             bindIp = bindIp,
                             gatewayIp = gateway,
-                            leaveGroup = leaveGroup
+                            leaveGroup = leaveGroup,
+                            appContext = appContext
                         )
                     )
                 )
@@ -266,8 +299,11 @@ class TBoxWifiDirectConnector(
             for (address in nic.inetAddresses) {
                 if (address !is Inet4Address || address.isLoopbackAddress) continue
                 val host = address.hostAddress ?: continue
+                // Never accept the GO's own address as the phone's source: that only happens
+                // when the phone ended up as Group Owner, which the join already rejects.
+                if (host == GROUP_OWNER_IP) continue
                 if (nic.name == iface) return address
-                if (nameMatches && host.startsWith("192.168.49.") && host != GROUP_OWNER_IP) return address
+                if (nameMatches && host.startsWith("192.168.49.")) return address
             }
         }
         null
@@ -290,13 +326,25 @@ class TBoxWifiDirectConnector(
         else -> "reason $reason"
     }
 
-    private fun removeGroup(manager: WifiP2pManager, channel: WifiP2pManager.Channel) {
+    private fun removeGroup(
+        manager: WifiP2pManager,
+        channel: WifiP2pManager.Channel,
+        closeChannelAfter: Boolean
+    ) {
+        // The channel must stay open until removeGroup has completed, so it is closed from the
+        // callbacks - closing it earlier silently cancels the pending framework call.
+        fun finish() {
+            if (closeChannelAfter) runCatching { channel.close() }
+        }
         runCatching {
             manager.removeGroup(channel, object : WifiP2pManager.ActionListener {
-                override fun onSuccess() = log("Wi-Fi Direct group released.")
-                override fun onFailure(reason: Int) = Unit
+                override fun onSuccess() {
+                    log("Wi-Fi Direct group released.")
+                    finish()
+                }
+                override fun onFailure(reason: Int) = finish()
             })
-        }
+        }.onFailure { finish() }
     }
 
     companion object {
@@ -308,5 +356,17 @@ class TBoxWifiDirectConnector(
         /** Wi-Fi Direct group names always start with "DIRECT-" (Android convention). */
         fun isWifiDirectSsid(ssid: String): Boolean =
             ssid.trim().removeSurrounding("\"").startsWith("DIRECT-", ignoreCase = true)
+
+        /**
+         * Whether a formed group's network name is the profile's dash. A null/blank name cannot
+         * be verified (some frameworks withhold it from legacy clients) and is accepted rather
+         * than breaking joins that used to work.
+         */
+        internal fun groupNameMatchesProfile(groupName: String?, profileSsid: String): Boolean {
+            val normalizedGroup = groupName?.trim()?.removeSurrounding("\"").orEmpty()
+            if (normalizedGroup.isEmpty()) return true
+            val normalizedProfile = profileSsid.trim().removeSurrounding("\"")
+            return normalizedGroup.equals(normalizedProfile, ignoreCase = true)
+        }
     }
 }

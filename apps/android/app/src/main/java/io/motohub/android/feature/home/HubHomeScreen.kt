@@ -492,8 +492,10 @@ private fun ErrorBanner(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     if (officialCfmotoAppInstalled) {
-                        SecondaryAction("Close official app and retry", onCloseOfficialCfmotoAndRetry)
-                        SecondaryAction("Open official app settings", onOpenOfficialCfmotoSettings)
+                        // Android cannot close another app programmatically: send the user to
+                        // App info to force-stop the official app, then offer a plain retry.
+                        SecondaryAction("Force-stop the official app", onOpenOfficialCfmotoSettings)
+                        SecondaryAction("Retry connection", onCloseOfficialCfmotoAndRetry)
                     }
                 }
                 if (showWifiSettingsAction) {

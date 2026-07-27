@@ -36,8 +36,10 @@ object TBoxPortScanner {
     suspend fun scan(context: Context, profile: MotorcycleProfile): Result<TBoxPortScanResult> =
         withContext(Dispatchers.IO) {
             val connector = TBoxNetworkConnector(context)
+            var establishedLink: TBoxLink? = null
             val result = runCatching {
                 val link = TBoxLinkResolver.connect(context, connector, profile).getOrThrow()
+                establishedLink = link
                 val peerIp = link.peerHint?.hostAddress ?: link.network?.let { network ->
                     val connectivityManager = context.applicationContext
                         .getSystemService(ConnectivityManager::class.java)
@@ -77,6 +79,10 @@ object TBoxPortScanner {
                     TBoxPortScanResult(peerIp, entries)
                 }
             }
+            // A Wi-Fi Direct link owns its P2P group directly (no ConnectivityManager request to
+            // release), so the link must be disconnected too or the group survives the scan and
+            // pollutes the next real connection as a stale formed group.
+            establishedLink?.let { runCatching { it.disconnect() } }
             connector.disconnect()
             result
         }

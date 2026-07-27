@@ -31,7 +31,6 @@ import io.motohub.android.tbox.OfficialCfmotoClient
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -323,15 +322,15 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
             var sessionInstalled = false
             try {
                 // The official CFMOTO app can keep its EasyConn/PXC service alive after logout
-                // and while it is only in the recent-apps list. Release its background process
-                // before MOTO-HUB starts its own local 10920-10922 listeners.
+                // and while it is only in the recent-apps list. Android 14+ offers no way to
+                // close another app's process, so this is recorded as a risk factor only; the
+                // error banner guides the user to force-stop it when the conflict actually bites.
                 if (OfficialCfmotoClient.isInstalled(getApplication())) {
-                    OfficialCfmotoClient.closeBestEffort(getApplication())
-                    ProjectionEventLog.record(
+                    ProjectionEventLog.debug(
                         "CONNECTION",
-                        "Requested background shutdown of the official CFMOTO app before EasyConn connection."
+                        "The official CFMOTO app is installed; it may hold the T-Box session " +
+                            "if it was recently used."
                     )
-                    delay(300)
                 }
                 val connected = TBoxLinkResolver.connect(getApplication(), networkConnector, profile)
                 val networkFailure = connected.exceptionOrNull()

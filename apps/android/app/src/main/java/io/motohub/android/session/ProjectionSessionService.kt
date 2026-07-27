@@ -60,6 +60,7 @@ class ProjectionSessionService : Service() {
     private var tBoxHandle: TBoxSessionHandle? = null
     private var transportEventsJob: Job? = null
     private var networkEventsJob: Job? = null
+    private var p2pGroupWatcher: AutoCloseable? = null
     private var handleCleanupJob: Job? = null
     private var recoveryJob: Job? = null
     private val recoveryRequested = AtomicBoolean(false)
@@ -364,6 +365,8 @@ class ProjectionSessionService : Service() {
         networkEventsJob?.cancel()
         transportEventsJob = null
         networkEventsJob = null
+        p2pGroupWatcher?.close()
+        p2pGroupWatcher = null
         previousHandle.transport.stop()
         TBoxSessionRegistry.clear(previousHandle)
 
@@ -422,6 +425,17 @@ class ProjectionSessionService : Service() {
                 }
             }
         }
+        // A Wi-Fi Direct group has no ConnectivityManager network, so the Lost event above never
+        // fires for it; watch the P2P broadcasts and recover through the same retry budget as a
+        // transport error instead of waiting for the frame watchdog.
+        p2pGroupWatcher?.close()
+        p2pGroupWatcher = (handle.link as? io.motohub.android.tbox.TBoxLink.WifiDirect)?.watchGroupLost {
+            if (!stopping) {
+                serviceScope.launch {
+                    handleRecoverableFailure("The Wi-Fi Direct group with the dash was lost.")
+                }
+            }
+        }
     }
 
     @Synchronized
@@ -436,6 +450,8 @@ class ProjectionSessionService : Service() {
         transportEventsJob = null
         networkEventsJob?.cancel()
         networkEventsJob = null
+        p2pGroupWatcher?.close()
+        p2pGroupWatcher = null
         adaptiveJob?.cancel()
         adaptiveJob = null
         recoveryJob?.cancel()

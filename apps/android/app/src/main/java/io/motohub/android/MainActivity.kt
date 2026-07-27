@@ -917,14 +917,11 @@ class MainActivity : ComponentActivity() {
                         },
                         officialCfmotoAppInstalled = OfficialCfmotoClient.isInstalled(context),
                         onCloseOfficialCfmotoAndRetry = {
-                            val attempted = OfficialCfmotoClient.closeBestEffort(context)
+                            // Android 14+ cannot close another app's process; this action is a
+                            // plain retry for after the user has force-stopped the official app.
                             ProjectionEventLog.record(
                                 "CONNECTION",
-                                if (attempted) {
-                                    "Best-effort stop requested for the official CFMOTO app; retry scheduled."
-                                } else {
-                                    "Unable to stop the official CFMOTO app automatically; retry scheduled."
-                                }
+                                "Retry requested from the port-conflict help."
                             )
                             lifecycleScope.launch {
                                 delay(OFFICIAL_APP_CLOSE_RETRY_DELAY_MS)

@@ -99,6 +99,9 @@ class RideDaemonTransport(
     private val lastPxcEventElapsed = AtomicLong(0L)
     private val lastMediaControlEventElapsed = AtomicLong(0L)
     private val lastFrameOfferedElapsed = AtomicLong(0L)
+    /** Distinct (source, command) pairs already dumped this session for opcode identification. */
+    private val unknownCommandsLogged =
+        java.util.concurrent.ConcurrentHashMap.newKeySet<Pair<Long, Long>>()
 
     override fun configureProtocolProfile(profile: TBoxModelProfile) {
         protocolProfile = profile
@@ -194,11 +197,8 @@ class RideDaemonTransport(
     private suspend fun ensureReversePortsAvailable() {
         var busy = busyReversePorts()
         if (busy.isEmpty()) return
-        // The connect-time request may have been many seconds ago (or skipped entirely when
-        // Android Auto starts an already-connected link) - ask again, then wait.
-        if (OfficialCfmotoClient.isInstalled(appContext)) {
-            OfficialCfmotoClient.closeBestEffort(appContext)
-        }
+        // Nothing can close another app's sockets on Android 14+; the bounded wait below is the
+        // part that actually resolves the routine hand-off case (kernel releases asynchronously).
         ProjectionEventLog.warning(
             "TBOX",
             "Local reverse ports ${busy.joinToString()} are still held; waiting up to " +
@@ -446,12 +446,83 @@ class RideDaemonTransport(
             )
             return TBoxHost(peerAddress, WAKE_PROBE_PORT, SYNTHESIZED_EASYCONN_PACKAGE)
         }
+        // Some firmware variants refuse 10930 outright (observed as ECONNREFUSED on T-Boxes the
+        // reference projects never reverse-engineered) while answering the same handshake on a
+        // nearby port. Before giving up, sweep the known EasyConn neighborhood for open TCP
+        // ports and retry the ACK-verified wake probe there - the endpoint is only ever used
+        // when the full CMD_MDNS_RESPOND handshake completed, never invented from an open port.
+        if (peerAddress != null) {
+            val fallbackPort = probeFallbackEasyConnPort(link)
+            if (fallbackPort != null) {
+                ProjectionEventLog.record(
+                    "DISCOVERY",
+                    "Wi-Fi Direct EasyConn endpoint confirmed on fallback port " +
+                        "$peerAddress:$fallbackPort."
+                )
+                return TBoxHost(peerAddress, fallbackPort, SYNTHESIZED_EASYCONN_PACKAGE)
+            }
+        }
         throw IllegalStateException(
             "The Wi-Fi Direct dash did not answer an EasyConn wake probe at " +
-                "${link.gatewayIp.hostAddress}:$WAKE_PROBE_PORT. The dash may still be starting up, " +
-                "or the official CFMOTO app may already be connected to it."
+                "${link.gatewayIp.hostAddress}:$WAKE_PROBE_PORT (or on any nearby fallback port). " +
+                "The dash may still be starting up, or the official CFMOTO app may already be " +
+                "connected to it."
         )
     }
+
+    /**
+     * Sweeps the candidate EasyConn ports over the P2P link and retries the wake probe on any
+     * that accept a TCP connection. Returns the first port whose CMD_MDNS_RESPOND handshake
+     * completes, or null when none does.
+     */
+    private suspend fun probeFallbackEasyConnPort(link: TBoxLink.WifiDirect): Int? =
+        withContext(Dispatchers.IO) {
+            val openPorts = FALLBACK_EC_PORTS.filter { port ->
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                runCatching {
+                    link.createSocket().use { socket ->
+                        socket.connect(
+                            InetSocketAddress(link.gatewayIp, port),
+                            FALLBACK_PORT_CONNECT_TIMEOUT_MS
+                        )
+                    }
+                    true
+                }.getOrDefault(false)
+            }
+            if (openPorts.isEmpty()) {
+                ProjectionEventLog.record(
+                    "DISCOVERY",
+                    "Fallback port sweep found no open EasyConn candidates on " +
+                        "${link.gatewayIp.hostAddress}."
+                )
+                return@withContext null
+            }
+            ProjectionEventLog.record(
+                "DISCOVERY",
+                "Fallback port sweep: open candidates ${openPorts.joinToString()} on " +
+                    "${link.gatewayIp.hostAddress}; retrying the wake probe on each."
+            )
+            for (port in openPorts) {
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                try {
+                    link.createSocket().use { socket ->
+                        socket.connect(
+                            InetSocketAddress(link.gatewayIp, port),
+                            FALLBACK_PORT_CONNECT_TIMEOUT_MS
+                        )
+                        socket.soTimeout = WAKE_PROBE_READ_TIMEOUT_MS
+                        writeWakeProbeFrame(socket.getOutputStream())
+                        if (readWakeProbeAck(socket.getInputStream())) return@withContext port
+                    }
+                } catch (failure: Throwable) {
+                    ProjectionEventLog.debug(
+                        "DISCOVERY",
+                        "Fallback wake probe on port $port failed: ${failure.message}."
+                    )
+                }
+            }
+            null
+        }
 
     /**
      * Actively asks the T-Box to respond instead of waiting for it to broadcast on its own.
@@ -778,12 +849,31 @@ class RideDaemonTransport(
                 // protocolCommandName), so most CFDL26/CFDL16 control messages show as
                 // UNKNOWN. Dumping the payload here is how those get identified later - it's
                 // exactly how open-cfmoto's own log let us learn what several of these opcodes
-                // are, which this app currently can't name either.
-                if (verbose && commandName == "UNKNOWN" && payload != null && payload.isNotEmpty()) {
-                    ProjectionEventLog.debug(
-                        "TBOX",
-                        "Unknown command 0x${command.toString(16)} payload (verbose): ${payload.toDiagnosticHex()}."
-                    )
+                // are, which this app currently can't name either. With verbose logging every
+                // occurrence is dumped in full; without it, the first occurrence of each
+                // distinct unknown command is still dumped (truncated) so a normal user's
+                // problem report already contains the opcode evidence.
+                if (commandName == "UNKNOWN" && payload != null && payload.isNotEmpty()) {
+                    if (verbose) {
+                        ProjectionEventLog.debug(
+                            "TBOX",
+                            "Unknown command 0x${command.toString(16)} payload (verbose): ${payload.toDiagnosticHex()}."
+                        )
+                    } else if (
+                        unknownCommandsLogged.size < UNKNOWN_COMMAND_LOG_LIMIT &&
+                        unknownCommandsLogged.add(type to command)
+                    ) {
+                        val preview = payload.copyOfRange(
+                            0,
+                            payload.size.coerceAtMost(UNKNOWN_COMMAND_PREVIEW_BYTES)
+                        )
+                        val truncated = if (payload.size > preview.size) "…(+${payload.size - preview.size}B)" else ""
+                        ProjectionEventLog.record(
+                            "TBOX",
+                            "Unknown ${protocolSourceName(type)} command 0x${command.toString(16)} " +
+                                "first seen; payload=${preview.toDiagnosticHex()}$truncated."
+                        )
+                    }
                 }
             }
             if (type == PXC_EVENT_SOURCE) {
@@ -881,6 +971,7 @@ class RideDaemonTransport(
         lastPxcEventElapsed.set(0L)
         lastMediaControlEventElapsed.set(0L)
         lastFrameOfferedElapsed.set(0L)
+        unknownCommandsLogged.clear()
     }
 
     private fun protocolSnapshot(): String {
@@ -913,6 +1004,11 @@ class RideDaemonTransport(
         const val WAKE_PROBE_CONNECT_TIMEOUT_MS = 3_000
         const val WAKE_PROBE_READ_TIMEOUT_MS = 5_000
         const val WAKE_PROBE_RETRY_DELAY_MS = 1_000L
+        // Fallback sweep for firmware that refuses 10930: the only ports any reference EasyConn
+        // implementation documents (PXC 10920-10922, probe 10930) plus a narrow neighborhood in
+        // case the whole block shifted (same range TBoxPortScanner uses for diagnostics).
+        val FALLBACK_EC_PORTS: List<Int> = (10915..10935).filter { it != WAKE_PROBE_PORT }
+        const val FALLBACK_PORT_CONNECT_TIMEOUT_MS = 800
         const val WAKE_PROBE_HEADER_SIZE = 16
         const val CMD_MDNS_RESPOND = 0x70000010
         const val CMD_MDNS_RESPOND_ACK = 0x70000011
@@ -924,6 +1020,9 @@ class RideDaemonTransport(
             "{\"phoneType\":\"Android\",\"packageName\":\"com.cfmoto.cfmotointernational\"}"
         const val MEDIA_CONTROL_EVENT_SOURCE = 3L
         const val PXC_EVENT_SOURCE = 2L
+        /** Bounds for the always-on first-occurrence dump of unknown protocol commands. */
+        const val UNKNOWN_COMMAND_LOG_LIMIT = 32
+        const val UNKNOWN_COMMAND_PREVIEW_BYTES = 64
         const val PXC_HEARTBEAT_COMMAND = 0x70000000L
         const val PXC_HEARTBEAT_ACK_COMMAND = 0x70000001L
         const val PXC_CLOCK_KEEPALIVE_COMMAND = 0x10600L

@@ -66,6 +66,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
     private var tBoxHandle: TBoxSessionHandle? = null
     private var transportEventsJob: Job? = null
     private var networkEventsJob: Job? = null
+    private var p2pGroupWatcher: AutoCloseable? = null
     private var receiverPreparationJob: Job? = null
     private var bikeStreamJob: Job? = null
     private var videoReadyTimeoutJob: Job? = null
@@ -552,7 +553,14 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
             hasReachedStreaming = true
             markWatchdogProgress()
             startWatchdog()
-            mediaButtonBridge?.setCaptureActive(HandlebarControlStore.isEnabled(this))
+            val handlebarEnabled = HandlebarControlStore.isEnabled(this)
+            mediaButtonBridge?.setCaptureActive(handlebarEnabled)
+            if (handlebarEnabled) {
+                // The dash reads the AVRCP player's capabilities once, when its Bluetooth link
+                // forms — usually before this session exists. Re-announcing here, with the
+                // transport up, is what makes the dash actually route its handlebar buttons to us.
+                mediaButtonBridge?.reassertCaptureAfterTransportReady()
+            }
             ProjectionEventLog.record("ANDROID AUTO", "Android Auto streaming active on the TFT.")
         } catch (failure: Throwable) {
             fail("Android Auto pipeline did not start: ${failure.message}")
@@ -597,6 +605,17 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                             requestTBoxRecovery("T-Box Wi-Fi re-acquired; resuming Android Auto stream.")
                         }
                     }
+                }
+            }
+        }
+        // A Wi-Fi Direct group has no ConnectivityManager network, so the Lost/Reacquired flow
+        // above never fires for it. Watch the P2P broadcasts instead: recovery can then start
+        // the moment the group dissolves rather than after a 10s video-watchdog stall.
+        p2pGroupWatcher?.close()
+        p2pGroupWatcher = (handle.link as? io.motohub.android.tbox.TBoxLink.WifiDirect)?.watchGroupLost {
+            if (!stopping) {
+                serviceScope.launch {
+                    handleRecoverableFailure("The Wi-Fi Direct group with the dash was lost.")
                 }
             }
         }
@@ -775,6 +794,8 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         networkEventsJob?.cancel()
         transportEventsJob = null
         networkEventsJob = null
+        p2pGroupWatcher?.close()
+        p2pGroupWatcher = null
         compositor?.clearOutput()
         encoder?.stop()
         encoder = null
@@ -870,6 +891,8 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         watchdogJob = null
         recoveryJob = null
         networkLossJob = null
+        p2pGroupWatcher?.close()
+        p2pGroupWatcher = null
         receiver?.stop()
         receiver = null
         AndroidAutoReceiverOwnership.release("real-session")
