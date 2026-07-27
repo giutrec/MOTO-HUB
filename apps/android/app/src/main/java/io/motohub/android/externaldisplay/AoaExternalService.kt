@@ -232,7 +232,12 @@ class AoaExternalService : Service() {
                 latch.countDown()
             }
         }
-        registerReceiver(receiver, IntentFilter(ACTION_USB_PERMISSION))
+        ContextCompat.registerReceiver(
+            this@AoaExternalService,
+            receiver,
+            IntentFilter(ACTION_USB_PERMISSION),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         usbManager.requestPermission(
             accessory,
             PendingIntent.getBroadcast(

@@ -234,8 +234,12 @@ class MainActivity : ComponentActivity() {
                         // Automatic checks are throttled to once/24h so a rider who opens
                         // MOTO-HUB many times a day doesn't hit GitHub's anonymous API rate
                         // limit (60 req/h) on every launch; a manual tap always bypasses this.
+                        // A new CORE version also bypasses the throttle once, so the first
+                        // launch of the newly installed APK can discover its next update.
                         val elapsed = System.currentTimeMillis() - MotoHubSettings.lastAutoUpdateCheckAtMillis(context)
-                        if (elapsed < AUTO_UPDATE_CHECK_THROTTLE_MS) {
+                        val appVersionChanged = MotoHubSettings.lastAutoUpdateCheckVersion(context) !=
+                            BuildConfig.VERSION_NAME
+                        if (elapsed < AUTO_UPDATE_CHECK_THROTTLE_MS && !appVersionChanged) {
                             ProjectionEventLog.debug(
                                 "UPDATES",
                                 "Automatic GitHub check skipped; last check was ${elapsed / 60_000L} minute(s) ago."
@@ -243,6 +247,7 @@ class MainActivity : ComponentActivity() {
                             return
                         }
                         MotoHubSettings.setLastAutoUpdateCheckAtMillis(context, System.currentTimeMillis())
+                        MotoHubSettings.setLastAutoUpdateCheckVersion(context, BuildConfig.VERSION_NAME)
                     }
                     if (openDialog) showUpdateDialog = true
                     if (updateLoading) return

@@ -129,6 +129,7 @@ object MotoHubSettings {
     private const val KEY_SKIPPED_UPDATE_TAG = "skipped_update_tag"
     private const val KEY_AUTO_UPDATE_CHECKS = "auto_update_checks"
     private const val KEY_LAST_AUTO_UPDATE_CHECK_AT = "last_auto_update_check_at_millis"
+    private const val KEY_LAST_AUTO_UPDATE_CHECK_VERSION = "last_auto_update_check_version"
     private const val KEY_SAFETY_DISCLAIMER_ACKNOWLEDGED = "safety_disclaimer_acknowledged"
     private const val KEY_VERBOSE_TBOX_LOGGING = "verbose_tbox_logging"
     private const val KEY_LOGGING_ENABLED = "logging_enabled"
@@ -303,6 +304,13 @@ object MotoHubSettings {
 
     fun setLastAutoUpdateCheckAtMillis(context: Context, epochMillis: Long) {
         preferences(context).edit().putLong(KEY_LAST_AUTO_UPDATE_CHECK_AT, epochMillis).apply()
+    }
+
+    fun lastAutoUpdateCheckVersion(context: Context): String? =
+        preferences(context).getString(KEY_LAST_AUTO_UPDATE_CHECK_VERSION, null)
+
+    fun setLastAutoUpdateCheckVersion(context: Context, versionName: String) {
+        preferences(context).edit().putString(KEY_LAST_AUTO_UPDATE_CHECK_VERSION, versionName).apply()
     }
 
     /** True after the rider chose not to see the startup safety warning again. */
