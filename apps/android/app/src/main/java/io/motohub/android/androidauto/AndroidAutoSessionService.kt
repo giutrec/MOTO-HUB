@@ -131,6 +131,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         val handle = TBoxSessionRegistry.current()
             ?: return fail("No T-Box is ready. Connect and find the T-Box before starting Android Auto.")
         tBoxHandle = handle
+        TBoxSessionRegistry.claim(SESSION_CONSUMER)
         startSimulatorHandlebarBridgeIfNeeded(handle)
         val cachedCapabilities = capabilityStore.load(handle.motorcycle)?.capabilities
         val modelProfile = TBoxModelProfile.resolve(
@@ -371,6 +372,8 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                 handle = handle.copy(host = freshHost)
                 tBoxHandle = handle
                 TBoxSessionRegistry.install(handle)
+                // install() resets the claim list; this session is still using it.
+                TBoxSessionRegistry.claim(SESSION_CONSUMER)
                 configurationResult = handle.transport.negotiateVideoConfiguration(
                     host = handle.host,
                     savedArea = savedArea,
@@ -885,14 +888,23 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         releaseWakeLock()
         streamingLocks.release()
 
-        val releasedHandle = tBoxHandle ?: TBoxSessionRegistry.current()
+        // Only ever release the handle this session actually owns. The old
+        // `?: TBoxSessionRegistry.current()` fallback meant an Android Auto session that never
+        // started (framesSent=0, so tBoxHandle was still null) would grab whatever session
+        // happened to be active - in practice a streaming Ride Dashboard - and tear it down.
+        val releasedHandle = tBoxHandle
         tBoxHandle = null
         if (releasedHandle != null) {
             serviceScope.launch {
-                releasedHandle.transport.stop()
-                releasedHandle.networkConnector.disconnect()
-                TBoxSessionRegistry.clear(releasedHandle)
+                // Another mode may still be streaming on this session; only the last one out
+                // stops the transport and drops the network.
+                if (TBoxSessionRegistry.releaseAndClear(SESSION_CONSUMER, releasedHandle)) {
+                    releasedHandle.transport.stop()
+                    releasedHandle.networkConnector.disconnect()
+                }
             }
+        } else {
+            TBoxSessionRegistry.release(SESSION_CONSUMER)
         }
         if (AndroidAutoRuntime.state.value !is AndroidAutoRuntimeState.Failed) {
             AndroidAutoRuntime.publish(AndroidAutoRuntimeState.Stopped(reason))
@@ -999,6 +1011,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
     }
 
     companion object {
+        private const val SESSION_CONSUMER = "android-auto"
         private const val CHANNEL_ID = "android_auto_session_v1"
         private const val NOTIFICATION_ID = 4201
         private const val ACTION_STOP = "io.motohub.android.action.STOP_ANDROID_AUTO"

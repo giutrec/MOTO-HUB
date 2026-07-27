@@ -154,6 +154,7 @@ class ProjectionSessionService : Service() {
         val handle = TBoxSessionRegistry.current()
             ?: return fail("No T-Box session is ready. Reconnect the motorcycle before sharing.")
         tBoxHandle = handle
+        TBoxSessionRegistry.claim(SESSION_CONSUMER)
         observeActiveSession(handle)
         val geometryStore = TBoxDisplayGeometryStore(this)
         val savedArea = geometryStore.load(handle.motorcycle.ssid)?.let { geometry ->
@@ -382,6 +383,7 @@ class ProjectionSessionService : Service() {
         val host = previousHandle.transport.discover(link, previousHandle.motorcycle.modelId).getOrThrow()
         val recoveredHandle = previousHandle.copy(host = host, link = link)
         tBoxHandle = recoveredHandle
+        TBoxSessionRegistry.claim(SESSION_CONSUMER)
         TBoxSessionRegistry.install(recoveredHandle)
         observeActiveSession(recoveredHandle)
         recoveredHandle.transport.start(host).getOrThrow()
@@ -451,14 +453,20 @@ class ProjectionSessionService : Service() {
         if (stopProjection) mediaProjection?.stop()
         mediaProjection = null
 
-        val releasedHandle = tBoxHandle ?: TBoxSessionRegistry.current()
+        // Only release the handle this mode owns: the old `?: current()` fallback let a mode
+        // that never started tear down whatever session happened to be active.
+        val releasedHandle = tBoxHandle
         tBoxHandle = null
         if (releasedHandle != null) {
             handleCleanupJob = serviceScope.launch {
-                releasedHandle.transport.stop()
-                releasedHandle.networkConnector.disconnect()
-                TBoxSessionRegistry.clear(releasedHandle)
+                // Another mode may still be streaming on this session.
+                if (TBoxSessionRegistry.releaseAndClear(SESSION_CONSUMER, releasedHandle)) {
+                    releasedHandle.transport.stop()
+                    releasedHandle.networkConnector.disconnect()
+                }
             }
+        } else {
+            TBoxSessionRegistry.release(SESSION_CONSUMER)
         }
         if (ProjectionRuntime.state.value !is ProjectionRuntimeState.Failed) {
             ProjectionEventLog.record("STOP", reason)
@@ -560,6 +568,7 @@ class ProjectionSessionService : Service() {
         getParcelableExtra(key, Intent::class.java)
 
     companion object {
+        private const val SESSION_CONSUMER = "mirroring"
         // New id prevents Android from retaining the silent channel created by older builds.
         private const val CHANNEL_ID = "projection_session_v2"
         private const val TAG = "ProjectionSession"

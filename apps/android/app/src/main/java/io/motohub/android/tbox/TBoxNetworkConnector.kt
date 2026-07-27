@@ -44,6 +44,8 @@ class TBoxNetworkConnector(context: Context) {
         ConnectivityManager::class.java
     )
     private val wifiManager = appContext.getSystemService(WifiManager::class.java)
+    @Volatile
+    private var hiddenSsidFallbackLogged = false
     private val mutableEvents = MutableSharedFlow<TBoxNetworkEvent>(
         extraBufferCapacity = 1,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
@@ -447,11 +449,17 @@ class TBoxNetworkConnector(context: Context) {
         // is exactly one usable Wi-Fi network, it is still safe to use it for the simulator.
         if (connectedSsid.isBlank() || connectedSsid == "<unknown ssid>") {
             return candidates.singleOrNull()?.also {
-                ProjectionEventLog.warning(
-                    "NETWORK",
-                    "Android did not expose the current Wi-Fi SSID; using the only usable Wi-Fi network " +
-                        "for the simulator."
-                )
+                // This runs on a per-second poll, and the hidden SSID is a stable property of
+                // the build, not an event: logging it every call buried real entries under one
+                // warning per second for the whole session. Report the transition only.
+                if (!hiddenSsidFallbackLogged) {
+                    hiddenSsidFallbackLogged = true
+                    ProjectionEventLog.warning(
+                        "NETWORK",
+                        "Android did not expose the current Wi-Fi SSID; using the only usable Wi-Fi network " +
+                            "for the simulator. Further occurrences are not logged."
+                    )
+                }
             }
         }
         return null

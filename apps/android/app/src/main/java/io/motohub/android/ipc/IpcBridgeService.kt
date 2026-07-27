@@ -225,6 +225,11 @@ class IpcBridgeService : Service() {
             return runCatching {
                 val pipe = ParcelFileDescriptor.createPipe()
                 videoStreamInput = pipe[0]
+                // The companion app streams through this pipe on the shared T-Box session, but
+                // it lives in another process and cannot claim the session itself. Hold the
+                // claim on its behalf so a mode stopping inside Core cannot end the session
+                // while the companion is still streaming on it.
+                TBoxSessionRegistry.claim(SESSION_CONSUMER)
                 videoStreamJob = serviceScope.launch {
                     readVideoStream(pipe[0])
                 }
@@ -246,6 +251,7 @@ class IpcBridgeService : Service() {
         videoStreamJob = null
         videoStreamInput?.runCatching { close() }
         videoStreamInput = null
+        TBoxSessionRegistry.release(SESSION_CONSUMER)
     }
 
     private suspend fun readVideoStream(input: ParcelFileDescriptor) {
@@ -671,6 +677,7 @@ class IpcBridgeService : Service() {
     }
 
     private companion object {
+        const val SESSION_CONSUMER = "companion-app"
         const val VIDEO_PIPE_BUFFER_BYTES = 64 * 1024
         const val MAX_VIDEO_ACCESS_UNIT_BYTES = 2 * 1024 * 1024
         const val MAX_CONSECUTIVE_REJECTED_FRAMES = 3

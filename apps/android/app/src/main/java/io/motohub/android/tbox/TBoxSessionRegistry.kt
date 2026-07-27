@@ -11,13 +11,47 @@ data class TBoxSessionHandle(
     val link: TBoxLink
 )
 
-/** In-process handoff from connection UI to the foreground projection service. */
+/**
+ * In-process handoff from connection UI to the foreground projection service.
+ *
+ * One T-Box session is shared by every mode that can be running at once (mirroring, Android
+ * Auto, Ride Dashboard, and - in Core - a companion app driving it over IPC). Ending one mode
+ * must not tear the session out from under another: stopping an Android Auto session that had
+ * never streamed a frame once killed a live Ride Dashboard, whose watchdog then read the broken
+ * pipe as a fault and silently rebuilt everything, so the rider's Stop appeared to do nothing.
+ * Modes therefore [claim] the session and end it through [releaseAndClear], which only really
+ * tears it down once the last claim is gone.
+ */
+/** Who is currently using the shared session. Pure bookkeeping, unit-tested on its own. */
+internal class SessionConsumers {
+    private val consumers = linkedSetOf<String>()
+
+    /** @return true when [consumer] was not already holding the session. */
+    fun claim(consumer: String): Boolean = consumers.add(consumer)
+
+    fun release(consumer: String) {
+        consumers -= consumer
+    }
+
+    /** @return true when dropping [consumer] leaves nobody using the session. */
+    fun releaseIsLast(consumer: String): Boolean {
+        consumers -= consumer
+        return consumers.isEmpty()
+    }
+
+    fun clear() = consumers.clear()
+
+    fun describe(): String = consumers.joinToString()
+}
+
 object TBoxSessionRegistry {
     private var activeHandle: TBoxSessionHandle? = null
+    private val consumers = SessionConsumers()
 
     @Synchronized
     fun install(handle: TBoxSessionHandle) {
         activeHandle = handle
+        consumers.clear()
         val modelProfile = TBoxModelProfile.fromModelId(handle.motorcycle.modelId)
         ProjectionEventLog.record(
             "SESSION",
@@ -30,11 +64,55 @@ object TBoxSessionRegistry {
     @Synchronized
     fun current(): TBoxSessionHandle? = activeHandle
 
+    /** Registers [consumer] as a user of the active session. No-op when there is none. */
+    @Synchronized
+    fun claim(consumer: String): Boolean {
+        if (activeHandle == null) return false
+        if (consumers.claim(consumer)) {
+            ProjectionEventLog.debug("SESSION", "T-Box session claimed by $consumer.")
+        }
+        return true
+    }
+
+    /** Drops [consumer]'s claim without touching the session itself. */
+    @Synchronized
+    fun release(consumer: String) {
+        consumers.release(consumer)
+    }
+
+    /**
+     * Ends [consumer]'s use of [handle] and tears the session down only if nothing else holds it.
+     *
+     * @return true when the session was actually cleared, so the caller may also stop the
+     *   transport and drop the network. False means another mode is still streaming on it and
+     *   the caller must leave the transport alone.
+     */
+    @Synchronized
+    fun releaseAndClear(consumer: String, handle: TBoxSessionHandle? = null): Boolean {
+        val wasLast = consumers.releaseIsLast(consumer)
+        if (handle != null && activeHandle !== handle) return false
+        if (activeHandle == null) return false
+        if (!wasLast) {
+            ProjectionEventLog.record(
+                "SESSION",
+                "T-Box session kept after $consumer stopped: still used by ${consumers.describe()}."
+            )
+            return false
+        }
+        clear(handle)
+        return true
+    }
+
+    /**
+     * Unconditional teardown, for an explicit rider disconnect. Mode teardowns must use
+     * [releaseAndClear] instead so they cannot end a session another mode is still using.
+     */
     @Synchronized
     fun clear(handle: TBoxSessionHandle? = null) {
         if (handle == null || activeHandle === handle) {
             val previous = activeHandle
             activeHandle = null
+            consumers.clear()
             if (previous != null) {
                 previous.link.disconnect()
                 ProjectionEventLog.record("SESSION", "T-Box registry cleared.")

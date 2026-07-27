@@ -75,8 +75,8 @@ android {
         applicationId = "io.motohub.android"
         minSdk = 34
         targetSdk = 36
-        versionCode = 97
-        versionName = "1.1.3"
+        versionCode = 98
+        versionName = "1.1.4"
         buildConfigField("boolean", "IS_PRO", "false")
         buildConfigField("String", "SENTRY_DSN", asBuildConfigString(coreSentryDsn))
         manifestPlaceholders["appLabel"] = "MOTO-HUB"
@@ -95,12 +95,10 @@ android {
 
     buildTypes {
         debug {
-            // The exported "public" APK is this variant, so it ships obfuscated:
-            // R8 shrinking + optimization + repackaging (see proguard-rules.pro).
-            // AGP silently disables obfuscation on debuggable variants, so this
-            // build is marked non-debuggable — which also blocks debugger attach
-            // and run-as on shipped APKs. De-obfuscate stack traces with
-            // retrace + outputs/mapping/debug/mapping.txt.
+            // Local variant only — nothing built from "debug" is ever published: GitHub gets
+            // release builds exclusively (exportPublicApk assembles the release variant).
+            // Kept minified and non-debuggable so a local install behaves like the shipped
+            // artifact; de-obfuscate stack traces with retrace + outputs/mapping/*/mapping.txt.
             isDebuggable = false
             isMinifyEnabled = true
             isShrinkResources = true
