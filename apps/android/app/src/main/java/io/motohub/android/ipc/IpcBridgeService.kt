@@ -481,6 +481,46 @@ class IpcBridgeService : Service() {
                     }
                 }
             }
+            // Handlebar configuration is mirrored from the companion's own stores into Core's:
+            // Core's Android Auto bridge reads Core's HandlebarControlStore, so without this the
+            // rider's PRO-side configuration never applied to AA sessions. Gated on
+            // handlebarSyncProvided so a pre-sync caller's parcel (fields deserialize as
+            // false/empty) leaves Core's own configuration untouched.
+            if (settings.handlebarSyncProvided) {
+                runCatching {
+                    io.motohub.android.feature.controls.HandlebarControlStore.setEnabled(
+                        ctx, settings.handlebarControlsEnabled
+                    )
+                    settings.handlebarMapping.split(',').forEach { entry ->
+                        val gestureId = entry.substringBefore('=', "")
+                        val actionId = entry.substringAfter('=', "")
+                        val gesture = io.motohub.android.feature.controls.HandlebarGesture.entries
+                            .firstOrNull { it.id == gestureId }
+                        val action = io.motohub.android.feature.controls.HandlebarAction.entries
+                            .firstOrNull { it.id == actionId }
+                        if (gesture != null && action != null) {
+                            io.motohub.android.feature.controls.HandlebarControlStore.setAction(ctx, gesture, action)
+                        }
+                    }
+                    io.motohub.android.feature.controls.DoubleTapDelay.entries
+                        .firstOrNull { it.millis == settings.handlebarDoubleTapMillis }
+                        ?.let { io.motohub.android.feature.controls.HandlebarTimingPrefs.setDoubleTap(ctx, it) }
+                    io.motohub.android.feature.controls.SelectHoldDelay.entries
+                        .firstOrNull { it.millis == settings.handlebarSelectHoldMillis }
+                        ?.let { io.motohub.android.feature.controls.HandlebarTimingPrefs.setSelectHold(ctx, it) }
+                    // Apply live when an AA session is already capturing (settings re-pushed by
+                    // the companion at every session start, including embedded dashboard AA).
+                    io.motohub.android.feature.controls.MediaButtonBridge.setTargetCaptureActive(
+                        io.motohub.android.feature.controls.MediaButtonBridge.TARGET_ANDROID_AUTO,
+                        settings.handlebarControlsEnabled
+                    )
+                    ProjectionEventLog.record(
+                        "IPC_AA",
+                        "Handlebar configuration mirrored from companion: " +
+                            "enabled=${settings.handlebarControlsEnabled}."
+                    )
+                }
+            }
             ProjectionEventLog.record("IPC_AA", "Applied companion Android Auto settings snapshot.")
         }
 

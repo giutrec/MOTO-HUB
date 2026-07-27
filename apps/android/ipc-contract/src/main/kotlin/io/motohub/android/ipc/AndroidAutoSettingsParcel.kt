@@ -19,5 +19,17 @@ data class AndroidAutoSettingsParcel(
     val nightMode: Boolean,
     /** Per-motorcycle AndroidAutoDisplayMode.name (Garage setting) — Core stores this keyed by
      *  motorcycle id/ssid, separately from the global settings above. Empty when unknown. */
-    val displayMode: String = ""
+    val displayMode: String = "",
+    /**
+     * Handlebar sync. Appended at the parcel's end so an OLD caller's parcel deserializes these
+     * as false/empty/zero on a NEW Core: [handlebarSyncProvided] then gates the whole block, so
+     * Core keeps its own handlebar configuration for callers that predate the sync. A NEW
+     * caller against an OLD Core is harmless (extra trailing fields are never read).
+     */
+    val handlebarSyncProvided: Boolean = false,
+    val handlebarControlsEnabled: Boolean = false,
+    /** "gestureId=actionId" pairs joined by ',' (HandlebarGesture/HandlebarAction ids). */
+    val handlebarMapping: String = "",
+    val handlebarDoubleTapMillis: Long = 0L,
+    val handlebarSelectHoldMillis: Long = 0L
 ) : Parcelable
