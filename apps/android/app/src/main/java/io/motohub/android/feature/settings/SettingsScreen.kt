@@ -27,9 +27,11 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,6 +43,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.motohub.android.BuildConfig
 import io.motohub.android.R
+import io.motohub.android.feature.controls.DoubleTapDelay
+import io.motohub.android.feature.controls.HandlebarAction
+import io.motohub.android.feature.controls.HandlebarControlStore
+import io.motohub.android.feature.controls.HandlebarGesture
+import io.motohub.android.feature.controls.HandlebarTimingPrefs
+import io.motohub.android.feature.controls.MediaButtonBridge
+import io.motohub.android.feature.controls.SelectHoldDelay
 import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.ui.components.MonoLabel
 import io.motohub.android.ui.components.MotoHubActionRow
@@ -49,7 +58,9 @@ import io.motohub.android.ui.components.MotoHubDetailScreen
 import io.motohub.android.ui.components.MotoHubRadioRow
 import io.motohub.android.ui.components.ToggleRow
 
-private enum class SettingsDetail { GENERAL, LANGUAGE, VIDEO, ANDROID_AUTO, AUTOMATION, DIAGNOSTICS }
+private enum class SettingsDetail {
+    GENERAL, LANGUAGE, VIDEO, ANDROID_AUTO, HANDLEBAR, HANDLEBAR_MAPPING, AUTOMATION, DIAGNOSTICS
+}
 
 @Composable
 fun SettingsTabContent(
@@ -92,6 +103,13 @@ fun SettingsTabContent(
             SettingsDetail.LANGUAGE -> LanguageDetail(onBack = { detail = SettingsDetail.GENERAL })
             SettingsDetail.VIDEO -> VideoQualityDetail(onBack = { detail = null })
             SettingsDetail.ANDROID_AUTO -> AndroidAutoDetail(onBack = { detail = null })
+            SettingsDetail.HANDLEBAR -> HandlebarControlsDetail(
+                onBack = { detail = null },
+                onOpenMapping = { detail = SettingsDetail.HANDLEBAR_MAPPING }
+            )
+            SettingsDetail.HANDLEBAR_MAPPING -> HandlebarMappingDetail(
+                onBack = { detail = SettingsDetail.HANDLEBAR }
+            )
             SettingsDetail.AUTOMATION -> AutomationDetail(onBack = { detail = null })
             SettingsDetail.DIAGNOSTICS -> DiagnosticsDetail(
                 onBack = { detail = null },
@@ -142,6 +160,12 @@ private fun SettingsMainList(
                 description = motoHubText("Resolution and display mode"),
                 value = strings.getString(MotoHubSettings.androidAutoResolution(context).labelRes),
                 onClick = { onOpenDetail(SettingsDetail.ANDROID_AUTO) }
+            )
+            MotoHubActionRow(
+                title = motoHubText("Handlebar buttons"),
+                description = motoHubText("Drive Android Auto with the motorcycle's buttons"),
+                value = if (HandlebarControlStore.isEnabled(context)) motoHubText("On") else motoHubText("Off"),
+                onClick = { onOpenDetail(SettingsDetail.HANDLEBAR) }
             )
             MotoHubActionRow(
                 title = motoHubText("Connection & automation"),
@@ -424,6 +448,167 @@ private fun DiagnosticsDetail(
                 verboseLogging = it
                 MotoHubSettings.setVerboseTBoxLogging(context, it)
                 ProjectionEventLog.record("SETTINGS", "Verbose T-Box logging changed to enabled=$it.")
+            }
+        )
+    }
+}
+
+@Composable
+private fun HandlebarControlsDetail(onBack: () -> Unit, onOpenMapping: () -> Unit) {
+    val context = LocalContext.current
+    var enabled by remember { mutableStateOf(HandlebarControlStore.isEnabled(context)) }
+    var doubleTap by remember { mutableStateOf(HandlebarTimingPrefs.doubleTap(context)) }
+    var selectHold by remember { mutableStateOf(HandlebarTimingPrefs.selectHold(context)) }
+    val volumeLevels = remember { MediaButtonBridge.volumeLevels(context) }
+    var listeningVolume by remember { mutableStateOf(volumeLevels.first.toFloat()) }
+    MotoHubDetailScreen(
+        title = motoHubText("Handlebar buttons"),
+        backLabel = "‹ ${motoHubText("Settings")}",
+        onBack = onBack
+    ) {
+        Text(
+            motoHubText(
+                "The motorcycle's buttons reach the phone over Bluetooth as media keys. " +
+                    "While a session is streaming, MOTO-HUB can capture them and drive " +
+                    "Android Auto navigation instead of the music player."
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        ToggleRow(
+            title = motoHubText("Buttons control Android Auto"),
+            description = motoHubText(
+                "Requires the phone paired to the motorcycle's Bluetooth. Music keeps playing " +
+                    "but its buttons are captured while a session runs."
+            ),
+            checked = enabled,
+            onCheckedChange = { value ->
+                enabled = value
+                HandlebarControlStore.setEnabled(context, value)
+                val applied = MediaButtonBridge.setTargetCaptureActive(
+                    MediaButtonBridge.TARGET_ANDROID_AUTO,
+                    value
+                )
+                ProjectionEventLog.record(
+                    "SETTINGS",
+                    "Handlebar capture changed to enabled=$value; liveSession=$applied."
+                )
+            }
+        )
+        MotoHubActionRow(
+            title = motoHubText("Button mapping"),
+            description = motoHubText("What each press, double press and hold does"),
+            onClick = onOpenMapping
+        )
+        HorizontalDivider()
+        MonoLabel(motoHubText("MUSIC VOLUME"))
+        Text(
+            motoHubText(
+                "While capture is on, the volume buttons navigate instead of changing " +
+                    "volume — set your listening level here."
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Slider(
+            value = listeningVolume,
+            onValueChange = { listeningVolume = it },
+            onValueChangeFinished = {
+                MediaButtonBridge.setVolume(context, listeningVolume.toInt())
+            },
+            valueRange = 0f..volumeLevels.second.toFloat(),
+            steps = (volumeLevels.second - 1).coerceAtLeast(0)
+        )
+        HorizontalDivider()
+        MonoLabel(motoHubText("DOUBLE-TAP WINDOW"))
+        DoubleTapDelay.entries.forEach { candidate ->
+            MotoHubRadioRow(
+                title = candidate.label.substringBefore(" - "),
+                description = candidate.label.substringAfter(" - "),
+                selected = doubleTap == candidate,
+                onClick = {
+                    doubleTap = candidate
+                    HandlebarTimingPrefs.setDoubleTap(context, candidate)
+                    ProjectionEventLog.record("SETTINGS", "Handlebar double-tap window set to ${candidate.millis}ms.")
+                }
+            )
+        }
+        MonoLabel(motoHubText("SELECT HOLD"))
+        SelectHoldDelay.entries.forEach { candidate ->
+            MotoHubRadioRow(
+                title = candidate.label.substringBefore(" - "),
+                description = candidate.label.substringAfter(" - "),
+                selected = selectHold == candidate,
+                onClick = {
+                    selectHold = candidate
+                    HandlebarTimingPrefs.setSelectHold(context, candidate)
+                    ProjectionEventLog.record("SETTINGS", "Handlebar select-hold set to ${candidate.millis}ms.")
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun HandlebarMappingDetail(onBack: () -> Unit) {
+    val context = LocalContext.current
+    var editingGesture by remember { mutableStateOf<HandlebarGesture?>(null) }
+    var mapVersion by remember { mutableStateOf(0) }
+    val editing = editingGesture
+    if (editing != null) {
+        MotoHubDetailScreen(
+            title = editing.label,
+            backLabel = "‹ ${motoHubText("Button mapping")}",
+            onBack = { editingGesture = null }
+        ) {
+            Text(
+                editing.transportHint,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            val current = HandlebarControlStore.action(context, editing)
+            HandlebarAction.entries.forEach { candidate ->
+                MotoHubRadioRow(
+                    title = candidate.label,
+                    description = if (candidate == editing.defaultAction) motoHubText("Default") else "",
+                    selected = current == candidate,
+                    onClick = {
+                        HandlebarControlStore.setAction(context, editing, candidate)
+                        ProjectionEventLog.record(
+                            "SETTINGS",
+                            "Handlebar gesture ${editing.id} mapped to ${candidate.id}."
+                        )
+                        mapVersion++
+                        editingGesture = null
+                    }
+                )
+            }
+        }
+        return
+    }
+    MotoHubDetailScreen(
+        title = motoHubText("Button mapping"),
+        backLabel = "‹ ${motoHubText("Handlebar buttons")}",
+        onBack = onBack
+    ) {
+        key(mapVersion) {
+            HandlebarGesture.entries.forEach { gesture ->
+                MotoHubActionRow(
+                    title = gesture.label,
+                    description = gesture.transportHint,
+                    value = HandlebarControlStore.action(context, gesture).label,
+                    onClick = { editingGesture = gesture }
+                )
+            }
+        }
+        HorizontalDivider()
+        MotoHubActionRow(
+            title = motoHubText("Reset to defaults"),
+            description = motoHubText("Restore the recommended action for every gesture"),
+            onClick = {
+                HandlebarControlStore.reset(context)
+                mapVersion++
+                ProjectionEventLog.record("SETTINGS", "Handlebar mapping reset to defaults.")
             }
         )
     }

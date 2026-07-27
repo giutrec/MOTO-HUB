@@ -7,18 +7,47 @@ import org.junit.Test
 class MediaButtonBridgeTest {
     @Test
     fun `maps volume changes to dashboard gestures`() {
-        assertEquals(HandlebarGesture.VOLUME_UP, gestureForVolumeDelta(1))
-        assertEquals(HandlebarGesture.VOLUME_UP_DOUBLE, gestureForVolumeDelta(3))
-        assertEquals(HandlebarGesture.VOLUME_DOWN, gestureForVolumeDelta(-1))
-        assertEquals(HandlebarGesture.VOLUME_DOWN_DOUBLE, gestureForVolumeDelta(-3))
-        assertNull(gestureForVolumeDelta(0))
+        assertEquals(
+            VolumeDeltaRead.Tap(HandlebarGesture.VOLUME_UP, HandlebarGesture.VOLUME_UP_DOUBLE, forceDouble = false),
+            interpretVolumeDelta(1, HandlebarAction.SCROLL_BACK)
+        )
+        assertEquals(
+            VolumeDeltaRead.Tap(HandlebarGesture.VOLUME_UP, HandlebarGesture.VOLUME_UP_DOUBLE, forceDouble = true),
+            interpretVolumeDelta(3, HandlebarAction.SCROLL_BACK)
+        )
+        assertEquals(
+            VolumeDeltaRead.Tap(HandlebarGesture.VOLUME_DOWN, HandlebarGesture.VOLUME_DOWN_DOUBLE, forceDouble = false),
+            interpretVolumeDelta(-1, HandlebarAction.SCROLL_FORWARD)
+        )
+        assertEquals(
+            VolumeDeltaRead.Tap(HandlebarGesture.VOLUME_DOWN, HandlebarGesture.VOLUME_DOWN_DOUBLE, forceDouble = true),
+            interpretVolumeDelta(-3, HandlebarAction.SCROLL_FORWARD)
+        )
+        assertNull(interpretVolumeDelta(0, HandlebarAction.SCROLL_FORWARD))
+    }
+
+    @Test
+    fun `replays a fused two-step jump as two scroll clicks`() {
+        assertEquals(
+            VolumeDeltaRead.ScrollClicks(HandlebarGesture.VOLUME_DOWN, 2),
+            interpretVolumeDelta(-2, HandlebarAction.SCROLL_FORWARD)
+        )
+        assertEquals(
+            VolumeDeltaRead.ScrollClicks(HandlebarGesture.VOLUME_UP, 2),
+            interpretVolumeDelta(2, HandlebarAction.SCROLL_BACK)
+        )
+        // A non-repeatable mapping must never fire twice for one physical press.
+        assertEquals(
+            VolumeDeltaRead.Tap(HandlebarGesture.VOLUME_UP, HandlebarGesture.VOLUME_UP_DOUBLE, forceDouble = false),
+            interpretVolumeDelta(2, HandlebarAction.SELECT)
+        )
     }
 
     @Test
     fun `new handlebar gestures keep the expected defaults`() {
         assertEquals(HandlebarAction.SELECT, HandlebarGesture.ENTER.defaultAction)
-        assertEquals(HandlebarAction.ASSISTANT, HandlebarGesture.ENTER_LONG.defaultAction)
-        assertEquals(HandlebarAction.ASSISTANT, HandlebarGesture.ENTER_DOUBLE.defaultAction)
+        assertEquals(HandlebarAction.HOME, HandlebarGesture.ENTER_LONG.defaultAction)
+        assertEquals(HandlebarAction.BACK, HandlebarGesture.ENTER_DOUBLE.defaultAction)
         assertEquals(HandlebarAction.HOME, HandlebarGesture.TRACK_BACK_DOUBLE.defaultAction)
         assertEquals(HandlebarAction.BACK, HandlebarGesture.TRACK_FORWARD_DOUBLE.defaultAction)
     }

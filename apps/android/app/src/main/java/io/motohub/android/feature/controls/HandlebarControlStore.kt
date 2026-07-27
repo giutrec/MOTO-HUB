@@ -30,8 +30,8 @@ enum class HandlebarGesture(
     VOLUME_DOWN("volumeDown", "Down press", "Bluetooth absolute-volume change", HandlebarAction.SCROLL_FORWARD),
     VOLUME_DOWN_DOUBLE("volumeDownDouble", "Down double press", "Larger absolute-volume change", HandlebarAction.BACK),
     ENTER("enter", "Select tap - Enter / Star", "Bluetooth play/pause command", HandlebarAction.SELECT),
-    ENTER_LONG("enterLong", "Select hold - Enter / Star", "Requires a real Bluetooth key-up", HandlebarAction.ASSISTANT),
-    ENTER_DOUBLE("enterDouble", "Select double tap - Enter / Star", "Two presses inside the double-tap window", HandlebarAction.ASSISTANT),
+    ENTER_LONG("enterLong", "Select hold - Enter / Star", "Requires a real Bluetooth key-up", HandlebarAction.HOME),
+    ENTER_DOUBLE("enterDouble", "Select double tap - Enter / Star", "Two presses inside the double-tap window", HandlebarAction.BACK),
     TRACK_BACK("trackBack", "Backward - Left", "Bluetooth previous-track command", HandlebarAction.SCROLL_BACK),
     TRACK_BACK_DOUBLE("trackBackDouble", "Backward double tap - Left", "Two previous-track presses inside the window", HandlebarAction.HOME),
     TRACK_FORWARD("trackForward", "Forward - Right", "Bluetooth next-track command", HandlebarAction.SCROLL_FORWARD),
@@ -42,7 +42,7 @@ object HandlebarControlStore {
     private const val PREFERENCES = "handlebar_controls"
     private const val ENABLED = "enabled"
     /** Bumped when [defaultAction] values change — auto-migrates stored overrides. */
-    private const val DEFAULTS_VER = 1
+    private const val DEFAULTS_VER = 2
     private const val KEY_DEFAULTS_VER = "defaults_ver"
 
     fun isEnabled(context: Context): Boolean = preferences(context).getBoolean(ENABLED, false)
@@ -61,16 +61,26 @@ object HandlebarControlStore {
         preferences(context).edit().putString(gesture.id, action.id).apply()
     }
 
+    /** Restores every gesture to its default action. The enabled flag is a separate choice and survives. */
     fun reset(context: Context) {
-        preferences(context).edit().clear().apply()
+        val editor = preferences(context).edit()
+        HandlebarGesture.entries.forEach { editor.remove(it.id) }
+        editor.apply()
     }
 
     private fun ensureDefaultsMigrated(context: Context) {
         val p = preferences(context)
         if (p.getInt(KEY_DEFAULTS_VER, 0) >= DEFAULTS_VER) return
-        // V1: Remove stored overrides for gestures whose defaultAction changed.
-        // Currently no migrations — placeholder for future default changes.
-        p.edit().putInt(KEY_DEFAULTS_VER, DEFAULTS_VER).apply()
+        // V2: Select hold/double defaulted to ASSISTANT twice, leaving Back and Home unreachable
+        // on volume-only dashes. Clear stored values still equal to the old default so the new
+        // HOME/BACK defaults apply; explicit rider overrides are kept.
+        val editor = p.edit()
+        listOf(HandlebarGesture.ENTER_LONG, HandlebarGesture.ENTER_DOUBLE).forEach { gesture ->
+            if (p.getString(gesture.id, null) == HandlebarAction.ASSISTANT.id) {
+                editor.remove(gesture.id)
+            }
+        }
+        editor.putInt(KEY_DEFAULTS_VER, DEFAULTS_VER).apply()
     }
 
     private fun preferences(context: Context) = context.applicationContext.getSharedPreferences(

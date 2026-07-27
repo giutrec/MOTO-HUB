@@ -268,13 +268,23 @@ class MediaButtonBridge(
         }.getOrNull() ?: return
         if (current == pinnedVolume) return
         val delta = current - pinnedVolume
-        try { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, pinnedVolume, 0) } catch (_: Throwable) {}
-        val up = delta > 0
-        val single = if (up) HandlebarGesture.VOLUME_UP else HandlebarGesture.VOLUME_DOWN
-        val double = if (up) HandlebarGesture.VOLUME_UP_DOUBLE else HandlebarGesture.VOLUME_DOWN_DOUBLE
-        val forceDouble = abs(delta) >= DOUBLE_PRESS_VOLUME_STEPS
+        // Re-pin under the ignore guard, like pinVolume()/setListeningVolume(): with Bluetooth
+        // absolute volume the write round-trips through the peer, and reading that in-flight
+        // echo back as a fresh delta would fabricate a phantom press.
+        ignoreVolumeChanges = true
+        try {
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, pinnedVolume, 0)
+        } catch (_: Throwable) {
+        } finally {
+            handler.postDelayed({ ignoreVolumeChanges = false }, REPIN_IGNORE_MILLIS)
+        }
+        val single = if (delta > 0) HandlebarGesture.VOLUME_UP else HandlebarGesture.VOLUME_DOWN
         log("[BTN] volume ${if (delta > 0) "UP" else "DOWN"}; pinned=$pinnedVolume, delta=$delta")
-        detectDoubleTap(single, double, forceDouble)
+        when (val read = interpretVolumeDelta(delta, HandlebarControlStore.action(context, single))) {
+            null -> Unit
+            is VolumeDeltaRead.ScrollClicks -> repeat(read.count) { dispatch(read.gesture) }
+            is VolumeDeltaRead.Tap -> detectDoubleTap(read.single, read.double, read.forceDouble)
+        }
     }
 
     private fun unregisterVolumeObserver() {
@@ -562,6 +572,7 @@ class MediaButtonBridge(
         private const val REASSERT_GAP_MILLIS = 500L
         private const val ECHO_REFRACTORY_MILLIS = 80L
         private const val SELECT_DEDUP_MILLIS = 100L
+        private const val REPIN_IGNORE_MILLIS = 80L
         private val bridges = ConcurrentHashMap<String, MediaButtonBridge>()
 
         fun setTargetCaptureActive(targetName: String, enabled: Boolean): Boolean {
@@ -602,10 +613,34 @@ class MediaButtonBridge(
     }
 }
 
-internal fun gestureForVolumeDelta(delta: Int): HandlebarGesture? = when {
-    delta == 0 -> null
-    delta > 0 && abs(delta) >= DOUBLE_PRESS_VOLUME_STEPS -> HandlebarGesture.VOLUME_UP_DOUBLE
-    delta > 0 -> HandlebarGesture.VOLUME_UP
-    abs(delta) >= DOUBLE_PRESS_VOLUME_STEPS -> HandlebarGesture.VOLUME_DOWN_DOUBLE
-    else -> HandlebarGesture.VOLUME_DOWN
+internal sealed interface VolumeDeltaRead {
+    /** Repeatable scroll presses fused into one write by the poll window — replay each click. */
+    data class ScrollClicks(val gesture: HandlebarGesture, val count: Int) : VolumeDeltaRead
+    data class Tap(
+        val single: HandlebarGesture,
+        val double: HandlebarGesture,
+        val forceDouble: Boolean
+    ) : VolumeDeltaRead
+}
+
+/**
+ * Interprets one absolute-volume delta. AVRCP volume is cumulative, so the 250ms poll can fuse
+ * quick repeated presses into a single larger write. When the single-press gesture maps to a
+ * rotary scroll — a naturally repeatable action — a 2-step jump is replayed as two clicks instead
+ * of being mistaken for a gesture. Jumps of [DOUBLE_PRESS_VOLUME_STEPS]+ keep the field-proven
+ * meaning of a dash-coalesced double press, which is how BACK/HOME stay reachable from a
+ * volume-only handlebar.
+ */
+internal fun interpretVolumeDelta(delta: Int, singleAction: HandlebarAction): VolumeDeltaRead? {
+    if (delta == 0) return null
+    val up = delta > 0
+    val single = if (up) HandlebarGesture.VOLUME_UP else HandlebarGesture.VOLUME_DOWN
+    val double = if (up) HandlebarGesture.VOLUME_UP_DOUBLE else HandlebarGesture.VOLUME_DOWN_DOUBLE
+    val magnitude = abs(delta)
+    val scrollMapped = singleAction == HandlebarAction.SCROLL_FORWARD ||
+        singleAction == HandlebarAction.SCROLL_BACK
+    if (scrollMapped && magnitude in 2 until DOUBLE_PRESS_VOLUME_STEPS) {
+        return VolumeDeltaRead.ScrollClicks(single, magnitude)
+    }
+    return VolumeDeltaRead.Tap(single, double, magnitude >= DOUBLE_PRESS_VOLUME_STEPS)
 }
