@@ -8,5 +8,6 @@ data class EncoderProfileParcel(
     val width: Int,
     val height: Int,
     val frameRate: Int,
-    val bitRate: Int
+    val bitRate: Int,
+    val usedFallback: Boolean = false
 ) : Parcelable

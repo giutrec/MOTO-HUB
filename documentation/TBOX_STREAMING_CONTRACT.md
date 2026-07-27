@@ -211,11 +211,14 @@ For Android Auto, touch mapping is based on the actual compositor viewport:
 firmware that does not send the safe area, plus whether any firmware reports
 safe-area offsets or full physical TFT dimensions elsewhere.
 
-## Live-Only Startup
+## Live-Preferred Startup
 
-MOTO-HUB creates `MobileConfig` without a static source. A fixed-resolution
-fallback can be incompatible with the runtime TFT area and can replace an
-otherwise healthy stream during a short encoder pause.
+MOTO-HUB creates `MobileConfig` without a static source and always prefers a
+live runtime `VideoArea`. If the transport starts successfully but the T-Box
+does not emit that event, MOTO-HUB falls back in order to saved geometry and
+then the resolved model's validated compatibility area. The selected source is
+recorded as `LIVE`, `SAVED` or `FALLBACK`; a fallback must never replace a
+live area when one is available.
 
 On media command `112`, RideDaemon clears stale frames and waits for a fresh
 IDR before serving the TFT. Android requests that sync frame immediately,

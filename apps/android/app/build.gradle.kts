@@ -8,6 +8,11 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+val noReleaseObfuscation = providers.gradleProperty("noReleaseObfuscation")
+    .map(String::toBoolean)
+    .orElse(false)
+    .get()
+
 // Encrypts string literals in the compiled bytecode (XOR + per-build random key), decrypted at
 // runtime by the small `xor` library below - complements R8, which renames identifiers but
 // leaves string constants (URLs, log messages, SSIDs, error text) sitting in the clear for
@@ -15,6 +20,10 @@ plugins {
 apply(plugin = "stringfog")
 
 configure<com.github.megatronking.stringfog.plugin.StringFogExtension> {
+    // Only ever assign `enable` to turn fogging OFF. Setting it to true here (which reads as a
+    // no-op) left the transform inert: a clean build encrypted 0 of ~1200 app classes and R8
+    // then stripped the unused xor library, shipping every string literal in the clear.
+    if (noReleaseObfuscation) enable = false
     implementation = "com.github.megatronking.stringfog.xor.StringFogImpl"
     fogPackages = arrayOf("io.motohub.android")
 }
@@ -58,7 +67,6 @@ fun asBuildConfigString(value: String): String =
     "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 val coreSentryDsn = sentryDsn("sentryCoreDsn", "SENTRY_CORE_DSN")
-
 android {
     namespace = "io.motohub.android"
     compileSdk = 36
@@ -67,8 +75,8 @@ android {
         applicationId = "io.motohub.android"
         minSdk = 34
         targetSdk = 36
-        versionCode = 96
-        versionName = "1.1.2"
+        versionCode = 97
+        versionName = "1.1.3"
         buildConfigField("boolean", "IS_PRO", "false")
         buildConfigField("String", "SENTRY_DSN", asBuildConfigString(coreSentryDsn))
         manifestPlaceholders["appLabel"] = "MOTO-HUB"
@@ -102,8 +110,11 @@ android {
             )
         }
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // Keep normal releases protected, but allow a local device-test release
+            // with readable stack traces and no R8 obfuscation.
+            // Use -PnoReleaseObfuscation=true for the latter.
+            isMinifyEnabled = !noReleaseObfuscation
+            isShrinkResources = !noReleaseObfuscation
             signingConfig = signingConfigs.findByName("localRelease")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -202,10 +213,22 @@ tasks.named("preBuild").configure {
 }
 
 val exportPublicApk by tasks.registering(Copy::class) {
-    dependsOn("assembleDebug")
-    from(layout.buildDirectory.file("outputs/apk/debug/app-debug.apk"))
+    // Only obfuscated release builds are published, so this is the release variant - never the
+    // "debug" buildType it used to copy. That variant is signed with the local debug key, which
+    // cannot update a release-signed install: on a phone already running MOTO-HUB it failed with
+    // INSTALL_FAILED_UPDATE_INCOMPATIBLE, so it could never have been a real upgrade path.
+    dependsOn("assembleRelease")
+    from(layout.buildDirectory.file("outputs/apk/release/app-release.apk"))
     into(rootProject.projectDir.resolve("../../artifacts"))
     rename { "MOTO-HUB-${android.defaultConfig.versionName}-${android.defaultConfig.versionCode}-public.apk" }
+    doFirst {
+        check(hasLocalReleaseSigning) {
+            "The persistent MOTO-HUB release keystore and release-signing.properties are required."
+        }
+        check(!noReleaseObfuscation) {
+            "Published artifacts must be obfuscated: drop -PnoReleaseObfuscation to export."
+        }
+    }
 }
 
 val exportPrivateAndroidAutoApk by tasks.registering(Copy::class) {
@@ -216,6 +239,9 @@ val exportPrivateAndroidAutoApk by tasks.registering(Copy::class) {
     doFirst {
         check(hasLocalReleaseSigning) {
             "The persistent MOTO-HUB release keystore and release-signing.properties are required."
+        }
+        check(!noReleaseObfuscation) {
+            "Published artifacts must be obfuscated: drop -PnoReleaseObfuscation to export."
         }
         check(includeAndroidAutoIdentity.get()) {
             "Private Android Auto APK export requires -PincludeAndroidAutoIdentity=true."

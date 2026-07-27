@@ -16,6 +16,19 @@ class AndroidAutoCapabilityProfileTest {
     }
 
     @Test
+    fun `keeps portrait geometry when the landscape fallback is only the generic guess`() {
+        val target = DisplayGeometry(800, 951)
+
+        val usable = AndroidAutoCapabilityProfiles.usableSavedGeometryForAuto(
+            target,
+            AndroidAutoVideoPreset.LANDSCAPE_800X480,
+            fallbackIsValidated = false
+        )
+
+        assertEquals(target, usable)
+    }
+
+    @Test
     fun `keeps non exact geometry when it matches the model orientation`() {
         val target = DisplayGeometry(460, 750)
 

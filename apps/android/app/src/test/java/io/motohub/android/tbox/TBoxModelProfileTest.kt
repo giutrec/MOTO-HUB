@@ -26,6 +26,10 @@ class TBoxModelProfileTest {
     fun `unknown model id uses generic profile`() {
         assertEquals(TBoxModelProfile.GENERIC, TBoxModelProfile.fromModelId("unknown"))
         assertEquals(true, TBoxModelProfile.GENERIC.mapTilesRequireCellular)
+        assertEquals(
+            TBoxEvent.VideoArea(800, 480),
+            TBoxModelProfile.fallbackVideoArea("unknown", null)
+        )
     }
 
     @Test
@@ -73,6 +77,10 @@ class TBoxModelProfileTest {
         assertEquals(TBoxScreenMargins.NONE, TBoxModelProfile.CFMOTO_MTX800.defaultScreenMargins)
         assertEquals(AndroidAutoDisplayMode.FILL, TBoxModelProfile.CFMOTO_MTX800.defaultAndroidAutoDisplayMode)
         assertEquals(true, TBoxModelProfile.CFMOTO_MTX800.requiresProactivePxcHeartbeat)
+        assertEquals(
+            TBoxEvent.VideoArea(460, 750),
+            TBoxModelProfile.fallbackVideoArea("66660732", null)
+        )
     }
 
     @Test

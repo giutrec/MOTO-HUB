@@ -10,6 +10,7 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
+import android.os.ParcelFileDescriptor
 import android.os.RemoteCallbackList
 import android.view.Surface
 import androidx.core.app.NotificationCompat
@@ -32,6 +33,8 @@ import io.motohub.android.feature.settings.AndroidAutoResolutionMode
 import io.motohub.android.feature.settings.MotoHubSettings
 import io.motohub.android.feature.settings.VideoQuality
 import io.motohub.android.session.ProjectionEventLog
+import io.motohub.android.tbox.ProfileOverride
+import io.motohub.android.tbox.TBoxModelProfile
 import io.motohub.android.tbox.TBoxSessionHandle
 import io.motohub.android.tbox.TBoxSessionRegistry
 import io.motohub.android.tbox.negotiateVideoConfiguration
@@ -42,15 +45,23 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
+import java.io.BufferedInputStream
+import java.io.DataInputStream
+import java.io.EOFException
 
 class IpcBridgeService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val videoStreamLock = Any()
+    @Volatile private var videoStreamInput: ParcelFileDescriptor? = null
+    @Volatile private var videoStreamJob: Job? = null
 
     // ── T-Box transport ──────────────────────────────────────────────
 
@@ -84,10 +95,17 @@ class IpcBridgeService : Service() {
         // starts delivering frames only after this returns non-null.
         override fun startVideoSession(): EncoderProfileParcel? =
             kotlinx.coroutines.runBlocking {
+                closeVideoStreamPipe()
                 var handle = TBoxSessionRegistry.current() ?: return@runBlocking null
+                val fallbackArea = TBoxModelProfile.fallbackVideoArea(
+                    handle.motorcycle.modelId,
+                    null,
+                    ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
+                )
                 var result = handle.transport.negotiateVideoConfiguration(
                     host = handle.host,
                     savedArea = null,
+                    fallbackArea = fallbackArea,
                     timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
                 )
                 if (result.isFailure) {
@@ -116,6 +134,7 @@ class IpcBridgeService : Service() {
                         result = handle.transport.negotiateVideoConfiguration(
                             host = handle.host,
                             savedArea = null,
+                            fallbackArea = fallbackArea,
                             timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
                         )
                     }
@@ -130,13 +149,15 @@ class IpcBridgeService : Service() {
                 val area = configuration.rawArea
                 ProjectionEventLog.record(
                     "IPC_TBOX",
-                    "Video session started for a companion app; TFT area ${area.width}x${area.height}."
+                    "Video session started for a companion app; TFT area ${area.width}x${area.height} " +
+                        "(source=${configuration.source})."
                 )
                 EncoderProfileParcel(
                     width = area.width,
                     height = area.height,
                     frameRate = 30,
-                    bitRate = 2_500_000
+                    bitRate = 2_500_000,
+                    usedFallback = configuration.source == io.motohub.android.tbox.TBoxVideoAreaSource.FALLBACK
                 )
             }
 
@@ -171,6 +192,7 @@ class IpcBridgeService : Service() {
         }
 
         override fun disconnect() {
+            closeVideoStreamPipe()
             kotlinx.coroutines.runBlocking {
                 CoreTBoxConnector(applicationContext).disconnect()
             }
@@ -183,6 +205,93 @@ class IpcBridgeService : Service() {
 
         override fun unregisterSessionListener(listener: ITBoxSessionListener) {
             sessionListeners.unregister(listener)
+        }
+
+        override fun openVideoStream(): ParcelFileDescriptor? = openVideoStreamPipe()
+
+        override fun closeVideoStream() {
+            closeVideoStreamPipe()
+        }
+    }
+
+    /**
+     * Opens the high-rate data plane once. The Binder bridge remains the control
+     * plane; encoded frames are length-prefixed on this local pipe instead of
+     * becoming one Binder transaction per frame.
+     */
+    private fun openVideoStreamPipe(): ParcelFileDescriptor? {
+        synchronized(videoStreamLock) {
+            closeVideoStreamPipeLocked()
+            return runCatching {
+                val pipe = ParcelFileDescriptor.createPipe()
+                videoStreamInput = pipe[0]
+                videoStreamJob = serviceScope.launch {
+                    readVideoStream(pipe[0])
+                }
+                pipe[1]
+            }.onFailure {
+                ProjectionEventLog.error("IPC_TBOX", "Unable to open the PRO video data pipe.", it)
+            }.getOrNull()
+        }
+    }
+
+    private fun closeVideoStreamPipe() {
+        synchronized(videoStreamLock) {
+            closeVideoStreamPipeLocked()
+        }
+    }
+
+    private fun closeVideoStreamPipeLocked() {
+        videoStreamJob?.cancel()
+        videoStreamJob = null
+        videoStreamInput?.runCatching { close() }
+        videoStreamInput = null
+    }
+
+    private suspend fun readVideoStream(input: ParcelFileDescriptor) {
+        try {
+            ParcelFileDescriptor.AutoCloseInputStream(input).use { raw ->
+                DataInputStream(BufferedInputStream(raw, VIDEO_PIPE_BUFFER_BYTES)).use { stream ->
+                    var consecutiveRejectedFrames = 0
+                    while (currentCoroutineContext().isActive) {
+                        val size = try {
+                            stream.readInt()
+                        } catch (_: EOFException) {
+                            break
+                        }
+                        require(size in 1..MAX_VIDEO_ACCESS_UNIT_BYTES) {
+                            "Invalid PRO video access unit size: $size"
+                        }
+                        val accessUnit = ByteArray(size)
+                        stream.readFully(accessUnit)
+                        val transport = TBoxSessionRegistry.current()?.transport ?: break
+                        if (!transport.offerAccessUnit(accessUnit)) {
+                            consecutiveRejectedFrames++
+                            if (consecutiveRejectedFrames >= MAX_CONSECUTIVE_REJECTED_FRAMES) {
+                                ProjectionEventLog.warning(
+                                    "IPC_TBOX",
+                                    "PRO video pipe stopped because CORE rejected " +
+                                        "$consecutiveRejectedFrames consecutive AVC frames."
+                                )
+                                break
+                            }
+                        } else {
+                            consecutiveRejectedFrames = 0
+                        }
+                    }
+                }
+            }
+        } catch (failure: Throwable) {
+            if (failure !is kotlinx.coroutines.CancellationException) {
+                ProjectionEventLog.error("IPC_TBOX", "PRO video pipe reader stopped.", failure)
+            }
+        } finally {
+            synchronized(videoStreamLock) {
+                if (videoStreamInput === input) {
+                    videoStreamInput = null
+                    videoStreamJob = null
+                }
+            }
         }
     }
 
@@ -281,10 +390,15 @@ class IpcBridgeService : Service() {
             }
             receiver = activeReceiver
             publishState(AndroidAutoIpcState.RECEIVER_READY, "")
+            triggerSelfModeForEmbeddedReceiver()
             return true
         }
 
         override fun detachOutputSurface() {
+            // Same reasoning as stopFullSession: a pending trigger would re-launch Google
+            // Android Auto after the receiver is gone.
+            selfModeJob?.cancel()
+            selfModeJob = null
             releaseReceiver()
         }
 
@@ -435,6 +549,23 @@ class IpcBridgeService : Service() {
         }
     }
 
+    /**
+     * The embedded (Ride Dashboard) receiver is ready as soon as AaReceiver.start() returns and
+     * never drives AndroidAutoRuntime, so [triggerSelfModeWhenReady]'s state wait would block
+     * forever here. Without a trigger the receiver just listens on the local AAP port and Google
+     * Android Auto is never asked to connect - the dashboard sits on "STARTING ANDROID AUTO"
+     * indefinitely, which is exactly what the full-session path avoids by calling AaSelfMode.
+     */
+    private fun triggerSelfModeForEmbeddedReceiver() {
+        selfModeJob?.cancel()
+        selfModeJob = serviceScope.launch {
+            delay(ANDROID_AUTO_RECEIVER_SETTLE_MS)
+            if (receiver != null) {
+                AaSelfMode.trigger(applicationContext) { ProjectionEventLog.record("AAP", it) }
+            }
+        }
+    }
+
     private fun releaseReceiver() {
         receiver?.stop()
         receiver = null
@@ -527,6 +658,7 @@ class IpcBridgeService : Service() {
     }
 
     override fun onDestroy() {
+        closeVideoStreamPipe()
         sessionPollJob?.cancel()
         fullSessionForwardingJob?.cancel()
         selfModeJob?.cancel()
@@ -539,6 +671,9 @@ class IpcBridgeService : Service() {
     }
 
     private companion object {
+        const val VIDEO_PIPE_BUFFER_BYTES = 64 * 1024
+        const val MAX_VIDEO_ACCESS_UNIT_BYTES = 2 * 1024 * 1024
+        const val MAX_CONSECUTIVE_REJECTED_FRAMES = 3
         const val SESSION_POLL_INTERVAL_MS = 1_000L
         const val VIDEO_CONFIGURATION_TIMEOUT_MS = 10_000L
         const val SELF_MODE_READY_TIMEOUT_MS = 10_000L

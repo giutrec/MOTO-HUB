@@ -11,7 +11,12 @@ data class TBoxHost(
 
 sealed interface TBoxEvent {
     data class Capabilities(val value: TBoxCapabilities) : TBoxEvent
-    data class VideoArea(val width: Int, val height: Int) : TBoxEvent
+    data class VideoArea(
+        val width: Int,
+        val height: Int,
+        /** True when the area came from a compatibility fallback rather than the T-Box. */
+        val isFallback: Boolean = false
+    ) : TBoxEvent
     data class Touch(val action: Int, val pointerId: Int, val x: Int, val y: Int) : TBoxEvent
     data object VideoStreamStart : TBoxEvent
     data class Warning(val message: String) : TBoxEvent

@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import io.motohub.android.R
 import io.motohub.android.encoding.AdaptiveVideoController
 import io.motohub.android.encoding.AvcEncoder
+import io.motohub.android.encoding.VideoBackpressureGuard
 import io.motohub.android.androidauto.DisplayGeometry
 import io.motohub.android.androidauto.TBoxDisplayGeometryStore
 import io.motohub.android.feature.settings.MotoHubSettings
@@ -63,6 +64,7 @@ class ProjectionSessionService : Service() {
     private var recoveryJob: Job? = null
     private val recoveryRequested = AtomicBoolean(false)
     private val transportUnavailable = AtomicBoolean(false)
+    private var backpressureGuard = VideoBackpressureGuard()
     private val videoStreamStartRequested = AtomicBoolean(false)
     /**
      * Guards [startCapture] against duplicate concurrent starts. [mediaProjection] is
@@ -157,9 +159,15 @@ class ProjectionSessionService : Service() {
         val savedArea = geometryStore.load(handle.motorcycle.ssid)?.let { geometry ->
             TBoxEvent.VideoArea(geometry.width, geometry.height)
         }
+        val fallbackArea = TBoxModelProfile.fallbackVideoArea(
+            handle.motorcycle.modelId,
+            capabilityStore.load(handle.motorcycle)?.capabilities,
+            ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
+        )
         val configurationResult = handle.transport.negotiateVideoConfiguration(
             host = handle.host,
             savedArea = savedArea,
+            fallbackArea = fallbackArea,
             timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
         )
         configurationResult.exceptionOrNull()?.let {
@@ -201,22 +209,42 @@ class ProjectionSessionService : Service() {
             val projection = manager.getMediaProjection(resultCode, resultData)
                 ?: error("Android did not create the media projection")
             projection.registerCallback(projectionCallback, null)
+            backpressureGuard = VideoBackpressureGuard()
             val activeEncoder = AvcEncoder(
                 profile = profile,
                 onAccessUnit = { accessUnit ->
-                    if (!handle.transport.offerAccessUnit(accessUnit) &&
-                        transportUnavailable.compareAndSet(false, true)
-                    ) {
-                        serviceScope.launch {
-                            if (!stopping) fail("The T-Box session no longer accepts video frames.")
-                        }
-                        false
-                    } else {
+                    if (handle.transport.offerAccessUnit(accessUnit)) {
+                        backpressureGuard.onAccepted()
                         val accepted = framesAccepted.incrementAndGet()
                         if (accepted == 1L || accepted % FRAME_LOG_INTERVAL == 0L) {
                             ProjectionEventLog.record("ENCODER", "Frames sent to T-Box: $accepted.")
                         }
                         true
+                    } else {
+                        // A single rejection is a pushFrame() overlap, not a dead link - only a
+                        // sustained streak ends the session (see VideoBackpressureGuard).
+                        val fatal = backpressureGuard.onRejected()
+                        if (backpressureGuard.isStreakStart()) {
+                            ProjectionEventLog.warning(
+                                "ENCODER",
+                                "The T-Box rejected an AVC frame; holding the session open while " +
+                                    "the transport recovers. Rejected so far: " +
+                                    "${backpressureGuard.totalRejections()}."
+                            )
+                        }
+                        if (fatal && transportUnavailable.compareAndSet(false, true)) {
+                            val streak = backpressureGuard.rejectionStreak()
+                            val streakMillis = backpressureGuard.streakMillis()
+                            serviceScope.launch {
+                                if (!stopping) {
+                                    fail(
+                                        "The T-Box session no longer accepts video frames " +
+                                            "($streak in a row over ${streakMillis}ms)."
+                                    )
+                                }
+                            }
+                        }
+                        false
                     }
                 },
                 onFailure = { failure ->

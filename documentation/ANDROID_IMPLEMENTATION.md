@@ -129,11 +129,13 @@ The overlay:
 Do not permanently modify `Settings.System.SCREEN_BRIGHTNESS`: a crash could
 otherwise leave the phone unusable at minimum brightness.
 
-The virtual display uses the runtime area advertised by the connected T-Box.
-Both dimensions are aligned down to complete 16-pixel H.264 macroblocks; no
-motorcycle model or fixed TFT resolution is assumed. A geometry saved for the
-same SSID may recover a missing live event, but an unknown display without a
-valid area fails explicitly instead of receiving a wrongly sized stream.
+The virtual display prefers the runtime area advertised by the connected T-Box.
+Both dimensions are aligned down to complete 16-pixel H.264 macroblocks. A
+geometry saved for the same SSID recovers a missing live event; if neither is
+available, the resolved model's validated compatibility area is used and marked
+as a fallback. An unknown display uses the generic compatibility profile so the
+app remains usable, but the TFT geometry remains unverified until a live area
+is received.
 
 Full Android Auto and Ride Dashboard do not depend on `MediaProjection`, so they
 can continue while the phone display is locked. Android Auto is started through

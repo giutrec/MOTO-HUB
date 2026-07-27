@@ -22,6 +22,7 @@ import io.motohub.android.aa.SingleKeyKeyManager
 import io.motohub.android.encoding.AdaptiveVideoController
 import io.motohub.android.encoding.AvcEncoder
 import io.motohub.android.encoding.EncoderProfile
+import io.motohub.android.encoding.VideoBackpressureGuard
 import io.motohub.android.feature.controls.HandlebarControlStore
 import io.motohub.android.feature.controls.MediaButtonBridge
 import io.motohub.android.feature.controls.SimulatorHandlebarBridge
@@ -80,6 +81,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
     private val capabilityStore by lazy { TBoxCapabilityStore(this) }
     private val bikeStartRequested = AtomicBoolean(false)
     private val transportUnavailable = AtomicBoolean(false)
+    private var backpressureGuard = VideoBackpressureGuard()
     private val videoStreamStartRequested = AtomicBoolean(false)
     private val framesAccepted = AtomicLong(0)
     private val recoveryRequested = AtomicBoolean(false)
@@ -154,9 +156,14 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
             handle.motorcycle.modelId,
             cachedCapabilities
         )
+        val fallbackIsValidated = TBoxModelProfile.hasValidatedAndroidAutoPreset(
+            handle.motorcycle.modelId,
+            cachedCapabilities
+        )
         val usableLearnedGeometry = AndroidAutoCapabilityProfiles.usableSavedGeometryForAuto(
             learnedGeometry,
-            fallbackPreset
+            fallbackPreset,
+            fallbackIsValidated
         )
         if (learnedGeometry != null && usableLearnedGeometry == null) {
             ProjectionEventLog.warning(
@@ -336,9 +343,15 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         val savedArea = displayGeometryStore.load(handle.motorcycle.ssid)?.let { geometry ->
             TBoxEvent.VideoArea(geometry.width, geometry.height)
         }
+        val fallbackArea = TBoxModelProfile.fallbackVideoArea(
+            handle.motorcycle.modelId,
+            capabilityStore.load(handle.motorcycle)?.capabilities,
+            ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
+        )
         var configurationResult = handle.transport.negotiateVideoConfiguration(
             host = handle.host,
             savedArea = savedArea,
+            fallbackArea = fallbackArea,
             timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
         )
         if (configurationResult.isFailure) {
@@ -361,6 +374,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                 configurationResult = handle.transport.negotiateVideoConfiguration(
                     host = handle.host,
                     savedArea = savedArea,
+                    fallbackArea = fallbackArea,
                     timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
                 )
             }
@@ -396,16 +410,27 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
             )
         }
         val expectedGeometry = ActiveAndroidAutoDisplayProfile.current.expectedTft
+        var liveGeometryPersisted = false
         if (configuration.source == TBoxVideoAreaSource.LIVE) {
             val negotiatedGeometry = DisplayGeometry(negotiatedArea.width, negotiatedArea.height)
+            val liveCapabilities = capabilityStore.load(handle.motorcycle)?.capabilities
             val fallbackPreset = TBoxModelProfile.defaultAndroidAutoPreset(
                 handle.motorcycle.modelId,
-                capabilityStore.load(handle.motorcycle)?.capabilities
+                liveCapabilities
+            )
+            val fallbackIsValidated = TBoxModelProfile.hasValidatedAndroidAutoPreset(
+                handle.motorcycle.modelId,
+                liveCapabilities
             )
             val shouldPersistGeometry = capabilityProfile.source == AndroidAutoCapabilitySource.USER_OVERRIDE ||
-                AndroidAutoCapabilityProfiles.usableSavedGeometryForAuto(negotiatedGeometry, fallbackPreset) != null
+                AndroidAutoCapabilityProfiles.usableSavedGeometryForAuto(
+                    negotiatedGeometry,
+                    fallbackPreset,
+                    fallbackIsValidated
+                ) != null
             if (shouldPersistGeometry) {
                 displayGeometryStore.save(handle.motorcycle.ssid, negotiatedGeometry)
+                liveGeometryPersisted = true
             } else {
                 ProjectionEventLog.warning(
                     "ANDROID AUTO",
@@ -439,13 +464,20 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         if (capabilityProfile.source != AndroidAutoCapabilitySource.USER_OVERRIDE &&
             learnedCapability.videoPreset != capabilityProfile.videoPreset
         ) {
+            val followUp = if (liveGeometryPersisted) {
+                "the learned profile will be used automatically the next time Android Auto starts."
+            } else {
+                // Saying "next time" when the geometry was just rejected is what made this
+                // loop invisible in rider logs: the promise never came true.
+                "this geometry was not saved, so the next session starts from the same profile - " +
+                    "set the resolution manually in Settings to use it now."
+            }
             ProjectionEventLog.warning(
                 "ANDROID AUTO",
                 "The live TFT geometry recommends ${learnedCapability.video.width}x" +
                     "${learnedCapability.video.height}@${learnedCapability.densityDpi}dpi. " +
                     "The current AAP session remains ${capabilityProfile.video.width}x" +
-                    "${capabilityProfile.video.height}; the learned profile will be used automatically " +
-                    "the next time Android Auto starts."
+                    "${capabilityProfile.video.height}; $followUp"
             )
         }
         ProjectionEventLog.record(
@@ -454,24 +486,40 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                 "quality=${quality.name}, bitrate=${encoderProfile.bitRate}."
         )
         try {
+            backpressureGuard = VideoBackpressureGuard()
             val activeEncoder = AvcEncoder(
                 profile = encoderProfile,
                 onAccessUnit = { accessUnit ->
-                    if (!handle.transport.offerAccessUnit(accessUnit)) {
-                        if (transportUnavailable.compareAndSet(false, true)) {
-                            serviceScope.launch {
-                                handleRecoverableFailure(
-                                    "The T-Box no longer accepts Android Auto frames."
-                                )
-                            }
-                        }
-                        false
-                    } else {
+                    if (handle.transport.offerAccessUnit(accessUnit)) {
+                        backpressureGuard.onAccepted()
                         val accepted = framesAccepted.incrementAndGet()
                         if (accepted == 1L || accepted % FRAME_LOG_INTERVAL == 0L) {
                             ProjectionEventLog.record("ANDROID AUTO", "Frames sent: $accepted.")
                         }
                         true
+                    } else {
+                        // A single rejection is a pushFrame() overlap, not a dead link - only a
+                        // sustained streak ends the session (see VideoBackpressureGuard).
+                        val fatal = backpressureGuard.onRejected()
+                        if (backpressureGuard.isStreakStart()) {
+                            ProjectionEventLog.warning(
+                                "ANDROID AUTO",
+                                "The T-Box rejected an Android Auto frame; holding the session " +
+                                    "open while the transport recovers. Rejected so far: " +
+                                    "${backpressureGuard.totalRejections()}."
+                            )
+                        }
+                        if (fatal && transportUnavailable.compareAndSet(false, true)) {
+                            val streak = backpressureGuard.rejectionStreak()
+                            val streakMillis = backpressureGuard.streakMillis()
+                            serviceScope.launch {
+                                handleRecoverableFailure(
+                                    "The T-Box no longer accepts Android Auto frames " +
+                                        "($streak in a row over ${streakMillis}ms)."
+                                )
+                            }
+                        }
+                        false
                     }
                 },
                 onFailure = { failure ->

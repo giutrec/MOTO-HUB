@@ -29,6 +29,12 @@ enum class TBoxModelProfile(
     val supportsScreenTouch: Boolean = true,
     val defaultAndroidAutoPreset: AndroidAutoVideoPreset =
         AndroidAutoVideoPreset.LANDSCAPE_800X480,
+    /**
+     * Compatibility geometry used only when the T-Box omits its live VideoArea. This is kept
+     * separate from the Android Auto source preset because the AA source and physical T-Box
+     * projection canvas are not interchangeable.
+     */
+    val fallbackTBoxVideoArea: TBoxEvent.VideoArea? = null,
     /** Matches OpenCfMoto's requiresSockServerAuth / enableSockServerAuth flag. */
     val requiresSockAuth: Boolean = false,
     /** Capability bitmask returned by the MediaCtrlScreenConf response. */
@@ -41,6 +47,7 @@ enum class TBoxModelProfile(
         displayName = "MOTO-HUB T-Box Simulator",
         modelIds = setOf("MOTO-HUB-SIMULATOR"),
         mapTilesRequireCellular = false,
+        fallbackTBoxVideoArea = TBoxEvent.VideoArea(800, 480),
         advertisedSupportFunction = 128
     ),
     /** CFDL16 / 450SR-style non-touch legacy dash. */
@@ -82,6 +89,7 @@ enum class TBoxModelProfile(
         defaultAndroidAutoDisplayMode = AndroidAutoDisplayMode.FILL,
         supportsScreenTouch = false,
         defaultAndroidAutoPreset = AndroidAutoVideoPreset.PORTRAIT_720X1280,
+        fallbackTBoxVideoArea = TBoxEvent.VideoArea(460, 750),
         requiresSockAuth = false,
         advertisedSupportFunction = 128,
         requiresProactivePxcHeartbeat = true
@@ -126,6 +134,7 @@ enum class TBoxModelProfile(
         supportsScreenTouch = true,
         defaultScreenMargins = TBoxScreenMargins(top = 22),
         defaultAndroidAutoPreset = AndroidAutoVideoPreset.PORTRAIT_720X1280,
+        fallbackTBoxVideoArea = TBoxEvent.VideoArea(720, 712),
         requiresSockAuth = true,
         advertisedSupportFunction = 128
     ),
@@ -148,6 +157,7 @@ enum class TBoxModelProfile(
         mapTilesRequireCellular = true,
         supportsScreenTouch = false,
         defaultAndroidAutoPreset = AndroidAutoVideoPreset.LANDSCAPE_1280X720,
+        fallbackTBoxVideoArea = TBoxEvent.VideoArea(544, 512),
         requiresSockAuth = false,
         advertisedSupportFunction = 0
     ),
@@ -155,7 +165,9 @@ enum class TBoxModelProfile(
         key = "generic",
         displayName = "Generic CFMOTO T-Box",
         modelIds = emptySet(),
-        mapTilesRequireCellular = true
+        mapTilesRequireCellular = true,
+        // Existing generic compatibility profile; never treated as live geometry.
+        fallbackTBoxVideoArea = TBoxEvent.VideoArea(800, 480)
     );
 
     companion object {
@@ -324,5 +336,24 @@ enum class TBoxModelProfile(
             modelId: String?,
             capabilities: TBoxCapabilities?
         ): AndroidAutoVideoPreset = resolve(modelId, capabilities).defaultAndroidAutoPreset
+
+        /**
+         * True when [defaultAndroidAutoPreset] comes from a recognized dash rather than
+         * [GENERIC]. Only a recognized profile's orientation is evidence about the hardware;
+         * see AndroidAutoCapabilityProfiles.usableSavedGeometryForAuto.
+         */
+        fun hasValidatedAndroidAutoPreset(
+            modelId: String?,
+            capabilities: TBoxCapabilities?
+        ): Boolean = resolve(modelId, capabilities) != GENERIC
+
+        fun fallbackVideoArea(
+            modelId: String?,
+            capabilities: TBoxCapabilities?,
+            profileOverride: ProfileOverride? = null
+        ): TBoxEvent.VideoArea =
+            resolve(modelId, capabilities, profileOverride).fallbackTBoxVideoArea
+                ?: GENERIC.fallbackTBoxVideoArea
+                ?: error("Generic T-Box fallback geometry is not configured.")
     }
 }

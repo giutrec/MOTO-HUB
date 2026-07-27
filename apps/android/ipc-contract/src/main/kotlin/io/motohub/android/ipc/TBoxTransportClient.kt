@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
+import android.os.ParcelFileDescriptor
 import android.util.Log
 
 /**
@@ -64,8 +65,8 @@ class TBoxTransportClient(
 
     fun unbind() {
         if (!bound) return
-        service?.unregisterSessionListener(sessionListener)
-        context.unbindService(connection)
+        runCatching { service?.unregisterSessionListener(sessionListener) }
+        runCatching { context.unbindService(connection) }
         service = null
         bound = false
     }
@@ -83,6 +84,13 @@ class TBoxTransportClient(
      * Must succeed before offerAccessUnit() delivers any frames.
      */
     fun startVideoSession(): EncoderProfileParcel? = service?.startVideoSession()
+
+    /** Opens the high-rate video data plane; null means the older Binder-only Core is in use. */
+    fun openVideoStream(): ParcelFileDescriptor? = service?.openVideoStream()
+
+    fun closeVideoStream() {
+        service?.closeVideoStream()
+    }
 
     fun offerAccessUnit(accessUnit: ByteArray): Boolean = service?.offerAccessUnit(accessUnit) ?: false
 

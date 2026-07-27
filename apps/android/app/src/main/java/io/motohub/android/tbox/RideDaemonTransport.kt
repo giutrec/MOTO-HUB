@@ -21,10 +21,12 @@ import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.io.IOException
 import java.net.ServerSocket
-import java.net.BindException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.TimeUnit
@@ -43,9 +45,17 @@ import kotlinx.coroutines.withTimeout
 
 private const val MOTO_HUB_SIMULATOR_MODEL_ID = "MOTO-HUB-SIMULATOR"
 internal const val RIDE_DAEMON_STARTUP_TIMEOUT_SEC = 25L
+private const val REVERSE_PORT_WAIT_MS = 12_000L
+private const val REVERSE_PORT_POLL_MS = 400L
+private const val PXC_STALL_WARNING_MS = 6_000L
 private const val PUSH_FRAME_TIMEOUT_MS = 5_000L
+private const val PUSH_FRAME_SUBMIT_WAIT_MS = 1_000L
+private const val PUSH_FRAME_SUBMIT_RETRY_DELAY_MS = 5L
 private const val REJECTED_FRAME_LOG_INTERVAL = 100L
 private val REVERSE_PORTS = intArrayOf(10920, 10921, 10922)
+
+internal fun isCurrentRideDaemonSession(callbackGeneration: Long, activeGeneration: Long): Boolean =
+    callbackGeneration != 0L && callbackGeneration == activeGeneration
 
 /** Kotlin boundary around the GPL gomobile binding. Network selection stays outside this class. */
 class RideDaemonTransport(
@@ -56,17 +66,15 @@ class RideDaemonTransport(
     private val nsdManager = appContext.getSystemService(NsdManager::class.java)
     private val wifiManager = appContext.getSystemService(WifiManager::class.java)
     private val callbackExecutor = ContextCompat.getMainExecutor(appContext)
-    // A SynchronousQueue (zero capacity) instead of the unbounded queue
-    // Executors.newSingleThreadExecutor() would use: if the single worker is still busy on a
-    // prior pushFrame() call, submit() rejects immediately rather than queuing. That bounds
-    // memory even if the native pushFrame() call were to hang forever, instead of silently
-    // accumulating queued access units behind a permanently stuck worker.
+    // Keep only one access unit queued behind the native call. A zero-capacity
+    // SynchronousQueue made a short pushFrame() overlap look like a dead session to PRO.
+    // The bounded queue retains the watchdog below without allowing an unbounded backlog.
     private val pushFrameExecutor = java.util.concurrent.ThreadPoolExecutor(
         1,
         1,
         0L,
         TimeUnit.MILLISECONDS,
-        java.util.concurrent.SynchronousQueue()
+        ArrayBlockingQueue(1)
     ) { runnable -> Thread(runnable, "MotoHubPushFrame").apply { isDaemon = true } }
     private val mutableEvents = MutableSharedFlow<TBoxEvent>(
         extraBufferCapacity = 8,
@@ -77,6 +85,10 @@ class RideDaemonTransport(
     private var session: MobileSession? = null
     @Volatile
     private var sessionLink: TBoxLink? = null
+    private val sessionLock = Any()
+    private val nextSessionGeneration = AtomicLong(0L)
+    @Volatile
+    private var activeSessionGeneration = 0L
     @Volatile
     private var protocolProfile: TBoxModelProfile = TBoxModelProfile.GENERIC
     private val pxcEvents = AtomicLong(0L)
@@ -111,12 +123,16 @@ class RideDaemonTransport(
                 setSupportFunction(profile.advertisedSupportFunction.toLong())
                 setProactivePxcHeartbeatEnabled(profile.requiresProactivePxcHeartbeat)
             }
+            val generation = nextSessionGeneration.incrementAndGet()
             val createdSession = Api.newMobileSession(
                 mobileConfig,
-                SessionCallback()
+                SessionCallback(generation)
             )
-            session = createdSession
-            sessionLink = link
+            synchronized(sessionLock) {
+                session = createdSession
+                sessionLink = link
+                activeSessionGeneration = generation
+            }
             createdSession.setECHost(
                 Api.newStreamHost(host.ipAddress, host.port.toString(), host.packageName)
             )
@@ -165,42 +181,73 @@ class RideDaemonTransport(
             }
         }
 
-    /** Fail early when another EasyConn client already owns the phone-side listeners. */
-    private fun ensureReversePortsAvailable() {
-        val probes = mutableListOf<ServerSocket>()
-        try {
-            REVERSE_PORTS.forEach { port -> probes += ServerSocket(port) }
-        } catch (failure: BindException) {
+    /**
+     * Waits for the phone-side EasyConn listeners before handing them to the native session.
+     *
+     * Failing on the first probe made a routine hand-off look like a hard conflict: a rider log
+     * showed the ports still held 10s after MOTO-HUB asked the official CFMOTO app to stop, the
+     * Android Auto hand-off aborted with EADDRINUSE, and the very next manual attempt ~20s later
+     * connected normally. killBackgroundProcesses() cannot touch a foreground service and the
+     * kernel releases the sockets asynchronously either way, so the only correct behaviour is to
+     * wait a bounded time and only then report the conflict.
+     */
+    private suspend fun ensureReversePortsAvailable() {
+        var busy = busyReversePorts()
+        if (busy.isEmpty()) return
+        // The connect-time request may have been many seconds ago (or skipped entirely when
+        // Android Auto starts an already-connected link) - ask again, then wait.
+        if (OfficialCfmotoClient.isInstalled(appContext)) {
+            OfficialCfmotoClient.closeBestEffort(appContext)
+        }
+        ProjectionEventLog.warning(
+            "TBOX",
+            "Local reverse ports ${busy.joinToString()} are still held; waiting up to " +
+                "${REVERSE_PORT_WAIT_MS}ms for them to be released."
+        )
+        val deadline = SystemClock.elapsedRealtime() + REVERSE_PORT_WAIT_MS
+        while (busy.isNotEmpty() && SystemClock.elapsedRealtime() < deadline) {
+            delay(REVERSE_PORT_POLL_MS)
+            busy = busyReversePorts()
+        }
+        if (busy.isNotEmpty()) {
             throw IllegalStateException(
-                "Another EasyConn session is using local reverse ports 10920-10922. " +
-                    "Close the official CFMOTO app and retry.",
-                failure
+                "Another EasyConn session still holds local reverse ports " +
+                    "${busy.joinToString()} after ${REVERSE_PORT_WAIT_MS}ms " +
+                    "(address already in use). Force-stop the official CFMOTO app and retry."
             )
+        }
+        ProjectionEventLog.record("TBOX", "Local reverse ports 10920-10922 were released; continuing.")
+    }
+
+    /** Probes 10920-10922 exactly as the native reverse server will bind them. */
+    private fun busyReversePorts(): List<Int> {
+        val probes = mutableListOf<ServerSocket>()
+        val busy = mutableListOf<Int>()
+        try {
+            REVERSE_PORTS.forEach { port ->
+                val probe = ServerSocket()
+                try {
+                    // SO_REUSEADDR before bind, like the Go listener: sockets the previous
+                    // session left in TIME_WAIT are ours to reuse and must not read as a
+                    // foreign conflict. A live listener in another process still fails here.
+                    probe.reuseAddress = true
+                    probe.bind(InetSocketAddress(port), 1)
+                    probes += probe
+                } catch (_: IOException) {
+                    runCatching { probe.close() }
+                    busy += port
+                }
+            }
         } finally {
             probes.forEach { runCatching { it.close() } }
         }
+        return busy
     }
 
     override fun offerAccessUnit(avcc: ByteArray): Boolean {
         val activeSession = session ?: return false
         if (!activeSession.isRunning) return false
-        val future = try {
-            pushFrameExecutor.submit {
-                activeSession.pushFrame(avcc)
-            }
-        } catch (_: java.util.concurrent.RejectedExecutionException) {
-            // Zero-capacity queue: rejected while the worker is still inside a native pushFrame().
-            // Logged throttled so a congestion burst cannot flood the diagnostic log.
-            val rejections = framesRejected.incrementAndGet()
-            if (rejections == 1L || rejections % REJECTED_FRAME_LOG_INTERVAL == 0L) {
-                ProjectionEventLog.warning(
-                    "TBOX",
-                    "AVC frame dropped: the previous pushFrame() call is still running. " +
-                        "Rejected frames so far: $rejections."
-                )
-            }
-            return false
-        }
+        val future = submitPushFrame(activeSession, avcc) ?: return false
         return try {
             future.get(PUSH_FRAME_TIMEOUT_MS, TimeUnit.MILLISECONDS)
             framesOffered.incrementAndGet()
@@ -221,18 +268,64 @@ class RideDaemonTransport(
         }
     }
 
+    /**
+     * A transient overlap is recoverable: wait briefly for the bounded queue to accept the
+     * access unit. Only a queue that remains blocked for the grace period is reported as a
+     * transport failure to the caller.
+     */
+    private fun submitPushFrame(activeSession: MobileSession, avcc: ByteArray): java.util.concurrent.Future<*>? {
+        val deadline = SystemClock.elapsedRealtime() + PUSH_FRAME_SUBMIT_WAIT_MS
+        while (true) {
+            try {
+                return pushFrameExecutor.submit {
+                    activeSession.pushFrame(avcc)
+                }
+            } catch (_: RejectedExecutionException) {
+                val rejections = framesRejected.incrementAndGet()
+                if (rejections == 1L || rejections % REJECTED_FRAME_LOG_INTERVAL == 0L) {
+                    ProjectionEventLog.warning(
+                        "TBOX",
+                        "AVC frame submission temporarily delayed; waiting for the previous " +
+                            "pushFrame() call. Rejections so far: $rejections."
+                    )
+                }
+                val remaining = deadline - SystemClock.elapsedRealtime()
+                if (remaining <= 0L) {
+                    ProjectionEventLog.error(
+                        "TBOX",
+                        "AVC frame submission stayed blocked for ${PUSH_FRAME_SUBMIT_WAIT_MS}ms."
+                    )
+                    return null
+                }
+                try {
+                    Thread.sleep(PUSH_FRAME_SUBMIT_RETRY_DELAY_MS.coerceAtMost(remaining))
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return null
+                }
+            }
+        }
+    }
+
     override suspend fun stop() = withContext(Dispatchers.IO) {
         stopSession()
     }
 
     private fun stopSession() {
-        if (session != null) {
+        val sessionToStop: MobileSession?
+        synchronized(sessionLock) {
+            // Invalidate callbacks before asking the native session to stop. RideDaemon can
+            // report the socket close asynchronously after stopSession() has been called.
+            activeSessionGeneration = 0L
+            sessionToStop = session
+            session = null
+            sessionLink = null
+        }
+        if (sessionToStop != null) {
             ProjectionEventLog.record("TBOX", "Stopping RideDaemon session. ${protocolSnapshot()}")
         }
-        session?.runCatching { stopSession() }
+        sessionToStop?.runCatching { stopSession() }
             ?.onFailure { ProjectionEventLog.warning("TBOX", "RideDaemon stopSession failed.", it) }
-        session = null
-        sessionLink = null
     }
 
     /** Opens the EasyConn command socket over the established T-Box link. */
@@ -624,10 +717,17 @@ class RideDaemonTransport(
         }.onFailure { finish(Result.failure(it)) }
     }
 
-    private inner class SessionCallback : MobileCallback {
+    private inner class SessionCallback(
+        private val generation: Long
+    ) : MobileCallback {
         override fun onError(message: String?, fatal: Boolean) {
             Log.w(TAG, "T-Box error fatal=$fatal: ${message.orEmpty()}")
             val detail = message.orEmpty().ifBlank { "EasyConn error without details." }
+            if (!isCurrentRideDaemonSession(generation, activeSessionGeneration)) {
+                Log.i(TAG, "Ignoring RideDaemon callback from an inactive session: $detail")
+                ProjectionEventLog.debug("TBOX", "Ignored stale RideDaemon callback: $detail")
+                return
+            }
             if (fatal) {
                 ProjectionEventLog.error("TBOX", "RideDaemon fatal callback: $detail")
             } else {
@@ -646,7 +746,18 @@ class RideDaemonTransport(
             val now = SystemClock.elapsedRealtime()
             val sequence = when (type) {
                 PXC_EVENT_SOURCE -> {
-                    lastPxcEventElapsed.set(now)
+                    // The dash sends CLOCK_KEEPALIVE about every 2s. A long gap is the only
+                    // warning that the link is dying: a rider log went silent for 16.6s and the
+                    // T-Box then tore down all three sockets at once. Recording the gap is what
+                    // separates "the bike gave up" from "the app stopped sending".
+                    val previous = lastPxcEventElapsed.getAndSet(now)
+                    if (previous > 0L && now - previous >= PXC_STALL_WARNING_MS) {
+                        ProjectionEventLog.warning(
+                            "TBOX",
+                            "PXC keepalive gap of ${now - previous}ms before this event; the " +
+                                "T-Box control link went quiet."
+                        )
+                    }
                     pxcEvents.incrementAndGet()
                 }
                 MEDIA_CONTROL_EVENT_SOURCE -> {
@@ -748,6 +859,10 @@ class RideDaemonTransport(
 
         override fun onStopped() {
             Log.i(TAG, "T-Box session stopped")
+            if (!isCurrentRideDaemonSession(generation, activeSessionGeneration)) {
+                ProjectionEventLog.debug("TBOX", "Ignored stale RideDaemon stopped callback.")
+                return
+            }
             ProjectionEventLog.warning(
                 "TBOX",
                 "RideDaemon reported that the T-Box session stopped. ${protocolSnapshot()}"

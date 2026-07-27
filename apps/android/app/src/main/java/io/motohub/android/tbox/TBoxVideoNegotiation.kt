@@ -10,7 +10,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 enum class TBoxVideoAreaSource {
     LIVE,
-    SAVED
+    SAVED,
+    FALLBACK
 }
 
 data class TBoxVideoConfiguration(
@@ -23,7 +24,8 @@ data class TBoxVideoConfiguration(
 suspend fun TBoxTransport.negotiateVideoConfiguration(
     host: TBoxHost,
     savedArea: TBoxEvent.VideoArea?,
-    timeoutMillis: Long
+    timeoutMillis: Long,
+    fallbackArea: TBoxEvent.VideoArea? = null
 ): Result<TBoxVideoConfiguration> = coroutineScope {
     val liveArea = async(start = CoroutineStart.UNDISPATCHED) {
         withTimeoutOrNull(timeoutMillis) {
@@ -36,23 +38,34 @@ suspend fun TBoxTransport.negotiateVideoConfiguration(
         return@coroutineScope Result.failure(failure)
     }
 
-    selectVideoConfiguration(liveArea.await(), savedArea)
+    selectVideoConfiguration(liveArea.await(), savedArea, fallbackArea)
 }
 
 internal fun selectVideoConfiguration(
     liveArea: TBoxEvent.VideoArea?,
-    savedArea: TBoxEvent.VideoArea?
+    savedArea: TBoxEvent.VideoArea?,
+    fallbackArea: TBoxEvent.VideoArea? = null
 ): Result<TBoxVideoConfiguration> {
-    val area = liveArea ?: savedArea ?: return Result.failure(
+    val selected = when {
+        liveArea != null -> liveArea to if (liveArea.isFallback) {
+            TBoxVideoAreaSource.FALLBACK
+        } else {
+            TBoxVideoAreaSource.LIVE
+        }
+        savedArea != null -> savedArea to TBoxVideoAreaSource.SAVED
+        fallbackArea != null -> fallbackArea.copy(isFallback = true) to TBoxVideoAreaSource.FALLBACK
+        else -> null
+    } ?: return Result.failure(
         IllegalStateException(
-            "The T-Box did not provide a valid video area and no saved geometry is available."
+            "The T-Box did not provide a valid video area and no saved or fallback geometry is available."
         )
     )
+    val area = selected.first
     return runCatching {
         TBoxVideoConfiguration(
             rawArea = area,
             encoderProfile = EncoderProfile.forTBoxArea(area.width, area.height),
-            source = if (liveArea != null) TBoxVideoAreaSource.LIVE else TBoxVideoAreaSource.SAVED
+            source = selected.second
         )
     }
 }

@@ -63,13 +63,22 @@ object AndroidAutoCapabilityProfiles {
      * with the opposite orientation from the model's validated fallback is usually a stale or
      * misreported T-Box area (for example a portrait emulator area saved for a landscape 800NK).
      * Exact-fit geometries remain valid even when they are close to square.
+     *
+     * [fallbackIsValidated] must be false when the fallback comes from the generic profile
+     * rather than a recognized model. GENERIC's landscape default is a guess, not a
+     * measurement, and vetoing against it is self-defeating: a rider log (modelId 37426 whose
+     * CLIENT_INFO failed to decode, so it resolved to GENERIC) showed a real portrait 800x951
+     * dash rejected on every session, which also blocked saving the very geometry that would
+     * have corrected the guess - Android Auto stayed letterboxed into a 800x480 band forever.
      */
     internal fun usableSavedGeometryForAuto(
         target: DisplayGeometry?,
-        fallbackPreset: AndroidAutoVideoPreset
+        fallbackPreset: AndroidAutoVideoPreset,
+        fallbackIsValidated: Boolean = true
     ): DisplayGeometry? {
         if (target == null || !target.isPlausibleTBoxGeometry()) return null
         if (exactFitPreset(target) != null) return target
+        if (!fallbackIsValidated) return target
         val targetIsPortrait = target.height > target.width
         val fallbackIsPortrait = fallbackPreset.source.height > fallbackPreset.source.width
         return target.takeIf { targetIsPortrait == fallbackIsPortrait }

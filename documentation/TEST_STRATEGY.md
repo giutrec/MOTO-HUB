@@ -114,7 +114,7 @@ Video dumps must be excluded from user logs and deleted after testing.
 - motorcycles that report touch accurately, motorcycles that report touch but
   require focus/handlebar control, and `Disable touchscreen` enabled;
 - immediate `VideoArea` delivery during handshake and delayed delivery;
-- missing live area with and without a geometry saved for the same SSID;
+- missing live area with saved geometry, with a model fallback, and with neither;
 - 2, 2.5, 3 and 5 Mbps bitrates;
 - 10 consecutive starts/stops;
 - 30- and 60-minute sessions;

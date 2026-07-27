@@ -41,13 +41,29 @@ class TBoxVideoNegotiationTest {
     }
 
     @Test
+    fun `uses the validated fallback when live and saved geometry are unavailable`() = runBlocking {
+        val transport = FakeTransport(null)
+
+        val result = transport.negotiateVideoConfiguration(
+            HOST,
+            savedArea = null,
+            timeoutMillis = 10,
+            fallbackArea = TBoxEvent.VideoArea(800, 480)
+        )
+
+        assertEquals(TBoxVideoAreaSource.FALLBACK, result.getOrThrow().source)
+        assertEquals(TBoxEvent.VideoArea(800, 480, isFallback = true), result.getOrThrow().rawArea)
+        assertEquals(EncoderProfile(800, 480), result.getOrThrow().encoderProfile)
+    }
+
+    @Test
     fun `fails instead of inventing dimensions when no geometry exists`() = runBlocking {
         val transport = FakeTransport(null)
 
         val result = transport.negotiateVideoConfiguration(HOST, null, 10)
 
         assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull()?.message.orEmpty().contains("no saved geometry"))
+        assertTrue(result.exceptionOrNull()?.message.orEmpty().contains("no saved or fallback geometry"))
     }
 
     private class FakeTransport(

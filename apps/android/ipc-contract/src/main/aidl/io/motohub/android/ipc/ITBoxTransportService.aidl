@@ -1,5 +1,7 @@
 package io.motohub.android.ipc;
 
+import android.os.ParcelFileDescriptor;
+
 import io.motohub.android.ipc.MotorcycleSummary;
 import io.motohub.android.ipc.EncoderProfileParcel;
 import io.motohub.android.ipc.MotorcycleConnectRequest;
@@ -51,4 +53,10 @@ interface ITBoxTransportService {
 
     void registerSessionListener(ITBoxSessionListener listener);
     void unregisterSessionListener(ITBoxSessionListener listener);
+
+    /** Opens the one-way data plane for high-rate encoded video frames. */
+    ParcelFileDescriptor openVideoStream();
+
+    /** Closes the pipe returned by openVideoStream(). */
+    void closeVideoStream();
 }
