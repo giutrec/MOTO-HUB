@@ -475,6 +475,20 @@ private fun HandlebarControlsDetail(onBack: () -> Unit, onOpenMapping: () -> Uni
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        if (HandlebarControlStore.isManagedByCompanion(context)) {
+            // The companion re-pushes ITS handlebar configuration at every session start,
+            // silently overwriting anything set here — without this note the Core switch
+            // looks broken ("I enabled it and it turned itself off").
+            Text(
+                motoHubText(
+                    "Managed by the companion app: its Controls screen re-applies its own " +
+                        "handlebar configuration every time a session starts, overwriting " +
+                        "what is set here. Configure the handlebar there."
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
         ToggleRow(
             title = motoHubText("Buttons control Android Auto"),
             description = motoHubText(

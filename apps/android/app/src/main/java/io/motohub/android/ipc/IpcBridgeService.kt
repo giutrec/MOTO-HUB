@@ -488,6 +488,7 @@ class IpcBridgeService : Service() {
             // false/empty) leaves Core's own configuration untouched.
             if (settings.handlebarSyncProvided) {
                 runCatching {
+                    io.motohub.android.feature.controls.HandlebarControlStore.setManagedByCompanion(ctx, true)
                     io.motohub.android.feature.controls.HandlebarControlStore.setEnabled(
                         ctx, settings.handlebarControlsEnabled
                     )

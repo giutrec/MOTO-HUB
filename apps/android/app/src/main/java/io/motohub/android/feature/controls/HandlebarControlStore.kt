@@ -41,6 +41,7 @@ enum class HandlebarGesture(
 object HandlebarControlStore {
     private const val PREFERENCES = "handlebar_controls"
     private const val ENABLED = "enabled"
+    private const val MANAGED_BY_COMPANION = "managed_by_companion"
     /** Bumped when [defaultAction] values change — auto-migrates stored overrides. */
     private const val DEFAULTS_VER = 2
     private const val KEY_DEFAULTS_VER = "defaults_ver"
@@ -49,6 +50,19 @@ object HandlebarControlStore {
 
     fun setEnabled(context: Context, enabled: Boolean) {
         preferences(context).edit().putBoolean(ENABLED, enabled).apply()
+    }
+
+    /**
+     * True once a companion app (PRO/ADV) has mirrored its handlebar configuration over IPC.
+     * From that point the companion is the source of truth — it re-pushes its values at every
+     * session start, silently overwriting anything edited here. The Core settings screen uses
+     * this to tell the rider where the real switch lives instead of appearing to ignore them.
+     */
+    fun isManagedByCompanion(context: Context): Boolean =
+        preferences(context).getBoolean(MANAGED_BY_COMPANION, false)
+
+    fun setManagedByCompanion(context: Context, managed: Boolean) {
+        preferences(context).edit().putBoolean(MANAGED_BY_COMPANION, managed).apply()
     }
 
     fun action(context: Context, gesture: HandlebarGesture): HandlebarAction {
