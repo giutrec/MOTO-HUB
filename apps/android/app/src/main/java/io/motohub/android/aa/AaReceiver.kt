@@ -39,6 +39,13 @@ class AaReceiver(
     @Volatile private var transport: AapTransport? = null
     @Volatile private var connection: SocketAccessoryConnection? = null
     @Volatile private var videoReadyFired = false
+    /**
+     * Whether Google Android Auto ever opened the local AAP socket. False means the self-mode
+     * trigger never reached it — a different failure from "connected but sent no video", and the
+     * one to report when a newer Android Auto refuses every startup entry point.
+     */
+    @Volatile private var androidAutoConnected = false
+    val hasAndroidAutoConnected: Boolean get() = androidAutoConnected
     @Volatile private var input: AaInput? = null
     private val videoDecoder = VideoDecoder().apply {
         fallbackWidth = capabilityProfile.video.width
@@ -113,6 +120,7 @@ class AaReceiver(
                 if (running) log("[AA] accept ended: ${e.message}")
                 break
             }
+            androidAutoConnected = true
             log("[AA] <<< Android Auto connected from ${client.inetAddress?.hostAddress}")
             if (transport != null) {
                 log("[AA] already have a session — dropping extra connection")
