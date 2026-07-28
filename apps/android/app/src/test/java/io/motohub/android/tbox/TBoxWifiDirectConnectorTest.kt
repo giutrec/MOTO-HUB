@@ -1,6 +1,8 @@
 package io.motohub.android.tbox
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -33,5 +35,30 @@ class TBoxWifiDirectConnectorTest {
         assertTrue(TBoxWifiDirectConnector.groupNameMatchesProfile(null, "DIRECT-CL-C450-1234"))
         assertTrue(TBoxWifiDirectConnector.groupNameMatchesProfile("", "DIRECT-CL-C450-1234"))
         assertTrue(TBoxWifiDirectConnector.groupNameMatchesProfile("  ", "DIRECT-CL-C450-1234"))
+    }
+
+    @Test
+    fun `recovers the dash peer name from the group ssid`() {
+        // The SSID riders actually reported from the field.
+        assertEquals(
+            "CFMOTO-EF7198",
+            TBoxWifiDirectConnector.peerNameFromGroupSsid("DIRECT-go-CFMOTO-EF7198")
+        )
+        assertEquals(
+            "CL-C450-1234",
+            TBoxWifiDirectConnector.peerNameFromGroupSsid("\"DIRECT-XY-CL-C450-1234\" ")
+        )
+        assertEquals(
+            "LivingRoom",
+            TBoxWifiDirectConnector.peerNameFromGroupSsid("direct-tv-LivingRoom")
+        )
+    }
+
+    @Test
+    fun `falls back to a credential join when the ssid is not a DIRECT group name`() {
+        assertNull(TBoxWifiDirectConnector.peerNameFromGroupSsid("MotoHubAP"))
+        assertNull(TBoxWifiDirectConnector.peerNameFromGroupSsid("DIRECT-AB12"))
+        assertNull(TBoxWifiDirectConnector.peerNameFromGroupSsid("DIRECT--"))
+        assertNull(TBoxWifiDirectConnector.peerNameFromGroupSsid("DIRECT-go-"))
     }
 }
