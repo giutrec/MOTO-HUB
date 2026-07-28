@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.motohub.android.session.ProjectionRuntime
@@ -318,13 +319,19 @@ class NetworkDiagnosticsViewModel(application: Application) : AndroidViewModel(a
         return when {
             cellularTcp.status == NetworkDiagnosticStatus.PASSED &&
                 cellularUdp.status == NetworkDiagnosticStatus.PASSED ->
-                "This OnePlus allows cellular-bound TCP and UDP sockets. A local VPN bridge is technically feasible; a VPN is still required for internet access in other apps."
+                "$deviceLabel allows cellular-bound TCP and UDP sockets. A local VPN bridge is technically feasible; a VPN is still required for internet access in other apps."
             cellularTcp.status == NetworkDiagnosticStatus.PASSED ->
-                "Cellular-bound TCP works, but UDP/DNS does not. Do not implement the full VPN yet: the UDP path must be fixed first."
+                "Cellular-bound TCP works on $deviceLabel, but UDP/DNS does not. Do not implement the full VPN yet: the UDP path must be fixed first."
             else ->
-                "Android/OxygenOS did not allow cellular TCP binding in this configuration. A local VPN is not yet reliable on this phone."
+                "$deviceLabel did not allow cellular TCP binding in this configuration. A local VPN is not yet reliable on this phone."
         }
     }
+
+    // These conclusions end up in the log a rider mails in, so they must name the phone that
+    // actually ran the suite - the text used to say "This OnePlus" / "Android/OxygenOS" on every
+    // device, which made shared diagnostics read as if they came from a phone nobody owned.
+    private val deviceLabel: String
+        get() = "This ${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL}".trim()
 
     private fun check(
         id: NetworkDiagnosticId,
