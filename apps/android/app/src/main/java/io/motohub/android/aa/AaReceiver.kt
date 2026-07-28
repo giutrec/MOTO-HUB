@@ -30,6 +30,16 @@ class AaReceiver(
         const val PORT = 5288
 
         /**
+         * Android Auto's own "head unit server" (Developer settings ▸ Start head unit server),
+         * the port the Desktop Head Unit connects to. Here the roles are reversed from self-mode:
+         * Android Auto listens and the head unit dials in, so nothing has to ask Android Auto to
+         * start — which is the whole point, since 17.4 removed every way of asking.
+         */
+        const val HEAD_UNIT_SERVER_PORT = 5277
+        private const val HEAD_UNIT_SERVER_POLL_MS = 1_500L
+        private const val HEAD_UNIT_SERVER_CONNECT_TIMEOUT_MS = 400
+
+        /**
          * Process-wide "Android Auto has opened the local AAP socket" flag. The self-mode trigger
          * needs it to tell a dispatched intent from one that actually reached Gearhead:
          * sendBroadcast and startService report delivery, never whether anything acted on it.
@@ -43,6 +53,7 @@ class AaReceiver(
     @Volatile private var running = false
     private var serverSocket: ServerSocket? = null
     private var acceptThread: Thread? = null
+    private var headUnitServerThread: Thread? = null
     private var nsdManager: NsdManager? = null
     private var registrationListener: NsdManager.RegistrationListener? = null
 
@@ -99,6 +110,7 @@ class AaReceiver(
         registerNsd()
 
         acceptThread = thread(name = "aa-accept", isDaemon = true) { acceptLoop() }
+        headUnitServerThread = thread(name = "aa-hu-server", isDaemon = true) { headUnitServerLoop() }
         // Self-mode (launching Google Android Auto) is triggered by MainActivity from the
         // foreground, via AaSelfMode.trigger(), to satisfy background-activity-launch rules.
         return true
@@ -119,8 +131,56 @@ class AaReceiver(
         try { serverSocket?.close() } catch (_: Exception) {}
         serverSocket = null
         acceptThread?.interrupt(); acceptThread = null
+        headUnitServerThread?.interrupt(); headUnitServerThread = null
         AaLog.sink = null
         log("[AA] receiver stopped")
+    }
+
+    /**
+     * Dials Android Auto's head unit server while nothing has connected yet.
+     *
+     * Self-mode asks Android Auto to connect to us; 17.4 closed every entry point for that. The
+     * head unit server is the mirror image — the rider starts it from Android Auto's own
+     * developer menu and Android Auto listens, so a plain outbound socket is all that is needed
+     * and no permission or exported component is involved. Everything after the socket is the
+     * same AAP session, so this hands over to [handleConnection] unchanged.
+     */
+    private fun headUnitServerLoop() {
+        var announced = false
+        while (running) {
+            if (transport != null) {
+                Thread.sleep(HEAD_UNIT_SERVER_POLL_MS)
+                continue
+            }
+            val socket = try {
+                Socket().apply {
+                    connect(
+                        java.net.InetSocketAddress("127.0.0.1", HEAD_UNIT_SERVER_PORT),
+                        HEAD_UNIT_SERVER_CONNECT_TIMEOUT_MS
+                    )
+                }
+            } catch (_: Exception) {
+                // Not running: this is the normal state until the rider starts it.
+                if (!announced) {
+                    announced = true
+                    log(
+                        "[AA] Android Auto's head unit server is not running on " +
+                            ":$HEAD_UNIT_SERVER_PORT; polling for it as a fallback."
+                    )
+                }
+                try { Thread.sleep(HEAD_UNIT_SERVER_POLL_MS) } catch (_: InterruptedException) { return }
+                continue
+            }
+            if (!running || transport != null) {
+                try { socket.close() } catch (_: Exception) {}
+                return
+            }
+            log("[AA] <<< connected to Android Auto's head unit server on :$HEAD_UNIT_SERVER_PORT")
+            androidAutoConnected = true
+            androidAutoConnectedSinceStart = true
+            handleConnection(socket)
+            return
+        }
     }
 
     private fun acceptLoop() {

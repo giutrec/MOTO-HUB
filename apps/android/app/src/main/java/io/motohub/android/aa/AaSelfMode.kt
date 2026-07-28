@@ -104,13 +104,14 @@ object AaSelfMode {
         }
 
         if (isConnected()) return
-        onProgress("Android Auto did not respond — see the error for what to check.")
+        onProgress("Start \"head unit server\" in Android Auto's Developer settings…")
         log(
             "[AA] Self-mode could not be triggered: none of ${attempts.size} entry points produced " +
                 "a connection. Android Auto 17.4 closed them all - the activity is no longer " +
                 "exported and WirelessStartupReceiver ships disabled (same wall headunit-revived " +
-                "hit in its issue #698). Downgrade Android Auto below 17.2 to restore wireless " +
-                "projection; USB projection is unaffected."
+                "hit in its issue #698). The receiver keeps polling Android Auto's own head unit " +
+                "server on :${AaReceiver.HEAD_UNIT_SERVER_PORT}, so starting it from Android Auto's " +
+                "Developer settings connects without any downgrade."
         )
     }
 
