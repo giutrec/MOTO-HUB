@@ -28,6 +28,16 @@ class AaReceiver(
 ) {
     companion object {
         const val PORT = 5288
+
+        /**
+         * Process-wide "Android Auto has opened the local AAP socket" flag. The self-mode trigger
+         * needs it to tell a dispatched intent from one that actually reached Gearhead:
+         * sendBroadcast and startService report delivery, never whether anything acted on it.
+         */
+        @Volatile
+        private var androidAutoConnectedSinceStart = false
+
+        fun hasAndroidAutoConnectedSinceStart(): Boolean = androidAutoConnectedSinceStart
     }
 
     @Volatile private var running = false
@@ -72,6 +82,8 @@ class AaReceiver(
             return false
         }
         running = true
+        androidAutoConnected = false
+        androidAutoConnectedSinceStart = false
         AaLog.sink = log
         ConscryptInitializer.initialize()
 
@@ -121,6 +133,7 @@ class AaReceiver(
                 break
             }
             androidAutoConnected = true
+            androidAutoConnectedSinceStart = true
             log("[AA] <<< Android Auto connected from ${client.inetAddress?.hostAddress}")
             if (transport != null) {
                 log("[AA] already have a session — dropping extra connection")

@@ -10,15 +10,18 @@ import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.os.Parcel
 import android.os.Parcelable
+import android.os.SystemClock
+import kotlinx.coroutines.delay
 
 object AaSelfMode {
     private const val GEARHEAD_PKG = "com.google.android.projection.gearhead"
 
     /**
-     * The entry point that has worked historically. Newer Android Auto builds (~16.4+) stopped
-     * exporting it: `startActivity` then fails with "Permission Denial: … not exported", which no
-     * caller-side change can work around. [discoverStartupComponents] looks for whatever the
-     * installed build does export instead, so a version bump does not silently kill self-mode.
+     * The entry point that has worked historically. Android Auto 17.x no longer exports it:
+     * `startActivity` fails with "Permission Denial: … not exported", which no caller-side change
+     * can work around. The remaining exported components are found at runtime instead of guessing
+     * class names that change between releases (17.4 exposes WirelessStartupReceiver plus the
+     * WirelessSetupShared* services).
      */
     private const val CLASSIC_ACTIVITY =
         "com.google.android.apps.auto.wireless.setup.service.impl.WirelessStartupActivity"
@@ -27,42 +30,78 @@ object AaSelfMode {
     private const val RECEIVER_ACTION =
         "com.google.android.apps.auto.wireless.setup.receiver.wirelessstartup.START"
 
-    /** A component is a self-mode candidate when its name mentions both concepts. */
     private val REQUIRED_KEYWORDS = listOf("wireless")
     private val ENTRY_KEYWORDS = listOf("startup", "start", "projection", "setup")
 
-    fun trigger(context: Context, port: Int = AaReceiver.PORT, log: (String) -> Unit) {
+    /** How long one entry point gets to produce an inbound AAP connection before the next is tried. */
+    private const val ATTEMPT_WAIT_MS = 4_000L
+    private const val POLL_INTERVAL_MS = 200L
+
+    /**
+     * Asks Android Auto to project here, trying every entry point the installed build exposes.
+     *
+     * [isConnected] is what makes this reliable: `sendBroadcast` and `startService` only report
+     * that an intent was dispatched, never that Gearhead acted on it, so each attempt is followed
+     * by a short wait for the local AAP socket to actually be opened. Without that check the
+     * sequence stopped at the first component that merely accepted the intent.
+     */
+    suspend fun trigger(
+        context: Context,
+        port: Int = AaReceiver.PORT,
+        isConnected: () -> Boolean = { AaReceiver.hasAndroidAutoConnectedSinceStart() },
+        log: (String) -> Unit
+    ) {
         log("[AA] Android Auto app: ${gearheadVersion(context) ?: "not installed"}")
         val extras = SelfModeExtras(context, port)
 
-        if (startActivityComponent(context, CLASSIC_ACTIVITY, extras, log)) return
-
-        // The classic activity was refused (not exported, or gone). Ask the installed build what
-        // it still exposes rather than guessing class names that change between AA releases.
         val discovered = discoverStartupComponents(context)
         if (discovered.isEmpty()) {
-            log(
-                "[AA] Android Auto exports no wireless-startup component on this device; " +
-                    "only the legacy broadcast is left to try."
-            )
+            log("[AA] Android Auto exports no wireless-startup component on this device.")
         } else {
             log("[AA] Exported wireless-startup candidates: ${discovered.joinToString { it.describe() }}")
-            for (candidate in discovered) {
-                val started = when (candidate.kind) {
-                    ComponentKind.ACTIVITY -> startActivityComponent(context, candidate.className, extras, log)
-                    ComponentKind.RECEIVER -> sendReceiverBroadcast(context, candidate.className, extras, log)
-                    ComponentKind.SERVICE -> startServiceComponent(context, candidate.className, extras, log)
-                }
-                if (started) return
+        }
+
+        // Activity first (the historical, most reliable shape), then whatever is still exported,
+        // and the legacy receiver last in case discovery missed it.
+        val attempts = buildList {
+            add(StartupComponent(ComponentKind.ACTIVITY, CLASSIC_ACTIVITY))
+            addAll(discovered)
+            if (discovered.none { it.className == CLASSIC_RECEIVER }) {
+                add(StartupComponent(ComponentKind.RECEIVER, CLASSIC_RECEIVER))
             }
         }
 
-        if (sendReceiverBroadcast(context, CLASSIC_RECEIVER, extras, log)) return
+        for (attempt in attempts) {
+            if (isConnected()) return
+            val dispatched = when (attempt.kind) {
+                ComponentKind.ACTIVITY -> startActivityComponent(context, attempt.className, extras, log)
+                ComponentKind.RECEIVER -> sendReceiverBroadcast(context, attempt.className, extras, log)
+                ComponentKind.SERVICE -> startServiceComponent(context, attempt.className, extras, log)
+            }
+            if (!dispatched) continue
+            if (awaitConnection(isConnected)) {
+                log("[AA] Android Auto connected after ${attempt.describe()}.")
+                return
+            }
+            log("[AA] no connection ${ATTEMPT_WAIT_MS}ms after ${attempt.describe()}; trying the next entry point.")
+        }
+
+        if (isConnected()) return
         log(
-            "[AA] Self-mode could not be triggered: this Android Auto version refuses every known " +
-                "entry point. Android Auto must project to MOTO-HUB itself; if you are on the " +
-                "Android Auto beta, leaving it restores the working entry point."
+            "[AA] Self-mode could not be triggered: this Android Auto version accepted none of " +
+                "${attempts.size} entry points. Android Auto has to project to MOTO-HUB itself; " +
+                "if you are on the Android Auto beta, leaving it restores the working entry point."
         )
+    }
+
+    /** Polls the receiver rather than trusting the dispatch result. See [trigger]. */
+    private suspend fun awaitConnection(isConnected: () -> Boolean): Boolean {
+        val deadline = SystemClock.elapsedRealtime() + ATTEMPT_WAIT_MS
+        while (SystemClock.elapsedRealtime() < deadline) {
+            if (isConnected()) return true
+            delay(POLL_INTERVAL_MS)
+        }
+        return isConnected()
     }
 
     private fun startActivityComponent(
@@ -80,7 +119,7 @@ object AaSelfMode {
         context.startActivity(intent)
         true
     } catch (failure: Exception) {
-        log("[AA] activity $className refused: ${failure.message}")
+        log("[AA] activity ${className.substringAfterLast('.')} refused: ${failure.message}")
         false
     }
 
@@ -97,15 +136,18 @@ object AaSelfMode {
             addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
         }
         context.sendBroadcast(intent)
-        // sendBroadcast never reports whether anything handled it, so this is "sent", not "worked":
-        // the caller still has to watch for an inbound AAP connection to know if it took effect.
-        log("[AA] broadcast sent to $className")
+        log("[AA] broadcast sent to ${className.substringAfterLast('.')}")
         true
     } catch (failure: Exception) {
-        log("[AA] broadcast to $className refused: ${failure.message}")
+        log("[AA] broadcast to ${className.substringAfterLast('.')} refused: ${failure.message}")
         false
     }
 
+    /**
+     * startService returns the resolved component, or null when nothing matched — the one dispatch
+     * result in this file that is actually informative, so a missing service is not counted as an
+     * attempt worth waiting on.
+     */
     private fun startServiceComponent(
         context: Context,
         className: String,
@@ -117,11 +159,16 @@ object AaSelfMode {
             action = RECEIVER_ACTION
             extras.applyReceiverExtras(this)
         }
-        context.startService(intent)
-        log("[AA] service $className started")
-        true
+        val resolved = context.startService(intent)
+        if (resolved == null) {
+            log("[AA] service ${className.substringAfterLast('.')} did not resolve")
+            false
+        } else {
+            log("[AA] service ${className.substringAfterLast('.')} started")
+            true
+        }
     } catch (failure: Exception) {
-        log("[AA] service $className refused: ${failure.message}")
+        log("[AA] service ${className.substringAfterLast('.')} refused: ${failure.message}")
         false
     }
 

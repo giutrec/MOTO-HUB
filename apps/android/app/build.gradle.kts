@@ -75,8 +75,8 @@ android {
         applicationId = "io.motohub.android"
         minSdk = 34
         targetSdk = 36
-        versionCode = 101
-        versionName = "1.1.7"
+        versionCode = 102
+        versionName = "1.1.8"
         buildConfigField("boolean", "IS_PRO", "false")
         buildConfigField("String", "SENTRY_DSN", asBuildConfigString(coreSentryDsn))
         manifestPlaceholders["appLabel"] = "MOTO-HUB"
