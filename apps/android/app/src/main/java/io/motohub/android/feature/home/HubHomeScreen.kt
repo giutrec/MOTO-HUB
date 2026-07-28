@@ -496,6 +496,20 @@ private fun ErrorBanner(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
+            if (officialCfmotoAppInstalled) {
+                // Android gives no way to ask whether another app is currently running, so
+                // "installed" is as close as we get to detecting that the official CFMOTO app may
+                // be holding the T-Box. It is the most common cause of a failed connection and the
+                // only fix is the rider force-stopping it from App info, so offer that directly
+                // rather than behind the details fold and only for one class of error.
+                Text(
+                    motoHubText("The official CFMOTO app is installed and may be holding the T-Box. Force-stop it from its App info page, then retry."),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                SecondaryAction(motoHubText("Open CFMOTO app info"), onOpenOfficialCfmotoSettings)
+                SecondaryAction(motoHubText("Retry connection"), onCloseOfficialCfmotoAndRetry)
+            }
             if (expanded) {
                 if (showPortConflictHelp) {
                     Text(
@@ -503,12 +517,6 @@ private fun ErrorBanner(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    if (officialCfmotoAppInstalled) {
-                        // Android cannot close another app programmatically: send the user to
-                        // App info to force-stop the official app, then offer a plain retry.
-                        SecondaryAction("Force-stop the official app", onOpenOfficialCfmotoSettings)
-                        SecondaryAction("Retry connection", onCloseOfficialCfmotoAndRetry)
-                    }
                 }
                 if (showWifiSettingsAction) {
                     SecondaryAction("Open Wi-Fi settings", onOpenWifiSettings)
