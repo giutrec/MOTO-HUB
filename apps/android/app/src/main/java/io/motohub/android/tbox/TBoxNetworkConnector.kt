@@ -8,6 +8,7 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
+import android.os.SystemClock
 import android.util.Log
 import io.motohub.android.feature.settings.MotoHubSettings
 import io.motohub.android.session.MotorcycleProfile
@@ -36,6 +37,36 @@ sealed interface TBoxNetworkEvent {
     data class Reacquired(val network: Network) : TBoxNetworkEvent
 }
 
+/** What the T-Box Wi-Fi rejoin ladder does next. */
+internal sealed interface TBoxRejoinStep {
+    data class WaitThenRetry(val delayMillis: Long) : TBoxRejoinStep
+    data object GiveUp : TBoxRejoinStep
+}
+
+/**
+ * Decides the ladder's next move: a quick first retry for the ordinary blip, then a growing and
+ * capped wait, and eventually surrender.
+ *
+ * The budget is what stops a bike that was simply switched off from leaving an exclusive
+ * WifiNetworkSpecifier request open for as long as the app lives.
+ */
+internal fun nextTBoxRejoinStep(
+    attempt: Int,
+    elapsedMillis: Long,
+    budgetMillis: Long,
+    firstDelayMillis: Long,
+    baseDelayMillis: Long,
+    maxDelayMillis: Long
+): TBoxRejoinStep {
+    if (elapsedMillis >= budgetMillis) return TBoxRejoinStep.GiveUp
+    val delay = if (attempt <= 1) {
+        firstDelayMillis
+    } else {
+        (baseDelayMillis * (attempt - 1)).coerceAtMost(maxDelayMillis)
+    }
+    return TBoxRejoinStep.WaitThenRetry(delay)
+}
+
 /** Requests the T-Box AP explicitly and binds the process for its reverse TCP servers. */
 class TBoxNetworkConnector(context: Context) {
     private val appContext = context.applicationContext
@@ -51,6 +82,27 @@ class TBoxNetworkConnector(context: Context) {
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
     val events: SharedFlow<TBoxNetworkEvent> = mutableEvents.asSharedFlow()
+
+    /**
+     * Guards the whole network-request lifecycle: clearing the previous registration, storing the
+     * new one and handing it to ConnectivityManager have to happen as one step.
+     *
+     * They did not, and two callers - a connect() from the UI or the AIDL bridge, and the rejoin
+     * ladder below - could interleave their clear/store pairs. Both callbacks ended up registered
+     * with ConnectivityManager while the connector tracked only the last one. The untracked one
+     * was unreachable forever: it kept receiving onLost, kept calling [scheduleRejoin], and no
+     * disconnect() could ever release it. A rider's diagnostics showed two rejoin ladders running
+     * in lockstep for nineteen minutes, each new exclusive WifiNetworkSpecifier request tearing
+     * down the network the other had just been granted - and still fighting the rider's own manual
+     * reconnect at the end of it.
+     */
+    private val requestLock = Any()
+
+    /**
+     * Every callback currently registered with ConnectivityManager. [callback] is the one the
+     * current attempt owns; this set is what guarantees none of the others can be orphaned.
+     */
+    private val registeredCallbacks = mutableSetOf<ConnectivityManager.NetworkCallback>()
 
     @Volatile
     private var callback: ConnectivityManager.NetworkCallback? = null
@@ -71,6 +123,12 @@ class TBoxNetworkConnector(context: Context) {
     private var processBindingSuspended = false
     @Volatile
     private var rejoinJob: Job? = null
+
+    /**
+     * One rejoin ladder at a time. `rejoinJob?.isActive` was a check-then-act across threads:
+     * two onLost callbacks 6ms apart both passed it and started their own ladder.
+     */
+    private val rejoinActive = AtomicBoolean(false)
     @Volatile
     private var simulatorMonitorJob: Job? = null
 
@@ -125,6 +183,7 @@ class TBoxNetworkConnector(context: Context) {
     fun disconnect() {
         rejoinJob?.cancel()
         rejoinJob = null
+        rejoinActive.set(false)
         simulatorMonitorJob?.cancel()
         simulatorMonitorJob = null
         activeProfile = null
@@ -133,19 +192,40 @@ class TBoxNetworkConnector(context: Context) {
     }
 
     private fun clearCurrentNetworkRequest() {
+        synchronized(requestLock) { clearCurrentNetworkRequestLocked() }
+    }
+
+    /** Releases the process binding and *every* registered callback. Call under [requestLock]. */
+    private fun clearCurrentNetworkRequestLocked() {
         ProjectionEventLog.debug(
             "NETWORK",
-            "Disconnect requested; callback=${callback != null}, activeNetwork=$activeNetwork, processBound=$processBoundNetwork."
+            "Disconnect requested; callbacks=${registeredCallbacks.size}, " +
+                "activeNetwork=$activeNetwork, processBound=$processBoundNetwork."
         )
-        val releasedCallback = callback
         callback = null
         if (processBoundNetwork != null) {
             connectivityManager.bindProcessToNetwork(null)
             processBoundNetwork = null
         }
         activeNetwork = null
-        releasedCallback?.runCatching { connectivityManager.unregisterNetworkCallback(this) }
-            ?.onFailure { ProjectionEventLog.warning("NETWORK", "Network callback unregister failed.", it) }
+        val released = registeredCallbacks.toList()
+        registeredCallbacks.clear()
+        released.forEach { unregister(it) }
+    }
+
+    /** Releases one attempt's registration without touching a newer attempt's state. */
+    private fun releaseCallback(target: ConnectivityManager.NetworkCallback) {
+        synchronized(requestLock) {
+            if (callback === target) callback = null
+            if (registeredCallbacks.remove(target)) unregister(target)
+        }
+    }
+
+    private fun unregister(target: ConnectivityManager.NetworkCallback) {
+        runCatching { connectivityManager.unregisterNetworkCallback(target) }
+            .onFailure {
+                ProjectionEventLog.warning("NETWORK", "Network callback unregister failed.", it)
+            }
     }
 
     /** Current Wi-Fi network confirmed by the SSID-specific request callback, if still active. */
@@ -207,20 +287,14 @@ class TBoxNetworkConnector(context: Context) {
 
     private suspend fun requestNetwork(profile: MotorcycleProfile): Network =
         suspendCancellableCoroutine { continuation ->
-            clearCurrentNetworkRequest()
             val completed = AtomicBoolean(false)
             lateinit var networkCallback: ConnectivityManager.NetworkCallback
 
             fun finish(result: Result<Network>, keepCallback: Boolean) {
                 if (!completed.compareAndSet(false, true)) return
-                if (!keepCallback) {
-                    // Only clear the shared field if it still points at this attempt's callback;
-                    // a late failure must not orphan a newer attempt's registration.
-                    if (callback === networkCallback) callback = null
-                    networkCallback.runCatching {
-                        connectivityManager.unregisterNetworkCallback(this)
-                    }
-                }
+                // Releasing only this attempt's registration: a late failure must not orphan a
+                // newer attempt's callback, nor tear down the network it just acquired.
+                if (!keepCallback) releaseCallback(networkCallback)
                 continuation.resumeWith(result)
             }
 
@@ -330,8 +404,6 @@ class TBoxNetworkConnector(context: Context) {
                     )
                 }
             }
-            callback = networkCallback
-
             val specifier = WifiNetworkSpecifier.Builder()
                 .setSsid(profile.ssid)
                 .apply {
@@ -349,28 +421,63 @@ class TBoxNetworkConnector(context: Context) {
                 "Submitting WifiNetworkSpecifier request for ${profile.ssid} without INTERNET capability."
             )
 
-            continuation.invokeOnCancellation { clearCurrentNetworkRequest() }
-            runCatching {
-                connectivityManager.requestNetwork(request, networkCallback)
-            }.onFailure {
-                ProjectionEventLog.error("NETWORK", "ConnectivityManager.requestNetwork threw an exception.", it)
-                finish(Result.failure(it), keepCallback = false)
+            continuation.invokeOnCancellation { releaseCallback(networkCallback) }
+            // Drop the previous registration, take ownership and register, with no window in
+            // between for a concurrent caller to slip its own pair through. resumeWith() is kept
+            // out of the lock: it can run continuation code inline on this thread.
+            val requestFailure = synchronized(requestLock) {
+                clearCurrentNetworkRequestLocked()
+                callback = networkCallback
+                registeredCallbacks += networkCallback
+                runCatching {
+                    connectivityManager.requestNetwork(request, networkCallback)
+                }.exceptionOrNull()
+            }
+            if (requestFailure != null) {
+                ProjectionEventLog.error(
+                    "NETWORK",
+                    "ConnectivityManager.requestNetwork threw an exception.",
+                    requestFailure
+                )
+                finish(Result.failure(requestFailure), keepCallback = false)
             }
         }
 
     private fun scheduleRejoin() {
         val profile = activeProfile ?: return
-        if (!connectedOnce || rejoinJob?.isActive == true) return
+        if (!connectedOnce) return
+        // Exactly one ladder, whatever raced its way in here.
+        if (!rejoinActive.compareAndSet(false, true)) return
         rejoinJob = reconnectScope.launch {
             var attempt = 0
+            val startedAt = SystemClock.elapsedRealtime()
             try {
-                while (activeProfile != null && connectedOnce && activeNetwork == null) {
-                    attempt++
-                    delay(
-                        if (attempt == 1) REJOIN_FIRST_DELAY_MS
-                        else (REJOIN_BASE_DELAY_MS * (attempt - 1)).coerceAtMost(REJOIN_MAX_DELAY_MS)
+                ladder@ while (activeProfile != null && connectedOnce && activeNetwork == null) {
+                    val step = nextTBoxRejoinStep(
+                        attempt = attempt + 1,
+                        elapsedMillis = SystemClock.elapsedRealtime() - startedAt,
+                        budgetMillis = REJOIN_GIVE_UP_MS,
+                        firstDelayMillis = REJOIN_FIRST_DELAY_MS,
+                        baseDelayMillis = REJOIN_BASE_DELAY_MS,
+                        maxDelayMillis = REJOIN_MAX_DELAY_MS
                     )
-                    if (activeNetwork != null) break
+                    if (step is TBoxRejoinStep.GiveUp) {
+                        // Every downstream recovery budget is shorter than this, so past the
+                        // deadline there is no session left for a reacquired AP to serve. Holding
+                        // an exclusive WifiNetworkSpecifier request open past that point only
+                        // takes the Wi-Fi radio away from whoever asks next - including the rider
+                        // reconnecting by hand.
+                        ProjectionEventLog.warning(
+                            "NETWORK",
+                            "Giving up on the T-Box Wi-Fi after $attempt rejoin attempt(s) over " +
+                                "${REJOIN_GIVE_UP_MS / 1_000L}s; releasing the network request."
+                        )
+                        clearCurrentNetworkRequest()
+                        break@ladder
+                    }
+                    attempt++
+                    delay((step as TBoxRejoinStep.WaitThenRetry).delayMillis)
+                    if (activeNetwork != null) break@ladder
                     // Android may never call onUnavailable for a specifier request; without this
                     // timeout a single silent attempt would block the rejoin loop forever.
                     val result = try {
@@ -397,7 +504,11 @@ class TBoxNetworkConnector(context: Context) {
                     }
                 }
             } finally {
+                // Order matters: clear the handle before reopening the gate, so a ladder started
+                // by the next onLost cannot have its own job reference nulled out from under it -
+                // which would leave it running and uncancellable, the very shape of the bug.
                 rejoinJob = null
+                rejoinActive.set(false)
             }
         }
     }
@@ -529,6 +640,14 @@ class TBoxNetworkConnector(context: Context) {
         const val REJOIN_FIRST_DELAY_MS = 300L
         const val REJOIN_BASE_DELAY_MS = 2_500L
         const val REJOIN_MAX_DELAY_MS = 15_000L
+
+        /**
+         * How long the ladder keeps chasing a vanished T-Box AP. Deliberately longer than every
+         * downstream recovery budget (mirroring and Android Auto both give up after 120s), so a
+         * dropout short enough for a session to survive is still covered - and finite, so a bike
+         * that is simply switched off does not leave the radio under an exclusive request.
+         */
+        const val REJOIN_GIVE_UP_MS = 180_000L
     }
 
     private val contextPackageManager = context.applicationContext.packageManager

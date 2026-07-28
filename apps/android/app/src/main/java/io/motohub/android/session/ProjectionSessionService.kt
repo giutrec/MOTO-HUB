@@ -285,7 +285,10 @@ class ProjectionSessionService : Service() {
             adaptiveJob = serviceScope.launch {
                 while (!stopping) {
                     delay(ADAPTIVE_TICK_MS)
-                    adaptiveVideoController.onTick(encoder)
+                    adaptiveVideoController.onTick(
+                        encoder = encoder,
+                        linkDown = transportUnavailable.get() || recoveryRequested.get()
+                    )
                 }
             }
             scheduleAutoDim()

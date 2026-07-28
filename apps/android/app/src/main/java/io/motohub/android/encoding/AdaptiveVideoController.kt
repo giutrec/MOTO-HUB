@@ -93,10 +93,21 @@ class AdaptiveVideoController(
         adapting = false
     }
 
-    fun onTick(encoder: AvcEncoder?) {
+    /**
+     * @param linkDown true while the session has no working transport at all - a broken video
+     * pipe, a recovery in flight. Every access unit is rejected then, which is not the "weak bike
+     * link" this policy exists to soften: reading it as one collapsed the bitrate to the floor
+     * within twenty seconds and handed the recovered session a picture degraded for no reason.
+     * The outage's rejections are absorbed, not judged.
+     */
+    fun onTick(encoder: AvcEncoder?, linkDown: Boolean = false) {
         val activeEncoder = encoder ?: return
         val baseBitrate = activeEncoder.targetBitrate()
         if (baseBitrate <= 0) return
+        if (linkDown) {
+            lastRejectedFrames = activeEncoder.rejectedAccessUnitsTotal()
+            return
+        }
 
         val mode = MotoHubSettings.videoPowerMode(appContext)
         if (mode != VideoPowerMode.AUTO) {

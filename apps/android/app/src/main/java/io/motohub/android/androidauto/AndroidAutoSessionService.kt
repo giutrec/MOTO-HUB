@@ -695,7 +695,10 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         watchdogJob = serviceScope.launch {
             while (!stopping) {
                 delay(WATCHDOG_TICK_MS)
-                adaptiveVideoController.onTick(encoder)
+                adaptiveVideoController.onTick(
+                    encoder = encoder,
+                    linkDown = transportUnavailable.get() || recoveryRequested.get()
+                )
                 if (!MotoHubSettings.autoRecovery(this@AndroidAutoSessionService) ||
                     AndroidAutoRuntime.state.value !is AndroidAutoRuntimeState.Streaming ||
                     recoveryRequested.get()
