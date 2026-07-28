@@ -110,7 +110,13 @@ class AaReceiver(
         registerNsd()
 
         acceptThread = thread(name = "aa-accept", isDaemon = true) { acceptLoop() }
-        headUnitServerThread = thread(name = "aa-hu-server", isDaemon = true) { headUnitServerLoop() }
+        headUnitServerThread = thread(name = "aa-hu-server", isDaemon = true) {
+            // A fallback poller must never take the process down: anything escaping this thread
+            // reaches Android's default handler, which kills the app while the rider is riding.
+            try { headUnitServerLoop() } catch (failure: Exception) {
+                log("[AA] head unit server poll ended: ${failure.message}")
+            }
+        }
         // Self-mode (launching Google Android Auto) is triggered by MainActivity from the
         // foreground, via AaSelfMode.trigger(), to satisfy background-activity-launch rules.
         return true
@@ -149,7 +155,7 @@ class AaReceiver(
         var announced = false
         while (running) {
             if (transport != null) {
-                Thread.sleep(HEAD_UNIT_SERVER_POLL_MS)
+                if (!awaitNextPoll()) return
                 continue
             }
             val socket = try {
@@ -168,7 +174,7 @@ class AaReceiver(
                             ":$HEAD_UNIT_SERVER_PORT; polling for it as a fallback."
                     )
                 }
-                try { Thread.sleep(HEAD_UNIT_SERVER_POLL_MS) } catch (_: InterruptedException) { return }
+                if (!awaitNextPoll()) return
                 continue
             }
             if (!running || transport != null) {
@@ -181,6 +187,19 @@ class AaReceiver(
             handleConnection(socket)
             return
         }
+    }
+
+    /**
+     * Waits one poll interval, reporting whether the wait completed. [stop] interrupts this
+     * thread, so an interrupt is the normal way the loop ends — and an InterruptedException left
+     * to escape it would reach Android's default handler and kill the process.
+     */
+    private fun awaitNextPoll(): Boolean = try {
+        Thread.sleep(HEAD_UNIT_SERVER_POLL_MS)
+        true
+    } catch (_: InterruptedException) {
+        Thread.currentThread().interrupt()
+        false
     }
 
     private fun acceptLoop() {
