@@ -37,6 +37,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.motohub.android.androidauto.AndroidAutoRuntime
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -719,10 +721,14 @@ private fun ActiveSessionContent(
         externalDisplayActive -> MotoHubMirror
         else -> MotoHubMirror
     }
+    // Starting Google Android Auto can take several seconds and several attempts; the detail
+    // says which one is running so the card is not a motionless "being prepared".
+    val androidAutoStartupDetail by AndroidAutoRuntime.startupDetail.collectAsStateWithLifecycle()
     val statusText = when {
         androidAutoActive && ready -> "Navigation active on TFT"
         externalDisplayActive && ready -> "Streaming to external display via USB"
         ready -> "TFT is receiving your screen"
+        androidAutoActive -> androidAutoStartupDetail ?: "Session is being prepared"
         else -> "Session is being prepared"
     }
 

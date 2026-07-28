@@ -70,10 +70,14 @@ fun AndroidAutoPreviewScreen(onBack: () -> Unit, startFullscreen: Boolean = fals
     val streaming = runtimeState is AndroidAutoRuntimeState.Streaming
     val sessionActive = runtimeState is AndroidAutoRuntimeState.Preparing ||
         runtimeState is AndroidAutoRuntimeState.ReceiverReady || streaming
+    val startupDetail by AndroidAutoRuntime.startupDetail.collectAsStateWithLifecycle()
     val status = when (val state = runtimeState) {
         AndroidAutoRuntimeState.Idle -> "Android Auto is not running. Start a session from Home."
         AndroidAutoRuntimeState.Preparing -> "Preparing Android Auto…"
-        AndroidAutoRuntimeState.ReceiverReady -> "Connected — waiting for the first frame."
+        // Not "connected": at this point MOTO-HUB is only listening, and is still asking Google
+        // Android Auto to project here — which can take several seconds and several attempts.
+        AndroidAutoRuntimeState.ReceiverReady ->
+            startupDetail ?: "Waiting for Android Auto to start projecting…"
         AndroidAutoRuntimeState.Streaming -> "Live preview · touch enabled"
         is AndroidAutoRuntimeState.Stopped -> state.reason
         is AndroidAutoRuntimeState.Failed -> state.message

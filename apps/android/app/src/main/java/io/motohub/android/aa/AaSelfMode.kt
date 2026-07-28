@@ -49,6 +49,7 @@ object AaSelfMode {
         context: Context,
         port: Int = AaReceiver.PORT,
         isConnected: () -> Boolean = { AaReceiver.hasAndroidAutoConnectedSinceStart() },
+        onProgress: (String) -> Unit = { io.motohub.android.androidauto.AndroidAutoRuntime.publishStartupDetail(it) },
         log: (String) -> Unit
     ) {
         log("[AA] Android Auto app: ${gearheadVersion(context) ?: "not installed"}")
@@ -71,22 +72,28 @@ object AaSelfMode {
             }
         }
 
-        for (attempt in attempts) {
+        attempts.forEachIndexed { index, attempt ->
             if (isConnected()) return
+            // The rider sees this in the session card and the preview screen: several seconds of
+            // apparent inactivity is otherwise indistinguishable from a hang.
+            onProgress("Asking Android Auto to start (${index + 1}/${attempts.size})…")
             val dispatched = when (attempt.kind) {
                 ComponentKind.ACTIVITY -> startActivityComponent(context, attempt.className, extras, log)
                 ComponentKind.RECEIVER -> sendReceiverBroadcast(context, attempt.className, extras, log)
                 ComponentKind.SERVICE -> startServiceComponent(context, attempt.className, extras, log)
             }
-            if (!dispatched) continue
+            if (!dispatched) return@forEachIndexed
+            onProgress("Waiting for Android Auto to answer (${index + 1}/${attempts.size})…")
             if (awaitConnection(isConnected)) {
                 log("[AA] Android Auto connected after ${attempt.describe()}.")
+                onProgress("Android Auto is starting up…")
                 return
             }
             log("[AA] no connection ${ATTEMPT_WAIT_MS}ms after ${attempt.describe()}; trying the next entry point.")
         }
 
         if (isConnected()) return
+        onProgress("Android Auto did not respond. Check that it is installed and set up.")
         log(
             "[AA] Self-mode could not be triggered: this Android Auto version accepted none of " +
                 "${attempts.size} entry points. Android Auto has to project to MOTO-HUB itself; " +

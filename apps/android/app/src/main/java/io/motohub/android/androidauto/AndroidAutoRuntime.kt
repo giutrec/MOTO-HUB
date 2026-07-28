@@ -17,8 +17,24 @@ object AndroidAutoRuntime {
     private val mutableState = MutableStateFlow<AndroidAutoRuntimeState>(AndroidAutoRuntimeState.Idle)
     val state: StateFlow<AndroidAutoRuntimeState> = mutableState.asStateFlow()
 
+    /**
+     * What the session is doing while it sits in [AndroidAutoRuntimeState.ReceiverReady].
+     *
+     * Asking Google Android Auto to project can take several seconds and several attempts on
+     * recent versions, and the rider was left staring at a screen that claimed to be connected
+     * while nothing visibly happened. Null whenever there is nothing more specific to say.
+     */
+    private val mutableStartupDetail = MutableStateFlow<String?>(null)
+    val startupDetail: StateFlow<String?> = mutableStartupDetail.asStateFlow()
+
     fun publish(state: AndroidAutoRuntimeState) {
+        // The detail only describes the wait inside ReceiverReady; any other state supersedes it.
+        if (state !is AndroidAutoRuntimeState.ReceiverReady) mutableStartupDetail.value = null
         mutableState.value = state
+    }
+
+    fun publishStartupDetail(detail: String?) {
+        mutableStartupDetail.value = detail
     }
 
     fun isActive(): Boolean = when (mutableState.value) {

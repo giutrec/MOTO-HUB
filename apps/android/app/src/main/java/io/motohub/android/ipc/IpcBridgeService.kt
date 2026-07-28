@@ -590,7 +590,15 @@ class IpcBridgeService : Service() {
             if (state is AndroidAutoRuntimeState.ReceiverReady) {
                 delay(ANDROID_AUTO_RECEIVER_SETTLE_MS)
                 if (AndroidAutoRuntime.state.value is AndroidAutoRuntimeState.ReceiverReady) {
-                    AaSelfMode.trigger(applicationContext) { ProjectionEventLog.record("AAP", it) }
+                    AaSelfMode.trigger(
+                        context = applicationContext,
+                        onProgress = { detail ->
+                            // Keep Core's own UI and the companion's in step during the wait.
+                            AndroidAutoRuntime.publishStartupDetail(detail)
+                            publishState(AndroidAutoIpcState.RECEIVER_READY, detail)
+                        },
+                        log = { ProjectionEventLog.record("AAP", it) }
+                    )
                 }
             }
         }
@@ -608,7 +616,13 @@ class IpcBridgeService : Service() {
         selfModeJob = serviceScope.launch {
             delay(ANDROID_AUTO_RECEIVER_SETTLE_MS)
             if (receiver != null) {
-                AaSelfMode.trigger(applicationContext) { ProjectionEventLog.record("AAP", it) }
+                AaSelfMode.trigger(
+                    context = applicationContext,
+                    // The companion has no window into Core's startup: without forwarding the
+                    // progress it shows a motionless "preparing" for the whole attempt sequence.
+                    onProgress = { publishState(AndroidAutoIpcState.RECEIVER_READY, it) },
+                    log = { ProjectionEventLog.record("AAP", it) }
+                )
             }
         }
     }
