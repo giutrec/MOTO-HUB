@@ -21,18 +21,36 @@ object AndroidAutoSelfModeHelp {
         "com.google.android.projection.gearhead.companion.settings.DefaultSettingsActivity"
 
     /**
-     * Shown when the receiver never saw an inbound connection. Matched by the UI to offer help.
-     *
-     * The beta comes first because it is the case actually observed: on Android Auto 17.4 beta
-     * every exported entry point was tried and none produced a connection, while release builds
-     * of the same era still work.
+     * Android Auto releases from this one on have removed loopback ("self mode") projection:
+     * WirelessStartupActivity is no longer exported and WirelessStartupReceiver ships disabled,
+     * so every way an app can ask for it is closed. 17.2.662634 is verified working with
+     * MOTO-HUB; 17.4.663004 fails on every entry point (the headunit-revived project hit the
+     * same wall in its issue #698). 17.3 is untested, hence the boundary sits at 17.3.
      */
+    private const val FIRST_BROKEN_MAJOR = 17
+    private const val FIRST_BROKEN_MINOR = 3
+
+    /** Shown when the receiver never saw an inbound connection. Matched by the UI to offer help. */
     const val NEVER_CONNECTED_MESSAGE =
-        "Google Android Auto never connected to MOTO-HUB. If you are in the Android Auto beta " +
-            "programme, leave it and reinstall the stable version — recent betas refuse every " +
-            "way an app can ask Android Auto to project. Otherwise open Android Auto, tap " +
-            "Version ten times to unlock Developer settings, and enable \"Add new cars to " +
-            "Android Auto\" (older versions: \"Unknown sources\")."
+        "Google Android Auto never connected to MOTO-HUB. Android Auto 17.4 removed the way apps " +
+            "ask it to project wirelessly, so no version of MOTO-HUB can start it. Install " +
+            "Android Auto 17.2 (verified working) from APKMirror and turn off its automatic " +
+            "updates. If you already run 17.2 or older, open Android Auto, tap Version ten times " +
+            "and enable \"Add new cars to Android Auto\" in Developer settings."
+
+    /**
+     * Whether the installed Android Auto is new enough to have dropped self-mode. Used to warn
+     * up front instead of after a full round of attempts — but never to skip them: this is a
+     * behavioural regression Google could undo, and a version number is a poor thing to hard-code
+     * a refusal on.
+     */
+    fun isKnownBrokenVersion(versionName: String?): Boolean {
+        val numbers = versionName.orEmpty().substringBefore('-').split('.')
+        val major = numbers.getOrNull(0)?.toIntOrNull() ?: return false
+        val minor = numbers.getOrNull(1)?.toIntOrNull() ?: return false
+        return major > FIRST_BROKEN_MAJOR ||
+            (major == FIRST_BROKEN_MAJOR && minor >= FIRST_BROKEN_MINOR)
+    }
 
     fun isMessageAboutSelfMode(message: String?): Boolean = message == NEVER_CONNECTED_MESSAGE
 

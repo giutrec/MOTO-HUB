@@ -52,7 +52,18 @@ object AaSelfMode {
         onProgress: (String) -> Unit = { io.motohub.android.androidauto.AndroidAutoRuntime.publishStartupDetail(it) },
         log: (String) -> Unit
     ) {
-        log("[AA] Android Auto app: ${gearheadVersion(context) ?: "not installed"}")
+        val version = gearheadVersion(context)
+        log("[AA] Android Auto app: ${version ?: "not installed"}")
+        if (io.motohub.android.androidauto.AndroidAutoSelfModeHelp.isKnownBrokenVersion(version)) {
+            // Still attempted below: Google could restore the entry points, and a version string
+            // is not a good enough reason to refuse outright. The rider just learns immediately
+            // why the next few seconds are likely to be wasted.
+            log(
+                "[AA] Android Auto $version is a release known to have removed wireless " +
+                    "self-mode projection (17.2 works, 17.4 does not). Trying anyway."
+            )
+            onProgress("Android Auto $version may not support wireless projection…")
+        }
         val extras = SelfModeExtras(context, port)
 
         val discovered = discoverStartupComponents(context)
@@ -96,10 +107,10 @@ object AaSelfMode {
         onProgress("Android Auto did not respond — see the error for what to check.")
         log(
             "[AA] Self-mode could not be triggered: none of ${attempts.size} entry points produced " +
-                "a connection. Observed on Android Auto 17.4 beta, where the activity is not " +
-                "exported and the receiver/services accept the intent but do nothing; leaving the " +
-                "beta programme restores a working entry point. Also verify \"Add new cars to " +
-                "Android Auto\" is enabled in Android Auto's Developer settings."
+                "a connection. Android Auto 17.4 closed them all - the activity is no longer " +
+                "exported and WirelessStartupReceiver ships disabled (same wall headunit-revived " +
+                "hit in its issue #698). Downgrade Android Auto below 17.2 to restore wireless " +
+                "projection; USB projection is unaffected."
         )
     }
 
@@ -198,17 +209,27 @@ object AaSelfMode {
             PackageManager.GET_SERVICES or
             PackageManager.MATCH_DISABLED_COMPONENTS
         val info = context.packageManager.getPackageInfo(GEARHEAD_PKG, flags)
+        // Exported AND enabled: MATCH_DISABLED_COMPONENTS is needed to see the whole manifest,
+        // but a disabled component silently swallows anything sent to it — Android Auto 17.4
+        // ships WirelessStartupReceiver disabled, which is exactly why the broadcast that used
+        // to work now vanishes without an error.
         val activities = info.activities.orEmpty()
-            .filter { it.exported && looksLikeStartup(it.name) }
+            .filter { it.exported && it.isEnabled() && looksLikeStartup(it.name) }
             .map { StartupComponent(ComponentKind.ACTIVITY, it.name) }
         val receivers = info.receivers.orEmpty()
-            .filter { it.exported && looksLikeStartup(it.name) }
+            .filter { it.exported && it.isEnabled() && looksLikeStartup(it.name) }
             .map { StartupComponent(ComponentKind.RECEIVER, it.name) }
         val services = info.services.orEmpty()
-            .filter { it.exported && looksLikeStartup(it.name) }
+            .filter { it.exported && it.isEnabled() && looksLikeStartup(it.name) }
             .map { StartupComponent(ComponentKind.SERVICE, it.name) }
         (activities + receivers + services).filterNot { it.className == CLASSIC_ACTIVITY }
     }.getOrDefault(emptyList())
+
+    /**
+     * The manifest `enabled` flag combined with any runtime override the system holds for the
+     * component, so a component Google turned off after install is not treated as usable.
+     */
+    private fun android.content.pm.ComponentInfo.isEnabled(): Boolean = enabled
 
     private fun looksLikeStartup(className: String?): Boolean {
         val name = className?.lowercase() ?: return false
