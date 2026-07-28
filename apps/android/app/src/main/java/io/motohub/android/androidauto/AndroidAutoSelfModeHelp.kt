@@ -33,16 +33,16 @@ object AndroidAutoSelfModeHelp {
     /**
      * Shown when the receiver never saw an inbound connection.
      *
-     * The remedy deliberately leads with Android Auto's own head unit server rather than
-     * downgrading: it needs no sideloaded APK, works on the versions that removed self-mode, and
-     * MOTO-HUB connects to it automatically as soon as the rider starts it.
+     * Leads with the head unit server because it is the path confirmed working on the releases
+     * that removed self-mode, and it needs nothing but Android Auto's own menu — no sideloaded
+     * APK. MOTO-HUB keeps polling for it, so the rider can start it without restarting anything.
      */
     const val NEVER_CONNECTED_MESSAGE =
         "Google Android Auto never connected to MOTO-HUB. Android Auto 17.4 removed the way apps " +
-            "ask it to project, so start it from Android Auto instead: open Android Auto, tap " +
-            "Version ten times to unlock Developer settings, then choose \"Start head unit " +
-            "server\" from its menu. MOTO-HUB connects to it on its own — leave MOTO-HUB running " +
-            "while you do it."
+            "ask it to project, so start it from Android Auto itself: open Android Auto ▸ tap " +
+            "Version ten times ▸ Developer settings ▸ the ⋮ menu at the top right ▸ \"Start head " +
+            "unit server\". Leave MOTO-HUB running: it connects on its own within a couple of " +
+            "seconds, and you can leave the server running for next time."
 
     /**
      * Whether the installed Android Auto is new enough to have dropped self-mode. Used to warn

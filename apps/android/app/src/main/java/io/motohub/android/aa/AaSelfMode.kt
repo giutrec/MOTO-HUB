@@ -30,8 +30,20 @@ object AaSelfMode {
     private const val RECEIVER_ACTION =
         "com.google.android.apps.auto.wireless.setup.receiver.wirelessstartup.START"
 
+    /**
+     * Android Auto's own head unit server, the one its Developer settings start from the overflow
+     * menu. Starting it turns Android Auto into the listener on
+     * [AaReceiver.HEAD_UNIT_SERVER_PORT], which [AaReceiver] then dials — the one path still open
+     * on releases that removed self-mode. Historically a hidden service, so this may well be
+     * refused; it costs one intent to find out, and the log says which it was.
+     */
+    private const val HEAD_UNIT_SERVER_SERVICE =
+        "com.google.android.projection.gearhead.companion.DeveloperHeadUnitNetworkService"
+
     private val REQUIRED_KEYWORDS = listOf("wireless")
     private val ENTRY_KEYWORDS = listOf("startup", "start", "projection", "setup")
+    /** Matches the head unit server family, whose names carry no "wireless" at all. */
+    private val HEAD_UNIT_KEYWORDS = listOf("headunit", "head_unit")
 
     /** How long one entry point gets to produce an inbound AAP connection before the next is tried. */
     private const val ATTEMPT_WAIT_MS = 4_000L
@@ -73,13 +85,28 @@ object AaSelfMode {
             log("[AA] Exported wireless-startup candidates: ${discovered.joinToString { it.describe() }}")
         }
 
+        val headUnitServers = discoverHeadUnitServerComponents(context)
+        if (headUnitServers.isEmpty()) {
+            log(
+                "[AA] Android Auto exports no head unit server component; it can only be started " +
+                    "by hand from Developer settings ▸ overflow menu ▸ Start head unit server."
+            )
+        } else {
+            log("[AA] Head unit server candidates: ${headUnitServers.joinToString { it.describe() }}")
+        }
+
         // Activity first (the historical, most reliable shape), then whatever is still exported,
-        // and the legacy receiver last in case discovery missed it.
+        // the legacy receiver in case discovery missed it, and finally the head unit server -
+        // which does not project by itself but makes Android Auto listen for [AaReceiver].
         val attempts = buildList {
             add(StartupComponent(ComponentKind.ACTIVITY, CLASSIC_ACTIVITY))
             addAll(discovered)
             if (discovered.none { it.className == CLASSIC_RECEIVER }) {
                 add(StartupComponent(ComponentKind.RECEIVER, CLASSIC_RECEIVER))
+            }
+            addAll(headUnitServers)
+            if (headUnitServers.none { it.className == HEAD_UNIT_SERVER_SERVICE }) {
+                add(StartupComponent(ComponentKind.SERVICE, HEAD_UNIT_SERVER_SERVICE))
             }
         }
 
@@ -104,7 +131,7 @@ object AaSelfMode {
         }
 
         if (isConnected()) return
-        onProgress("Start \"head unit server\" in Android Auto's Developer settings…")
+        onProgress("Start \"head unit server\" in Android Auto ▸ Developer settings ▸ ⋮ menu…")
         log(
             "[AA] Self-mode could not be triggered: none of ${attempts.size} entry points produced " +
                 "a connection. Android Auto 17.4 closed them all - the activity is no longer " +
@@ -231,6 +258,25 @@ object AaSelfMode {
      * component, so a component Google turned off after install is not treated as usable.
      */
     private fun android.content.pm.ComponentInfo.isEnabled(): Boolean = enabled
+
+    /**
+     * Exported, enabled components whose name marks them as the head unit server. Kept separate
+     * from [discoverStartupComponents] because these do not advertise "wireless" anywhere.
+     */
+    private fun discoverHeadUnitServerComponents(context: Context): List<StartupComponent> = runCatching {
+        val info = context.packageManager.getPackageInfo(
+            GEARHEAD_PKG,
+            PackageManager.GET_SERVICES or PackageManager.MATCH_DISABLED_COMPONENTS
+        )
+        info.services.orEmpty()
+            .filter { it.exported && it.enabled && looksLikeHeadUnitServer(it.name) }
+            .map { StartupComponent(ComponentKind.SERVICE, it.name) }
+    }.getOrDefault(emptyList())
+
+    private fun looksLikeHeadUnitServer(className: String?): Boolean {
+        val name = className?.lowercase()?.replace("_", "") ?: return false
+        return HEAD_UNIT_KEYWORDS.any { name.contains(it.replace("_", "")) }
+    }
 
     private fun looksLikeStartup(className: String?): Boolean {
         val name = className?.lowercase() ?: return false
