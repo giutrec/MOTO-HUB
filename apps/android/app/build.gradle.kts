@@ -75,8 +75,12 @@ android {
         applicationId = "io.motohub.android"
         minSdk = 34
         targetSdk = 36
-        versionCode = 108
-        versionName = "1.1.14"
+        // CORE and ADVANCED ship as a pair, under one tag, and talk to each other over AIDL:
+        // keep this identical to the PRO worktree's build.gradle.kts. They drifted after v1.1.4
+        // (CORE reached 1.1.14/108 while ADVANCED sat at 1.1.6/100), which left a rider's
+        // "MOTO-HUB 1.1.x" unable to identify which pair they actually had installed.
+        versionCode = 109
+        versionName = "1.1.15"
         buildConfigField("boolean", "IS_PRO", "false")
         buildConfigField("String", "SENTRY_DSN", asBuildConfigString(coreSentryDsn))
         manifestPlaceholders["appLabel"] = "MOTO-HUB"
