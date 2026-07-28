@@ -34,6 +34,7 @@ object SentryIntegration {
                 options.dist = BuildConfig.VERSION_CODE.toString()
                 options.isSendDefaultPii = false
                 options.isEnableAutoSessionTracking = true
+                options.isDebug = BuildConfig.SENTRY_DEBUG
             }
             enabled = true
         }.onFailure { failure ->

@@ -67,6 +67,10 @@ fun asBuildConfigString(value: String): String =
     "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 val coreSentryDsn = sentryDsn("sentryCoreDsn", "SENTRY_CORE_DSN")
+val sentryDebug = providers.gradleProperty("sentryDebug")
+    .map(String::toBoolean)
+    .orElse(false)
+    .get()
 android {
     namespace = "io.motohub.android"
     compileSdk = 36
@@ -83,6 +87,10 @@ android {
         versionName = "1.1.16"
         buildConfigField("boolean", "IS_PRO", "false")
         buildConfigField("String", "SENTRY_DSN", asBuildConfigString(coreSentryDsn))
+        // -PsentryDebug=true makes the SDK narrate what it is doing to logcat. Telemetry that
+        // silently does not arrive is worse than none, and there is no other way to see whether
+        // a session was started, dropped or rejected: the SDK says nothing at all by default.
+        buildConfigField("boolean", "SENTRY_DEBUG", sentryDebug.toString())
         manifestPlaceholders["appLabel"] = "MOTO-HUB"
     }
 
@@ -112,6 +120,15 @@ android {
             )
         }
         release {
+            // Published APKs carry one architecture. minSdk is 34, and every phone that runs
+            // Android 14 is arm64 - x86/x86_64 exist only for Intel emulators, and armeabi-v7a
+            // for hardware that cannot run this minSdk at all. Shipping all four put ~50MB of
+            // native libraries no rider can execute into every download (libmaplibre.so alone
+            // was 15MB per ABI). The debug variant keeps every ABI, so emulators still work.
+            ndk {
+                abiFilters.clear()
+                abiFilters.add("arm64-v8a")
+            }
             // Keep normal releases protected, but allow a local device-test release
             // with readable stack traces and no R8 obfuscation.
             // Use -PnoReleaseObfuscation=true for the latter.
@@ -302,7 +319,6 @@ dependencies {
     implementation(libs.protobuf.java)
     implementation(libs.conscrypt.android)
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.maplibre.android)
     implementation(libs.okhttp)
     implementation(libs.sentry.android)
 
