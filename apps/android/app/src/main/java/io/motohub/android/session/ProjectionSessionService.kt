@@ -210,7 +210,11 @@ class ProjectionSessionService : Service() {
             val manager = getSystemService(MediaProjectionManager::class.java)
             val projection = manager.getMediaProjection(resultCode, resultData)
                 ?: error("Android did not create the media projection")
-            projection.registerCallback(projectionCallback, null)
+            // A null handler makes MediaProjection build one on the calling thread, and this
+            // runs on a coroutine dispatcher with no Looper - which threw before the capture
+            // ever started. The callback only reports that projection stopped, so the main
+            // thread is the right place to receive it.
+            projection.registerCallback(projectionCallback, mainHandler)
             backpressureGuard = VideoBackpressureGuard()
             val activeEncoder = AvcEncoder(
                 profile = profile,

@@ -15,7 +15,9 @@ import android.hardware.usb.UsbAccessory
 import android.hardware.usb.UsbManager
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import android.os.ParcelFileDescriptor
 import androidx.core.app.NotificationCompat
@@ -143,7 +145,10 @@ class AoaExternalService : Service() {
             val manager = getSystemService(MediaProjectionManager::class.java)
             val projection = manager.getMediaProjection(resultCode, resultData)
                 ?: error("Android did not create the media projection.")
-            projection.registerCallback(projectionCallback, null)
+            // A null handler makes MediaProjection build one on the calling thread, and this
+            // runs on a coroutine dispatcher with no Looper. The callback only reports that
+            // projection stopped, so the main thread is the right place to receive it.
+            projection.registerCallback(projectionCallback, Handler(Looper.getMainLooper()))
             mediaProjection = projection
 
             // 6. Build the encoder with Autolink-compatible settings
