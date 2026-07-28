@@ -65,6 +65,7 @@ import io.motohub.android.feature.garage.MotorcycleDetailsScreen
 import io.motohub.android.feature.garage.TBoxCapabilityScreen
 import io.motohub.android.feature.home.HubHomeScreen
 import io.motohub.android.feature.home.HubViewModel
+import io.motohub.android.feature.androidauto.AndroidAutoHelpScreen
 import io.motohub.android.feature.androidauto.AndroidAutoPreviewScreen
 import io.motohub.android.feature.androidauto.OfficialCfmotoWarningDialog
 import io.motohub.android.feature.diagnostics.NetworkDiagnosticsScreen
@@ -175,6 +176,7 @@ class MainActivity : ComponentActivity() {
                 var showNetworkDiagnostics by rememberSaveable { mutableStateOf(false) }
                 var showApplicationLogs by rememberSaveable { mutableStateOf(false) }
                 var showAbout by rememberSaveable { mutableStateOf(false) }
+                var showAndroidAutoHelp by rememberSaveable { mutableStateOf(false) }
                 val launchedPhoneOnlyAa =
                     intent?.getBooleanExtra(IpcBridgeContract.EXTRA_START_PHONE_ONLY_ANDROID_AUTO, false) == true
                 val launchedPhoneOnlyAaDisplayMode =
@@ -682,6 +684,13 @@ class MainActivity : ComponentActivity() {
                             showApplicationLogs = false
                         }
                     )
+                } else if (showAndroidAutoHelp) {
+                    AndroidAutoHelpScreen(
+                        onBack = {
+                            ProjectionEventLog.record("UI", "Android Auto help screen closed.")
+                            showAndroidAutoHelp = false
+                        }
+                    )
                 } else if (showAbout) {
                     AboutScreen(
                         onOpenGithub = {
@@ -939,13 +948,11 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onOpenAndroidAutoSettings = {
-                            if (!AndroidAutoSelfModeHelp.openAndroidAutoSettings(context)) {
-                                Toast.makeText(
-                                    context,
-                                    motoHubText("Unable to open Android Auto settings"),
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            }
+                            // The guide, not Android Auto itself: dropping the rider into another
+                            // app without telling them which hidden menu to open is what made the
+                            // first tester hunt for a setting that is not in the settings list.
+                            ProjectionEventLog.record("UI", "Android Auto help screen opened.")
+                            showAndroidAutoHelp = true
                         },
                         onOpenWifiSettings = {
                             if (!WifiGate.openWifiSettings(context)) {
@@ -1091,6 +1098,10 @@ class MainActivity : ComponentActivity() {
                                 onOpenApplicationLogs = {
                                     ProjectionEventLog.record("UI", "Application log screen opened.")
                                     showApplicationLogs = true
+                                },
+                                onOpenAndroidAutoHelp = {
+                                    ProjectionEventLog.record("UI", "Android Auto help screen opened.")
+                                    showAndroidAutoHelp = true
                                 },
                                 onOpenAbout = {
                                     ProjectionEventLog.record("UI", "About screen opened.")

@@ -212,6 +212,29 @@ Existing single-profile data is migrated automatically when the app is upgraded.
 
 `Ride Dashboard` draws a native scene at the negotiated TFT geometry directly into the H.264 encoder surface. Speed, course, altitude, accuracy, satellites and the live track come from the phone GNSS receiver. The map region can use cached CartoDB Voyager OpenStreetMap tiles over the cellular network or an Android Auto source decoded in memory and composited into the dashboard. Each side panel shows one of several selectable widgets (speed gauge, trip metrics, compass, altitude, satellites, battery, weather), independently configurable per motorcycle. Mirroring, full Android Auto, and Ride Dashboard remain three separate modes; embedded Android Auto replaces only the dashboard map region. A phone-side preview (with its own fullscreen mode) can render the same dashboard using the phone's own GPS, without a T-Box connection. The T-Box does not currently provide verified RPM, gear, fuel or engine-temperature telemetry.
 
+### If Android Auto does not start
+
+Android Auto 17.4 removed the entry points an app could use to ask it to project: the activity it
+used is no longer exported and the receiver behind it ships disabled, so MOTO-HUB's request is
+refused or silently ignored. This affects every app of this kind, not only MOTO-HUB — the
+`headunit-revived` project reports the same in its issue #698. Android Auto 17.2.662634 is verified
+working; 17.4.663004 is not.
+
+There is no need to install an older Android Auto. Android Auto can be asked to listen instead,
+using the head unit server its own Desktop Head Unit connects to, and MOTO-HUB connects to that:
+
+1. Open the **Android Auto** app, scroll to the bottom and tap **Version** ten times to reveal
+   Developer settings.
+2. In Developer settings, enable **Add new cars to Android Auto** (older wording: *Unknown
+   sources*).
+3. Open the **⋮ menu at the top right** of Developer settings and choose **Start head unit
+   server**. It lives in that menu, not in the list of settings below it. A notification confirms
+   it is running, and it stays running until stopped or the phone restarts.
+4. Start Android Auto from MOTO-HUB as usual. MOTO-HUB polls that server and connects on its own.
+
+The same instructions are in the app under `Settings ▸ Android Auto does not start`, and the error
+shown when projection fails links to them.
+
 ### Navigation
 
 `Navigation` geocodes free-text or coordinate destinations with Photon (OpenStreetMap data), calculates a motorcycle route with the Valhalla routing engine, and previews it on an OpenStreetMap route map before starting turn-by-turn guidance on the Ride Dashboard. Routing uses either the rider's own free Stadia Maps API key or, for a quick try without one, FOSSGIS's rate-limited public Valhalla demo server. If OpenStreetMap has a street but not the exact house number searched, the route preview map lets the rider zoom in and tap the correct spot to recalculate the route there instead. Saved places, a home destination, recent searches, and full saved "rides" (route plus its weather/fuel/golden-hour enrichment) persist locally. All OpenStreetMap-based maps in the app (Ride Dashboard, Trip history, Navigation preview) use CartoDB's Voyager basemap style for consistent, light, road-legible tiles.

@@ -67,6 +67,7 @@ fun SettingsTabContent(
     onOpenNetworkDiagnostics: () -> Unit,
     onOpenApplicationLogs: () -> Unit,
     onOpenAbout: () -> Unit,
+    onOpenAndroidAutoHelp: () -> Unit,
     seamlessResumeEnabled: Boolean,
     onSeamlessResumeChanged: (Boolean) -> Unit
 ) {
@@ -92,7 +93,8 @@ fun SettingsTabContent(
                 onOpenDetail = { detail = it },
                 onOpenNetworkDiagnostics = onOpenNetworkDiagnostics,
                 onOpenApplicationLogs = onOpenApplicationLogs,
-                onOpenAbout = onOpenAbout
+                onOpenAbout = onOpenAbout,
+                onOpenAndroidAutoHelp = onOpenAndroidAutoHelp
             )
             SettingsDetail.GENERAL -> GeneralDetail(
                 onBack = { detail = null },
@@ -125,7 +127,8 @@ private fun SettingsMainList(
     onOpenDetail: (SettingsDetail) -> Unit,
     onOpenNetworkDiagnostics: () -> Unit,
     onOpenApplicationLogs: () -> Unit,
-    onOpenAbout: () -> Unit
+    onOpenAbout: () -> Unit,
+    onOpenAndroidAutoHelp: () -> Unit
 ) {
     val context = LocalContext.current
     val strings = context.resources
@@ -179,6 +182,11 @@ private fun SettingsMainList(
                 title = motoHubText("Diagnostics"),
                 description = motoHubText("Network tests and application logs"),
                 onClick = { onOpenDetail(SettingsDetail.DIAGNOSTICS) }
+            )
+            MotoHubActionRow(
+                title = motoHubText("Android Auto does not start"),
+                description = motoHubText("What to do when Android Auto refuses to project"),
+                onClick = onOpenAndroidAutoHelp
             )
             MotoHubActionRow(
                 title = motoHubText("About MOTO-HUB"),

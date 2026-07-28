@@ -516,13 +516,13 @@ private fun ErrorBanner(
                 if (showAndroidAutoSetupHelp) {
                     Text(
                         motoHubText(
-                            "Android Auto ignores projection requests from a head unit it has not " +
-                                "been told to accept. This is a one-time setting inside Android Auto."
+                            "Android Auto 17.4 removed the way apps ask it to project. It can " +
+                                "still be started from Android Auto's own developer menu."
                         ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    SecondaryAction("Open Android Auto settings", onOpenAndroidAutoSettings)
+                    SecondaryAction("How to start Android Auto", onOpenAndroidAutoSettings)
                 }
             }
         }
