@@ -494,7 +494,11 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun showError(message: String) {
         val userFacingMessage = TBoxConflictDiagnostics.userFacingMessage(message)
-        ProjectionEventLog.error("STATE", userFacingMessage)
+        // Recorded as a warning, not an error: this only puts a banner on screen. Whatever
+        // actually failed was already reported at ERROR by the layer that detected it, and
+        // logging it again here sent every failure to telemetry twice - while turning purely
+        // user-recoverable prompts ("Wi-Fi is off", "grant Nearby devices") into fault reports.
+        ProjectionEventLog.warning("STATE", userFacingMessage)
         mutableUiState.value = mutableUiState.value.copy(
             session = mutableUiState.value.session.copy(
                 phase = SessionPhase.ERROR,
