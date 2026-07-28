@@ -93,11 +93,13 @@ object AaSelfMode {
         }
 
         if (isConnected()) return
-        onProgress("Android Auto did not respond. Check that it is installed and set up.")
+        onProgress("Android Auto did not respond — see the error for what to check.")
         log(
-            "[AA] Self-mode could not be triggered: this Android Auto version accepted none of " +
-                "${attempts.size} entry points. Android Auto has to project to MOTO-HUB itself; " +
-                "if you are on the Android Auto beta, leaving it restores the working entry point."
+            "[AA] Self-mode could not be triggered: none of ${attempts.size} entry points produced " +
+                "a connection. Observed on Android Auto 17.4 beta, where the activity is not " +
+                "exported and the receiver/services accept the intent but do nothing; leaving the " +
+                "beta programme restores a working entry point. Also verify \"Add new cars to " +
+                "Android Auto\" is enabled in Android Auto's Developer settings."
         )
     }
 

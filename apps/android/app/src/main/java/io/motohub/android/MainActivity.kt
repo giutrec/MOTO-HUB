@@ -45,6 +45,7 @@ import androidx.lifecycle.lifecycleScope
 import io.motohub.android.aa.AaSelfMode
 import io.motohub.android.androidauto.PhoneOnlyAndroidAutoLaunchRequest
 import io.motohub.android.androidauto.AndroidAutoRuntime
+import io.motohub.android.androidauto.AndroidAutoSelfModeHelp
 import io.motohub.android.androidauto.AndroidAutoRuntimeState
 import io.motohub.android.androidauto.AndroidAutoSessionService
 import io.motohub.android.androidauto.AndroidAutoDisplayMode
@@ -933,6 +934,15 @@ class MainActivity : ComponentActivity() {
                                 Toast.makeText(
                                     context,
                                     motoHubText("Unable to open official CFMOTO app settings"),
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        },
+                        onOpenAndroidAutoSettings = {
+                            if (!AndroidAutoSelfModeHelp.openAndroidAutoSettings(context)) {
+                                Toast.makeText(
+                                    context,
+                                    motoHubText("Unable to open Android Auto settings"),
                                     Toast.LENGTH_LONG
                                 ).show()
                             }

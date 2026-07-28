@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.motohub.android.androidauto.AndroidAutoRuntime
+import io.motohub.android.androidauto.AndroidAutoSelfModeHelp
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -91,6 +92,7 @@ fun HubHomeScreen(
     onCloseOfficialCfmotoAndRetry: () -> Unit,
     onOpenOfficialCfmotoSettings: () -> Unit,
     onOpenWifiSettings: () -> Unit,
+    onOpenAndroidAutoSettings: () -> Unit,
     onCancelConnection: () -> Unit,
     onDisconnect: () -> Unit,
     onStartProjection: () -> Unit,
@@ -148,6 +150,7 @@ fun HubHomeScreen(
                             onCloseOfficialCfmotoAndRetry = onCloseOfficialCfmotoAndRetry,
                             onOpenOfficialCfmotoSettings = onOpenOfficialCfmotoSettings,
                             onOpenWifiSettings = onOpenWifiSettings,
+                            onOpenAndroidAutoSettings = onOpenAndroidAutoSettings,
                             onCancelConnection = onCancelConnection,
                             onDisconnect = onDisconnect,
                             onStartProjection = onStartProjection,
@@ -192,6 +195,7 @@ private fun HomeTabContent(
     onCloseOfficialCfmotoAndRetry: () -> Unit,
     onOpenOfficialCfmotoSettings: () -> Unit,
     onOpenWifiSettings: () -> Unit,
+    onOpenAndroidAutoSettings: () -> Unit,
     onCancelConnection: () -> Unit,
     onDisconnect: () -> Unit,
     onStartProjection: () -> Unit,
@@ -269,6 +273,7 @@ private fun HomeTabContent(
                 onCloseOfficialCfmotoAndRetry = onCloseOfficialCfmotoAndRetry,
                 onOpenOfficialCfmotoSettings = onOpenOfficialCfmotoSettings,
                 onOpenWifiSettings = onOpenWifiSettings,
+                onOpenAndroidAutoSettings = onOpenAndroidAutoSettings,
                 onScanQr = onScanQr,
                 onImportQrPhoto = onImportQrPhoto,
                 onManualPairing = onManualPairing
@@ -401,6 +406,7 @@ private fun ConnectionContent(
     onCloseOfficialCfmotoAndRetry: () -> Unit,
     onOpenOfficialCfmotoSettings: () -> Unit,
     onOpenWifiSettings: () -> Unit,
+    onOpenAndroidAutoSettings: () -> Unit,
     onScanQr: () -> Unit,
     onImportQrPhoto: () -> Unit,
     onManualPairing: () -> Unit
@@ -414,7 +420,9 @@ private fun ConnectionContent(
                 onCloseOfficialCfmotoAndRetry = onCloseOfficialCfmotoAndRetry,
                 onOpenOfficialCfmotoSettings = onOpenOfficialCfmotoSettings,
                 showWifiSettingsAction = message == WifiGate.WIFI_OFF_MESSAGE,
-                onOpenWifiSettings = onOpenWifiSettings
+                onOpenWifiSettings = onOpenWifiSettings,
+                showAndroidAutoSetupHelp = AndroidAutoSelfModeHelp.isMessageAboutSelfMode(message),
+                onOpenAndroidAutoSettings = onOpenAndroidAutoSettings
             )
         }
         PrimaryAction("Connect", onConnect)
@@ -443,10 +451,12 @@ private fun ErrorBanner(
     onCloseOfficialCfmotoAndRetry: () -> Unit,
     onOpenOfficialCfmotoSettings: () -> Unit,
     showWifiSettingsAction: Boolean,
-    onOpenWifiSettings: () -> Unit
+    onOpenWifiSettings: () -> Unit,
+    showAndroidAutoSetupHelp: Boolean = false,
+    onOpenAndroidAutoSettings: () -> Unit = {}
 ) {
     var expanded by rememberSaveable(message) { mutableStateOf(false) }
-    val hasExtra = showPortConflictHelp || showWifiSettingsAction
+    val hasExtra = showPortConflictHelp || showWifiSettingsAction || showAndroidAutoSetupHelp
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -502,6 +512,17 @@ private fun ErrorBanner(
                 }
                 if (showWifiSettingsAction) {
                     SecondaryAction("Open Wi-Fi settings", onOpenWifiSettings)
+                }
+                if (showAndroidAutoSetupHelp) {
+                    Text(
+                        motoHubText(
+                            "Android Auto ignores projection requests from a head unit it has not " +
+                                "been told to accept. This is a one-time setting inside Android Auto."
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    SecondaryAction("Open Android Auto settings", onOpenAndroidAutoSettings)
                 }
             }
         }

@@ -322,12 +322,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                                 "The AAP session was closed; start Android Auto again."
                         )
                     } else {
-                        fail(
-                            "Google Android Auto never connected to MOTO-HUB. It must be " +
-                                "installed, already set up once, and allowed to start: check the " +
-                                "application log for the entry points it refused. On the Android " +
-                                "Auto beta, leaving the beta restores the working entry point."
-                        )
+                        fail(AndroidAutoSelfModeHelp.NEVER_CONNECTED_MESSAGE)
                     }
                 }
             }
