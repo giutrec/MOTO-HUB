@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.net.wifi.WpsInfo
 import android.net.wifi.p2p.WifiP2pConfig
 import android.net.wifi.p2p.WifiP2pDevice
+import android.net.wifi.p2p.WifiP2pGroup
 import android.net.wifi.p2p.WifiP2pInfo
 import android.net.wifi.p2p.WifiP2pManager
 import android.os.Build
@@ -220,10 +221,13 @@ class TBoxWifiDirectConnector(
     }
 
     /**
-     * Issues `connect()`, retrying a transient `ERROR` once. The framework returns ERROR for
-     * several recoverable states (a group still tearing down, a supplicant busy with the scan
-     * that was just stopped); the OEM app effectively retries through its scan/connect cycle,
-     * while this connector used to give the rider a hard failure on the first rejection.
+     * Issues `connect()`, retrying a rejection once. The first attempt joins by peer address
+     * (what the OEM app does); the retry drops to the credentials join instead of repeating the
+     * identical config. Some frameworks (seen on Xiaomi HyperOS / Android 16) clear their peer
+     * list the moment discovery stops and then reject the address-based config with a bare
+     * `ERROR` in ~2ms - the rejection snapshot shows "dash peer=not in the peer list" - so
+     * re-sending the same address can never succeed there, while the credentials join carries
+     * no peer address and is accepted by those same frameworks.
      */
     private suspend fun connectWithRetry(
         manager: WifiP2pManager,
@@ -232,19 +236,22 @@ class TBoxWifiDirectConnector(
         peer: WifiP2pDevice?,
         outcome: CompletableDeferred<Result<TBoxLink.WifiDirect>>
     ) {
-        val config = buildConfig(profile, peer) ?: run {
-            // setNetworkName rejects non-"DIRECT-" names; build() rejects a bad passphrase length.
-            outcome.complete(
-                Result.failure(
-                    IllegalStateException("Wi-Fi Direct join is not possible for ${profile.ssid}.")
-                )
-            )
-            return
-        }
         repeat(CONNECT_ATTEMPTS) { attempt ->
             if (outcome.isCompleted) return
+            val joinPeer = peer?.takeIf { attempt == 0 }
+            // buildConfig(profile, null) is the credentials form; it returns null when the SSID
+            // or passphrase cannot express one (setNetworkName rejects non-"DIRECT-" names,
+            // build() rejects a bad passphrase length), in which case the peer form is kept.
+            val config = buildConfig(profile, joinPeer) ?: buildConfig(profile, peer) ?: run {
+                outcome.complete(
+                    Result.failure(
+                        IllegalStateException("Wi-Fi Direct join is not possible for ${profile.ssid}.")
+                    )
+                )
+                return
+            }
             log(
-                if (peer != null) "Joining the dash at ${peer.deviceAddress} (attempt ${attempt + 1})."
+                if (joinPeer != null) "Joining the dash at ${joinPeer.deviceAddress} (attempt ${attempt + 1})."
                 else "Joining Wi-Fi Direct group ${profile.ssid} as a legacy client (attempt ${attempt + 1})."
             )
             when (val reason = issueConnect(manager, channel, config)) {
@@ -259,6 +266,7 @@ class TBoxWifiDirectConnector(
                 }
                 else -> {
                     if (attempt == CONNECT_ATTEMPTS - 1) {
+                        logConnectRejectionDiagnostics(manager, channel, profile, peer)
                         outcome.complete(
                             Result.failure(
                                 IllegalStateException("Wi-Fi Direct connect() failed: ${reasonName(reason)}.")
@@ -267,11 +275,70 @@ class TBoxWifiDirectConnector(
                         return
                     }
                     log("Wi-Fi Direct connect() failed (${reasonName(reason)}); retrying.")
+                    logConnectRejectionDiagnostics(manager, channel, profile, peer)
                     delay(CONNECT_RETRY_DELAY_MS)
                 }
             }
         }
     }
+
+    /**
+     * One bounded snapshot of the P2P stack, taken when `connect()` was rejected. The bare
+     * `ERROR` reason carries no context at all: whether a group already exists (and who owns
+     * it), whether discovery is still running, and what state the dash peer is in is exactly
+     * what separates "another app holds the P2P state machine" from "this framework refuses
+     * P2P outright" - the two causes riders' diagnostic logs could not distinguish so far.
+     */
+    // Same permission gate as the rest of this connector; see issueConnect.
+    @SuppressLint("MissingPermission")
+    private suspend fun logConnectRejectionDiagnostics(
+        manager: WifiP2pManager,
+        channel: WifiP2pManager.Channel,
+        profile: MotorcycleProfile,
+        peer: WifiP2pDevice?
+    ) {
+        val line = withTimeoutOrNull(FRAMEWORK_CALL_TIMEOUT_MS) {
+            val p2pState = awaitQuery<Int> { resume ->
+                manager.requestP2pState(channel) { state -> resume(state) }
+            }
+            val discoveryState = awaitQuery<Int> { resume ->
+                manager.requestDiscoveryState(channel) { state -> resume(state) }
+            }
+            val connection = awaitQuery<WifiP2pInfo> { resume ->
+                manager.requestConnectionInfo(channel) { info -> resume(info) }
+            }
+            val group = awaitQuery<WifiP2pGroup> { resume ->
+                manager.requestGroupInfo(channel) { info -> resume(info) }
+            }
+            val expectedName = peerNameFromGroupSsid(profile.ssid)
+            val dash = requestPeers(manager, channel).firstOrNull { candidate ->
+                (peer != null && candidate.deviceAddress.equals(peer.deviceAddress, ignoreCase = true)) ||
+                    (expectedName != null && candidate.deviceName.equals(expectedName, ignoreCase = true))
+            }
+            val groupDescription = if (group == null) {
+                "none"
+            } else {
+                // An existing group here is the smoking gun: this join never formed one, so it
+                // belongs to someone else (another app's session, or a leftover the phone owns).
+                "'${group.networkName}' (owner=${group.owner?.deviceName?.takeIf(String::isNotBlank) ?: group.owner?.deviceAddress ?: "?"}, " +
+                    "ownedByPhone=${group.isGroupOwner}, clients=${group.clientList?.size ?: 0})"
+            }
+            "P2P state after the rejection: p2p=${p2pStateName(p2pState)}, " +
+                "discovery=${discoveryStateName(discoveryState)}, " +
+                "groupFormed=${connection?.groupFormed == true}, group=$groupDescription, " +
+                "dash peer=${dash?.let { statusName(it.status) } ?: "not in the peer list"}."
+        } ?: "P2P state after the rejection: the framework did not answer the state queries."
+        log(line)
+    }
+
+    /** Runs one framework state query and waits briefly for its callback; null when it never answers. */
+    private suspend fun <T> awaitQuery(query: (resume: (T?) -> Unit) -> Unit): T? =
+        withTimeoutOrNull(FRAMEWORK_CALL_TIMEOUT_MS) {
+            suspendCancellableCoroutine { continuation ->
+                runCatching { query { value -> if (continuation.isActive) continuation.resume(value) } }
+                    .onFailure { if (continuation.isActive) continuation.resume(null) }
+            }
+        }
 
     /**
      * Prefers the peer-address form the dash's own companion app uses; falls back to the
@@ -501,6 +568,20 @@ class TBoxWifiDirectConnector(
         WifiP2pManager.BUSY -> "busy"
         WifiP2pManager.NO_SERVICE_REQUESTS -> "no service requests"
         else -> "reason $reason"
+    }
+
+    private fun p2pStateName(state: Int?): String = when (state) {
+        WifiP2pManager.WIFI_P2P_STATE_ENABLED -> "enabled"
+        WifiP2pManager.WIFI_P2P_STATE_DISABLED -> "disabled"
+        null -> "unknown"
+        else -> "state $state"
+    }
+
+    private fun discoveryStateName(state: Int?): String = when (state) {
+        WifiP2pManager.WIFI_P2P_DISCOVERY_STARTED -> "running"
+        WifiP2pManager.WIFI_P2P_DISCOVERY_STOPPED -> "stopped"
+        null -> "unknown"
+        else -> "state $state"
     }
 
     private fun statusName(status: Int): String = when (status) {

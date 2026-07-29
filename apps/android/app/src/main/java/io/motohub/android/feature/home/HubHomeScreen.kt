@@ -456,7 +456,15 @@ private fun ErrorBanner(
     onOpenAndroidAutoSettings: () -> Unit = {}
 ) {
     var expanded by rememberSaveable(message) { mutableStateOf(false) }
-    val hasExtra = showPortConflictHelp || showWifiSettingsAction || showAndroidAutoSetupHelp
+    // The official-app hint is evidence-based only for a port conflict; for every other
+    // connection failure it is one possible cause among several, so it moves behind the
+    // details fold - and it is dropped entirely for errors it cannot explain (phone Wi-Fi
+    // off, Android Auto self-mode), where it used to read as a false culprit.
+    val officialAppMayHoldTBox = officialCfmotoAppInstalled &&
+        !showWifiSettingsAction && !showAndroidAutoSetupHelp
+    val showOfficialAppHintProminently = officialAppMayHoldTBox && showPortConflictHelp
+    val hasExtra = showPortConflictHelp || showWifiSettingsAction || showAndroidAutoSetupHelp ||
+        (officialAppMayHoldTBox && !showOfficialAppHintProminently)
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -496,12 +504,11 @@ private fun ErrorBanner(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            if (officialCfmotoAppInstalled) {
-                // Android gives no way to ask whether another app is currently running, so
-                // "installed" is as close as we get to detecting that the official CFMOTO app may
-                // be holding the T-Box. It is the most common cause of a failed connection and the
-                // only fix is the rider force-stopping it from App info, so offer that directly
-                // rather than behind the details fold and only for one class of error.
+            if (showOfficialAppHintProminently) {
+                // A port conflict is the one failure the official app is known to cause, and
+                // Android gives no way to ask whether another app is currently running -
+                // "installed" is as close as detection gets. The only fix is the rider
+                // force-stopping it from App info, so offer that directly.
                 Text(
                     motoHubText("The official CFMOTO app is installed and may be holding the T-Box. Force-stop it from its App info page, then retry."),
                     style = MaterialTheme.typography.bodySmall,
@@ -517,6 +524,15 @@ private fun ErrorBanner(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+                if (officialAppMayHoldTBox && !showOfficialAppHintProminently) {
+                    Text(
+                        motoHubText("One possible cause: the official CFMOTO app is installed and can keep the T-Box link busy even in the background. If the connection keeps failing, force-stop it from its App info page, then retry."),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    SecondaryAction(motoHubText("Open CFMOTO app info"), onOpenOfficialCfmotoSettings)
+                    SecondaryAction(motoHubText("Retry connection"), onCloseOfficialCfmotoAndRetry)
                 }
                 if (showWifiSettingsAction) {
                     SecondaryAction("Open Wi-Fi settings", onOpenWifiSettings)
