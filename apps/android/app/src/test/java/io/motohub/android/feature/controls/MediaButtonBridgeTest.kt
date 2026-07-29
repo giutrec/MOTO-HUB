@@ -1,7 +1,9 @@
 package io.motohub.android.feature.controls
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MediaButtonBridgeTest {
@@ -87,5 +89,43 @@ class MediaButtonBridgeTest {
             assertEquals(gesture, handlebarGestureForSimulatorId(gesture.id))
         }
         assertNull(handlebarGestureForSimulatorId("missing"))
+    }
+
+    /**
+     * Regression: thresholds used to be a fixed number of steps, which assumed the common
+     * 0-15 volume scale. A OnePlus CPH2653 runs 0-160 and moves ten steps per key press
+     * (road test 2026-07-29), so every single press was being reported as a double.
+     */
+    @Test
+    fun `a single press on a fine-grained volume scale is not read as a double`() {
+        val read = interpretVolumeDelta(delta = -10, singleAction = HandlebarAction.BACK, streamMax = 160)
+
+        val tap = read as VolumeDeltaRead.Tap
+        assertEquals(HandlebarGesture.VOLUME_DOWN, tap.single)
+        assertFalse(tap.forceDouble)
+    }
+
+    /**
+     * Three presses' worth forces a double on any scale - the same rule the 15-step stream
+     * has always used, now counted in presses rather than raw steps. Two presses stay a
+     * single here exactly as they do on a coarse scale: the tap window pairs those.
+     */
+    @Test
+    fun `three coalesced presses on a fine-grained scale read as a double`() {
+        val two = interpretVolumeDelta(delta = 20, singleAction = HandlebarAction.BACK, streamMax = 160)
+        val three = interpretVolumeDelta(delta = 30, singleAction = HandlebarAction.BACK, streamMax = 160)
+
+        assertFalse((two as VolumeDeltaRead.Tap).forceDouble)
+        assertTrue((three as VolumeDeltaRead.Tap).forceDouble)
+    }
+
+    /** The classic 0-15 scale must keep behaving exactly as it did before. */
+    @Test
+    fun `a coarse scale keeps its original single and double thresholds`() {
+        val singlePress = interpretVolumeDelta(delta = 1, singleAction = HandlebarAction.BACK, streamMax = 15)
+        val doublePress = interpretVolumeDelta(delta = 3, singleAction = HandlebarAction.BACK, streamMax = 15)
+
+        assertFalse((singlePress as VolumeDeltaRead.Tap).forceDouble)
+        assertTrue((doublePress as VolumeDeltaRead.Tap).forceDouble)
     }
 }

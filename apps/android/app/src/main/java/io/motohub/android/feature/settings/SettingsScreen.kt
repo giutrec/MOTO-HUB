@@ -73,7 +73,12 @@ fun SettingsTabContent(
 ) {
     var detail by rememberSaveable { mutableStateOf<SettingsDetail?>(null) }
 
-    BackHandler(enabled = detail != null) { detail = null }
+    // The enum is flat but the screens are not: Language is reachable only from General, and
+    // its own "‹ General" link says so. Sending back to the root from there would skip a level
+    // and contradict the link right above it.
+    BackHandler(enabled = detail != null) {
+        detail = if (detail == SettingsDetail.LANGUAGE) SettingsDetail.GENERAL else null
+    }
 
     AnimatedContent(
         targetState = detail,

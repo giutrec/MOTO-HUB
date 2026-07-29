@@ -34,14 +34,22 @@ enum class HandlebarGesture(
     ENTER_DOUBLE("enterDouble", "Select double tap - Enter / Star", "Two presses inside the double-tap window", HandlebarAction.BACK),
     TRACK_BACK("trackBack", "Backward - Left", "Bluetooth previous-track command", HandlebarAction.SCROLL_BACK),
     TRACK_BACK_DOUBLE("trackBackDouble", "Backward double tap - Left", "Two previous-track presses inside the window", HandlebarAction.HOME),
+    // Only reachable on dashboards that report a key release separated in time from the press;
+    // see HandlebarControlStore.dashboardReportsHolds. Default NONE: on a dashboard that does
+    // not, these can never fire, and a default action would advertise something the hardware
+    // may not deliver.
+    TRACK_BACK_LONG("trackBackLong", "Backward hold - Left", "Requires a real Bluetooth key-up", HandlebarAction.NONE),
     TRACK_FORWARD("trackForward", "Forward - Right", "Bluetooth next-track command", HandlebarAction.SCROLL_FORWARD),
-    TRACK_FORWARD_DOUBLE("trackForwardDouble", "Forward double tap - Right", "Two next-track presses inside the window", HandlebarAction.BACK)
+    TRACK_FORWARD_DOUBLE("trackForwardDouble", "Forward double tap - Right", "Two next-track presses inside the window", HandlebarAction.BACK),
+    TRACK_FORWARD_LONG("trackForwardLong", "Forward hold - Right", "Requires a real Bluetooth key-up", HandlebarAction.NONE)
 }
 
 object HandlebarControlStore {
     private const val PREFERENCES = "handlebar_controls"
     private const val ENABLED = "enabled"
     private const val MANAGED_BY_COMPANION = "managed_by_companion"
+    private const val DASHBOARD_REPORTS_HOLDS = "dashboard_reports_holds"
+    private const val CALIBRATION_PREFIX = "calibrated_"
     /** Bumped when [defaultAction] values change — auto-migrates stored overrides. */
     private const val DEFAULTS_VER = 2
     private const val KEY_DEFAULTS_VER = "defaults_ver"
@@ -63,6 +71,20 @@ object HandlebarControlStore {
 
     fun setManagedByCompanion(context: Context, managed: Boolean) {
         preferences(context).edit().putBoolean(MANAGED_BY_COMPANION, managed).apply()
+    }
+
+    /**
+     * True once this phone has seen the dashboard report a key RELEASE for a previous/next
+     * press. Until then a hold on those buttons is undetectable - the press arrives, nothing
+     * says when it ended - so [HandlebarGesture.TRACK_BACK_LONG]/[HandlebarGesture.TRACK_FORWARD_LONG]
+     * stay dormant rather than guessing. The first release seen switches them on for good:
+     * the motorcycle proves the capability instead of the app assuming it.
+     */
+    fun dashboardReportsHolds(context: Context): Boolean =
+        preferences(context).getBoolean(DASHBOARD_REPORTS_HOLDS, false)
+
+    fun setDashboardReportsHolds(context: Context, reports: Boolean) {
+        preferences(context).edit().putBoolean(DASHBOARD_REPORTS_HOLDS, reports).apply()
     }
 
     fun action(context: Context, gesture: HandlebarGesture): HandlebarAction {

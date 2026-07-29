@@ -136,21 +136,53 @@ class MediaButtonBridge(
         }
     }
 
+    /** Whether this phone should hold the media volume in order to read volume-key presses. */
+    private var usesVolumeGestures = true
+
+    /** Last media volume seen by the observer, for the diagnostic trace only. */
+    private var lastObservedVolume = -1
+
+    /**
+     * True unless the rider has taught the app that their handlebar's volume presses never
+     * arrive. Before calibration the answer is yes: most dashboards do send them, and a
+     * missed gesture is worse than a held volume.
+     */
+    private fun volumeGesturesInUse(): Boolean {
+        if (!HandlebarCalibration.isCalibrated(context)) return true
+        return HandlebarCalibration.pressFor(context, HandlebarGesture.VOLUME_UP) != null ||
+            HandlebarCalibration.pressFor(context, HandlebarGesture.VOLUME_DOWN) != null ||
+            HandlebarCalibration.pressFor(context, HandlebarGesture.VOLUME_UP_DOUBLE) != null ||
+            HandlebarCalibration.pressFor(context, HandlebarGesture.VOLUME_DOWN_DOUBLE) != null
+    }
+
     private fun enableCapture() {
         if (session == null) {
             log("[BTN] Cannot enable capture before the $targetName service is ready")
             return
         }
         captureActive = true
-        if (previousVolume < 0) {
-            previousVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        // Pinning the media volume is how a volume-key press becomes readable as a gesture -
+        // the app holds the level and treats any drift as the rider pressing up or down. On a
+        // dashboard that never sends those presses to the phone (a CFDL16 keeps its rocker's
+        // short press for its own volume display, road test 2026-07-29) the pin buys nothing
+        // and costs the rider control of their own volume, so it is only taken when the rider
+        // has a volume-key press that actually arrives.
+        usesVolumeGestures = volumeGesturesInUse()
+        if (usesVolumeGestures) {
+            if (previousVolume < 0) {
+                previousVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+            }
+            pinVolume()
+        } else {
+            log("[BTN] volume keys are not delivered by this dashboard; leaving the media volume alone")
         }
-        pinVolume()
         val granted = requestMediaFocus()
         startSilentTrack()
         session?.isActive = true
         publishMetadata()
         postMediaNotification()
+        // Polling continues either way: with gestures off it only feeds the diagnostic trace,
+        // which is what proves whether the dashboard moves this phone's volume at all.
         startVolumePolling()
         log("[BTN] capture enabled; audio focus=${if (granted) "granted" else "denied"}")
     }
@@ -261,11 +293,24 @@ class MediaButtonBridge(
 
     /** Some Android builds do not notify Settings.System for Bluetooth absolute-volume changes. */
     private fun consumeVolumeChange() {
-        if (!captureActive || pinnedVolume < 0) return
-        if (ignoreVolumeChanges) return
-        val current = runCatching {
+        if (!captureActive) return
+        val observed = runCatching {
             audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
         }.getOrNull() ?: return
+        // Diagnostic first, before every guard below can swallow it: the open question on a
+        // CFDL16 is whether a short rocker press moves the phone's volume AT ALL (in which
+        // case it is recoverable) or stays inside the dashboard (in which case nothing can
+        // reach us). Only a trace that survives the guards can tell the two apart.
+        if (observed != lastObservedVolume) {
+            log(
+                "[BTN] media volume observed $lastObservedVolume -> $observed " +
+                    "(pinned=$pinnedVolume, ignoring=$ignoreVolumeChanges, gestures=$usesVolumeGestures)"
+            )
+            lastObservedVolume = observed
+        }
+        if (!usesVolumeGestures || pinnedVolume < 0) return
+        if (ignoreVolumeChanges) return
+        val current = observed
         if (current == pinnedVolume) return
         val delta = current - pinnedVolume
         // Re-pin under the ignore guard, like pinVolume()/setListeningVolume(): with Bluetooth
@@ -333,6 +378,13 @@ class MediaButtonBridge(
 
     private fun dispatch(gesture: HandlebarGesture) {
         if (!captureActive) return
+        // Published before anything consumes it, so the mapping screen shows what the
+        // handlebar sent even when the gesture is unmapped or swallowed by the dashboard.
+        HandlebarGestureFeed.publish(gesture)
+        if (HandlebarGestureFeed.isCaptureOnly()) {
+            log("[BTN] ${gesture.label} observed for calibration; not acted on")
+            return
+        }
         val handledByTarget = runCatching { gestureHandler?.invoke(gesture) == true }
             .onFailure { log("[BTN] $targetName gesture handler failed: ${it.message}") }
             .getOrDefault(false)
@@ -416,6 +468,8 @@ class MediaButtonBridge(
 
     private var selectDownAt = 0L
     private var lastSelectDispatchAt = 0L
+    /** Press instants of non-select media keys, kept only to time their release in the log. */
+    private val trackDownAt = mutableMapOf<Int, Long>()
 
     private fun isSelectKey(keyCode: Int) = keyCode == KeyEvent.KEYCODE_MEDIA_PLAY ||
         keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE ||
@@ -427,23 +481,70 @@ class MediaButtonBridge(
             isSelectKey(keyCode) -> if (selectDownAt == 0L) {
                 selectDownAt = SystemClock.elapsedRealtime()
             }
-            keyCode == KeyEvent.KEYCODE_MEDIA_NEXT || keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ->
-                detectDoubleTap(
-                    HandlebarGesture.TRACK_FORWARD,
-                    HandlebarGesture.TRACK_FORWARD_DOUBLE,
-                    forceDouble = false
-                )
-            keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS || keyCode == KeyEvent.KEYCODE_MEDIA_REWIND ->
-                detectDoubleTap(
-                    HandlebarGesture.TRACK_BACK,
-                    HandlebarGesture.TRACK_BACK_DOUBLE,
-                    forceDouble = false
-                )
+            isTrackKey(keyCode) -> {
+                trackDownAt[keyCode] = SystemClock.elapsedRealtime()
+                // Dashboards that never report a release give us one event per press and
+                // nothing else: dispatching here is the only chance to act on it. Where
+                // releases DO arrive, the decision waits for one, exactly as select does -
+                // a press cannot be known to be a tap until it ends.
+                if (!HandlebarControlStore.dashboardReportsHolds(context)) dispatchTrackTap(keyCode)
+            }
+        }
+    }
+
+    private fun isTrackKey(keyCode: Int) = keyCode == KeyEvent.KEYCODE_MEDIA_NEXT ||
+        keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ||
+        keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS ||
+        keyCode == KeyEvent.KEYCODE_MEDIA_REWIND
+
+    private fun isForwardKey(keyCode: Int) = keyCode == KeyEvent.KEYCODE_MEDIA_NEXT ||
+        keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD
+
+    private fun dispatchTrackTap(keyCode: Int) {
+        if (isForwardKey(keyCode)) {
+            detectDoubleTap(
+                HandlebarGesture.TRACK_FORWARD,
+                HandlebarGesture.TRACK_FORWARD_DOUBLE,
+                forceDouble = false
+            )
+        } else {
+            detectDoubleTap(
+                HandlebarGesture.TRACK_BACK,
+                HandlebarGesture.TRACK_BACK_DOUBLE,
+                forceDouble = false
+            )
         }
     }
 
     private fun onKeyUp(keyCode: Int) {
-        if (!isSelectKey(keyCode)) return
+        if (!isSelectKey(keyCode)) {
+            if (!isTrackKey(keyCode)) return
+            val downAt = trackDownAt.remove(keyCode)
+            if (downAt == null) {
+                log("[BTN] media key ${KeyEvent.keyCodeToString(keyCode)} released with no recorded press")
+                return
+            }
+            val heldMillis = SystemClock.elapsedRealtime() - downAt
+            val holdsKnown = HandlebarControlStore.dashboardReportsHolds(context)
+            log("[BTN] media key ${KeyEvent.keyCodeToString(keyCode)} released after ${heldMillis}ms")
+            if (!holdsKnown) {
+                // First release this dashboard has ever reported: it can time a hold after
+                // all. The press just gone was already dispatched on its key-down, so only
+                // the NEXT one takes the deferred path - no gesture is lost learning this.
+                HandlebarControlStore.setDashboardReportsHolds(context, true)
+                log("[BTN] dashboard reports key releases; hold on previous/next is now available")
+                return
+            }
+            if (heldMillis >= HandlebarTimingPrefs.selectHoldMillis(context)) {
+                dispatch(
+                    if (isForwardKey(keyCode)) HandlebarGesture.TRACK_FORWARD_LONG
+                    else HandlebarGesture.TRACK_BACK_LONG
+                )
+            } else {
+                dispatchTrackTap(keyCode)
+            }
+            return
+        }
         val startedAt = selectDownAt
         selectDownAt = 0L
         if (startedAt == 0L) {
@@ -637,6 +738,11 @@ internal sealed interface VolumeDeltaRead {
  * bike wrote 70 → delta −89), so a jump of a quarter of the stream range or more is read as ONE
  * press of that sign. A genuine double press arrives as two separate overwrites and still
  * becomes a double through the tap window.
+ *
+ * Every threshold is a FRACTION of [streamMax], never a fixed number of steps. Phones disagree
+ * wildly on how fine that scale is: the usual 0-15 moves one step per key press, while a
+ * OnePlus CPH2653 runs 0-160 and moves ten (road test 2026-07-29) - and against a fixed
+ * 3-step threshold every single press on that phone was read as a double.
  */
 internal fun interpretVolumeDelta(
     delta: Int,
@@ -652,10 +758,19 @@ internal fun interpretVolumeDelta(
     if (magnitude >= absoluteOverwriteFloor) {
         return VolumeDeltaRead.Tap(single, double, forceDouble = false)
     }
+    // Count PRESSES, not raw steps. One press of a hardware volume key moves about a
+    // fifteenth of the range whatever the scale - 1 step of 15, ten of 160 - and judging raw
+    // steps made every single press on a fine-grained phone look like a double (OnePlus
+    // CPH2653, 0-160, road test 2026-07-29). A delta smaller than one press did not come
+    // from a key at all but from a peer writing in its own units, like the T-Box simulator's
+    // ±1/±3 on a 255-step stream, and there the raw step count keeps its field-proven meaning.
+    val singlePressStep = maxOf(streamMax / 15, 1)
+    val presses = magnitude / singlePressStep
+    val effective = if (presses >= 1) presses else magnitude
     val scrollMapped = singleAction == HandlebarAction.SCROLL_FORWARD ||
         singleAction == HandlebarAction.SCROLL_BACK
-    if (scrollMapped && magnitude in 2 until DOUBLE_PRESS_VOLUME_STEPS) {
-        return VolumeDeltaRead.ScrollClicks(single, magnitude)
+    if (scrollMapped && effective in 2 until DOUBLE_PRESS_VOLUME_STEPS) {
+        return VolumeDeltaRead.ScrollClicks(single, effective)
     }
-    return VolumeDeltaRead.Tap(single, double, magnitude >= DOUBLE_PRESS_VOLUME_STEPS)
+    return VolumeDeltaRead.Tap(single, double, effective >= DOUBLE_PRESS_VOLUME_STEPS)
 }
