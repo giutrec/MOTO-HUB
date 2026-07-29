@@ -135,15 +135,21 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         TBoxSessionRegistry.claim(SESSION_CONSUMER)
         startSimulatorHandlebarBridgeIfNeeded(handle)
         val cachedCapabilities = capabilityStore.load(handle.motorcycle)?.capabilities
+        val profileOverride = ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
         val modelProfile = TBoxModelProfile.resolve(
             handle.motorcycle.modelId,
             cachedCapabilities,
-            ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
+            profileOverride
         )
-        if (cachedCapabilities != null && MotoHubSettings.verboseTBoxLogging(this)) {
+        // Landing on GENERIC means no profile recognised this dashboard, which is exactly the
+        // case a rider cannot diagnose from the outside - so the scores go in the log whether or
+        // not verbose logging is on. Everything else stays behind the setting.
+        if (cachedCapabilities != null &&
+            (modelProfile == TBoxModelProfile.GENERIC || MotoHubSettings.verboseTBoxLogging(this))
+        ) {
             ProjectionEventLog.debug(
                 "T-BOX",
-                "Profile scores (verbose): ${TBoxModelProfile.scoreBreakdown(cachedCapabilities)}."
+                "Profile scores: ${TBoxModelProfile.scoreBreakdown(cachedCapabilities)}."
             )
         }
         val touchEnabled = modelProfile.supportsScreenTouch &&
@@ -156,11 +162,13 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         val learnedGeometry = displayGeometryStore.load(handle.motorcycle.ssid)
         val fallbackPreset = TBoxModelProfile.defaultAndroidAutoPreset(
             handle.motorcycle.modelId,
-            cachedCapabilities
+            cachedCapabilities,
+            profileOverride
         )
         val fallbackIsValidated = TBoxModelProfile.hasValidatedAndroidAutoPreset(
             handle.motorcycle.modelId,
-            cachedCapabilities
+            cachedCapabilities,
+            profileOverride
         )
         val usableLearnedGeometry = AndroidAutoCapabilityProfiles.usableSavedGeometryForAuto(
             learnedGeometry,

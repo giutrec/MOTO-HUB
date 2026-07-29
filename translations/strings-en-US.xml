@@ -1261,4 +1261,16 @@
     <string name="legacy_the_official_cfmoto_motoplay_easyconn_app_can_st_7e0ae938">The official CFMOTO MotoPlay/EasyConn app can still take over the T-Box connection while it is in the background. For reliable projection, force-stop it in Android settings before continuing.</string>
     <string name="legacy_continue_with_android_auto_f6c7ef01">Continue with Android Auto</string>
     <string name="legacy_open_motoplay_settings_99bbfe9c">Open MotoPlay settings</string>
+    <!-- Source: tbox/ProfileOverride.kt -->
+    <string name="legacy_generic_dashboard_53d1376b">Generic dashboard</string>
+    <!-- Source: tbox/ProfileOverride.kt -->
+    <string name="legacy_neutral_defaults_for_a_dashboard_that_is_not_rec_8d299cf0">Neutral defaults for a dashboard that is not recognised</string>
+    <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
+    <string name="legacy_unfamiliar_pairing_code_714f8ce7">Unfamiliar pairing code</string>
+    <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
+    <string name="legacy_this_code_carries_wi_fi_details_for_1_s_but_it_w_422a5994">This code carries Wi-Fi details for %1$s, but it was not issued by a Carbit address like the dashboards MOTO-HUB knows.</string>
+    <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
+    <string name="legacy_several_manufacturers_ship_the_same_dashboard_so_49305d38">Several manufacturers ship the same dashboard software under their own branding, so this may well be your motorcycle. Continue only if you scanned it from your own dashboard.</string>
+    <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
+    <string name="legacy_use_these_details_52f852ac">Use these details</string>
 </resources>

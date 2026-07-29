@@ -350,6 +350,9 @@ private class TBoxQrAnalyzer(
                     onStatus("Unrecognized QR code: ${failure.message.orEmpty()}")
                     return@addOnSuccessListener
                 }
+                if (payload.origin == TBoxQrOrigin.UNVERIFIED) {
+                    onStatus("Network details read from an unfamiliar code. Confirm to continue.")
+                }
                 if (delivered.compareAndSet(false, true)) onPayload(payload)
             }
             .addOnFailureListener {

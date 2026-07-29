@@ -4,8 +4,8 @@ package io.motohub.android.tbox
 internal object TBoxConflictDiagnostics {
     const val PORT_CONFLICT_MESSAGE =
         "Another EasyConn session is already using the local connection ports (10920-10922). " +
-            "Stop any active MOTO-HUB session or force-stop the official CFMOTO/EasyConnect app, " +
-            "then retry the connection."
+            "Stop any active MOTO-HUB session, or force-stop your motorcycle's own companion app " +
+            "(CFMOTO EasyConnect and the equivalents other brands ship), then retry the connection."
 
     fun isPortConflict(message: String?): Boolean {
         val detail = message.orEmpty().lowercase()

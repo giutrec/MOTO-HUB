@@ -70,9 +70,10 @@ fun AboutScreen(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "MOTO-HUB connects an Android 14+ phone to compatible EasyConn " +
-                        "T-Box motorcycle displays. It supports screen and app mirroring, " +
-                        "Android Auto projection, saved motorcycle profiles, and on-device diagnostics.",
+                    text = "MOTO-HUB connects an Android 14+ phone to a motorcycle dashboard that " +
+                        "pairs over EasyConn — the Carbit software several manufacturers ship, " +
+                        "CFMOTO among them. It supports screen and app mirroring, Android Auto " +
+                        "projection, saved motorcycle profiles, and on-device diagnostics.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -129,8 +130,10 @@ fun AboutScreen(
             DisclaimerCard()
 
             Text(
-                text = "MOTO-HUB is an independent project and is not affiliated with or endorsed " +
-                    "by CFMOTO, EasyConn, MotoPlay, Google, or Android Auto.",
+                text = "MOTO-HUB is an independent project. It is not affiliated with, endorsed by, " +
+                    "or sponsored by Carbit, CFMOTO, any other manufacturer whose dashboard uses " +
+                    "EasyConn, Google, or Android Auto. All product names and marks belong to " +
+                    "their respective owners.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp)
@@ -194,9 +197,11 @@ private fun DisclaimerCard() {
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "It has been built and tested with a CFMOTO 700MT-ADV dashboard and " +
-                    "OnePlus 13 / Galaxy Z Fold4 phones. It may behave differently, require retries, " +
-                    "or fail on other motorcycles, T-Box firmware versions, and phones.",
+                text = "Development and testing happen on a CFMOTO 700MT-ADV dashboard with " +
+                    "OnePlus 13 / Galaxy Z Fold4 phones. Other motorcycles, brands, T-Box " +
+                    "firmware versions and phones are untested here: expect different behaviour, " +
+                    "retries, or no connection at all. If the dashboard shows a pairing QR code, " +
+                    "it is worth trying.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

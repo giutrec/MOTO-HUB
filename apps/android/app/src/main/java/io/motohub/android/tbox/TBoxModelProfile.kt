@@ -161,9 +161,14 @@ enum class TBoxModelProfile(
         requiresSockAuth = false,
         advertisedSupportFunction = 0
     ),
+    /**
+     * Where every dashboard no other profile claims ends up, whatever badge is on the tank. The
+     * geometry here is a starting point, not a measurement: once the dash reports a live video
+     * area it is learned per SSID and drives the next session (see TBoxDisplayGeometryStore).
+     */
     GENERIC(
         key = "generic",
-        displayName = "Generic CFMOTO T-Box",
+        displayName = "Generic EasyConn dashboard",
         modelIds = emptySet(),
         mapTilesRequireCellular = true,
         // Existing generic compatibility profile; never treated as live geometry.
@@ -334,18 +339,25 @@ enum class TBoxModelProfile(
 
         fun defaultAndroidAutoPreset(
             modelId: String?,
-            capabilities: TBoxCapabilities?
-        ): AndroidAutoVideoPreset = resolve(modelId, capabilities).defaultAndroidAutoPreset
+            capabilities: TBoxCapabilities?,
+            profileOverride: ProfileOverride? = null
+        ): AndroidAutoVideoPreset =
+            resolve(modelId, capabilities, profileOverride).defaultAndroidAutoPreset
 
         /**
          * True when [defaultAndroidAutoPreset] comes from a recognized dash rather than
          * [GENERIC]. Only a recognized profile's orientation is evidence about the hardware;
          * see AndroidAutoCapabilityProfiles.usableSavedGeometryForAuto.
+         *
+         * A rider who pinned [ProfileOverride.GENERIC] is stating the opposite — that nothing here
+         * is known-good — so the override has to reach this answer too, otherwise the pin would
+         * silently keep the veto of whichever profile detection had guessed.
          */
         fun hasValidatedAndroidAutoPreset(
             modelId: String?,
-            capabilities: TBoxCapabilities?
-        ): Boolean = resolve(modelId, capabilities) != GENERIC
+            capabilities: TBoxCapabilities?,
+            profileOverride: ProfileOverride? = null
+        ): Boolean = resolve(modelId, capabilities, profileOverride) != GENERIC
 
         fun fallbackVideoArea(
             modelId: String?,

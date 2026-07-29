@@ -5,7 +5,9 @@ package io.motohub.android.tbox
  * [AUTO] lets the app detect the profile from QR/modelId/CLIENT_INFO;
  * any other entry pins that profile regardless of detection.
  *
- * Mirrors the same profiles available in OpenCfMoto.
+ * [GENERIC] is the one entry that pins *less* rather than more. Detection can only recognise
+ * dashboards it has seen, so a rider whose dashboard scores against the wrong profile has no way
+ * back to the neutral defaults without it — [AUTO] would just re-run the same mistaken match.
  */
 enum class ProfileOverride(
     val key: String,
@@ -13,6 +15,7 @@ enum class ProfileOverride(
     val description: String
 ) {
     AUTO("auto", "Auto", "Detect from the motorcycle (recommended)"),
+    GENERIC("generic", "Generic dashboard", "Neutral defaults for a dashboard that is not recognised"),
     LEGACY_CFDL16("legacy_cfdl16", "CFDL16 / Legacy", "CFDL16 / 450SR-style non-touch"),
     CFMOTO_800NK("cfmoto_800nk", "CFMOTO 800NK", "CRCP / sdk 0.9.23.x non-touch"),
     CFMOTO_MTX800("cfmoto_mtx800", "CFMOTO MTX800", "Portrait Wi-Fi Direct dashboard, modelId 66660732"),
@@ -25,6 +28,7 @@ enum class ProfileOverride(
 
     fun resolve(): TBoxModelProfile? = when (this) {
         AUTO -> null
+        GENERIC -> TBoxModelProfile.GENERIC
         LEGACY_CFDL16 -> TBoxModelProfile.LEGACY_CFDL16
         CFMOTO_800NK -> TBoxModelProfile.CFMOTO_800NK
         CFMOTO_MTX800 -> TBoxModelProfile.CFMOTO_MTX800

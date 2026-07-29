@@ -416,7 +416,7 @@ class RideDaemonTransport(
 
         // Infrastructure fallback: the probe ACK on an AP link only re-arms one more NSD window;
         // the host/port must still come from a genuine advertisement (see TBOX_STREAMING_CONTRACT.md).
-        if (sendEasyConnWakeProbe(link)) {
+        if (sendEasyConnWakeProbe(link) != null) {
             try {
                 return withTimeout(DISCOVERY_TIMEOUT_MS) { discoverWithAndroidNsd(link, expectedModelId) }
             } catch (timeout: TimeoutCancellationException) {
@@ -439,12 +439,13 @@ class RideDaemonTransport(
      */
     private suspend fun discoverOverWifiDirect(link: TBoxLink.WifiDirect): TBoxHost {
         val peerAddress = link.gatewayIp.hostAddress
-        if (sendEasyConnWakeProbe(link) && peerAddress != null) {
+        val acknowledged = sendEasyConnWakeProbe(link)
+        if (acknowledged != null && peerAddress != null) {
             ProjectionEventLog.record(
                 "DISCOVERY",
                 "Wi-Fi Direct EasyConn endpoint confirmed at $peerAddress:$WAKE_PROBE_PORT."
             )
-            return TBoxHost(peerAddress, WAKE_PROBE_PORT, SYNTHESIZED_EASYCONN_PACKAGE)
+            return TBoxHost(peerAddress, WAKE_PROBE_PORT, acknowledged)
         }
         // Some firmware variants refuse 10930 outright (observed as ECONNREFUSED on T-Boxes the
         // reference projects never reverse-engineered) while answering the same handshake on a
@@ -452,20 +453,21 @@ class RideDaemonTransport(
         // ports and retry the ACK-verified wake probe there - the endpoint is only ever used
         // when the full CMD_MDNS_RESPOND handshake completed, never invented from an open port.
         if (peerAddress != null) {
-            val fallbackPort = probeFallbackEasyConnPort(link)
-            if (fallbackPort != null) {
+            val fallback = probeFallbackEasyConnPort(link)
+            if (fallback != null) {
+                val (fallbackPort, fallbackIdentity) = fallback
                 ProjectionEventLog.record(
                     "DISCOVERY",
                     "Wi-Fi Direct EasyConn endpoint confirmed on fallback port " +
                         "$peerAddress:$fallbackPort."
                 )
-                return TBoxHost(peerAddress, fallbackPort, SYNTHESIZED_EASYCONN_PACKAGE)
+                return TBoxHost(peerAddress, fallbackPort, fallbackIdentity)
             }
         }
         throw IllegalStateException(
             "The Wi-Fi Direct dash did not answer an EasyConn wake probe at " +
                 "${link.gatewayIp.hostAddress}:$WAKE_PROBE_PORT (or on any nearby fallback port). " +
-                "The dash may still be starting up, or the official CFMOTO app may already be " +
+                "The dash may still be starting up, or its own companion app may already be " +
                 "connected to it."
         )
     }
@@ -473,9 +475,10 @@ class RideDaemonTransport(
     /**
      * Sweeps the candidate EasyConn ports over the P2P link and retries the wake probe on any
      * that accept a TCP connection. Returns the first port whose CMD_MDNS_RESPOND handshake
-     * completes, or null when none does.
+     * completes together with the client identity that earned the acknowledgement, or null when
+     * no combination answers.
      */
-    private suspend fun probeFallbackEasyConnPort(link: TBoxLink.WifiDirect): Int? =
+    private suspend fun probeFallbackEasyConnPort(link: TBoxLink.WifiDirect): Pair<Int, String>? =
         withContext(Dispatchers.IO) {
             val openPorts = FALLBACK_EC_PORTS.filter { port ->
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
@@ -502,23 +505,37 @@ class RideDaemonTransport(
                 "Fallback port sweep: open candidates ${openPorts.joinToString()} on " +
                     "${link.gatewayIp.hostAddress}; retrying the wake probe on each."
             )
-            for (port in openPorts) {
-                kotlinx.coroutines.currentCoroutineContext().ensureActive()
-                try {
-                    link.createSocket().use { socket ->
-                        socket.connect(
-                            InetSocketAddress(link.gatewayIp, port),
-                            FALLBACK_PORT_CONNECT_TIMEOUT_MS
+            // Identity first, ports second: sweeping every open port with the leading identity
+            // before reaching for an alternate keeps the common case as quick as it was, and the
+            // port a dash answers on is far less predictable than the name it accepts.
+            for (identity in EasyConnClientIdentity.probeOrder()) {
+                for (port in openPorts) {
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    try {
+                        link.createSocket().use { socket ->
+                            socket.connect(
+                                InetSocketAddress(link.gatewayIp, port),
+                                FALLBACK_PORT_CONNECT_TIMEOUT_MS
+                            )
+                            socket.soTimeout = WAKE_PROBE_READ_TIMEOUT_MS
+                            writeWakeProbeFrame(socket.getOutputStream(), identity)
+                            if (readWakeProbeAck(socket.getInputStream())) {
+                                ProjectionEventLog.record(
+                                    "DISCOVERY",
+                                    "Fallback wake probe on port $port acknowledged as " +
+                                        "\"$identity\"; later probes will lead with it."
+                                )
+                                EasyConnClientIdentity.remember(identity)
+                                return@withContext port to identity
+                            }
+                        }
+                    } catch (failure: Throwable) {
+                        ProjectionEventLog.debug(
+                            "DISCOVERY",
+                            "Fallback wake probe on port $port as \"$identity\" failed: " +
+                                "${failure.message}."
                         )
-                        socket.soTimeout = WAKE_PROBE_READ_TIMEOUT_MS
-                        writeWakeProbeFrame(socket.getOutputStream())
-                        if (readWakeProbeAck(socket.getInputStream())) return@withContext port
                     }
-                } catch (failure: Throwable) {
-                    ProjectionEventLog.debug(
-                        "DISCOVERY",
-                        "Fallback wake probe on port $port failed: ${failure.message}."
-                    )
                 }
             }
             null
@@ -532,7 +549,15 @@ class RideDaemonTransport(
      * Wi-Fi Direct group (where NSD has no bindable Network) the ACK-confirmed endpoint is used
      * directly as the EC host/port; on infrastructure links it only re-arms one more NSD window.
      */
-    private suspend fun sendEasyConnWakeProbe(link: TBoxLink): Boolean = withContext(Dispatchers.IO) {
+    /**
+     * @return the client identity the dash acknowledged, or null when none of them was answered.
+     *
+     * The leading identity keeps the whole retry budget to itself, because those retries exist for
+     * a dash that is merely still booting and swapping names between them would answer a slow dash
+     * with a name it never accepts. Only once that identity has been given every chance do the
+     * alternates get one attempt each — extra time paid solely by riders the proven name failed.
+     */
+    private suspend fun sendEasyConnWakeProbe(link: TBoxLink): String? = withContext(Dispatchers.IO) {
         val peerIp = link.peerHint ?: link.network?.let { network ->
             connectivityManager.getLinkProperties(network)?.let { properties ->
                 deriveTBoxPeerIpv4(
@@ -544,47 +569,54 @@ class RideDaemonTransport(
         }
         if (peerIp == null) {
             ProjectionEventLog.debug("DISCOVERY", "Wake probe skipped: no usable peer IPv4 could be derived.")
-            return@withContext false
+            return@withContext null
         }
+        val identities = EasyConnClientIdentity.probeOrder()
         ProjectionEventLog.record(
             "DISCOVERY",
-            "Sending an EasyConn wake probe to ${peerIp.hostAddress}:$WAKE_PROBE_PORT."
+            "Sending an EasyConn wake probe to ${peerIp.hostAddress}:$WAKE_PROBE_PORT " +
+                "(identities: ${identities.joinToString()})."
         )
-        repeat(WAKE_PROBE_ATTEMPTS) { attempt ->
-            kotlinx.coroutines.currentCoroutineContext().ensureActive()
-            try {
-                link.createSocket().use { socket ->
-                    socket.connect(InetSocketAddress(peerIp, WAKE_PROBE_PORT), WAKE_PROBE_CONNECT_TIMEOUT_MS)
-                    socket.soTimeout = WAKE_PROBE_READ_TIMEOUT_MS
-                    writeWakeProbeFrame(socket.getOutputStream())
-                    if (readWakeProbeAck(socket.getInputStream())) {
-                        ProjectionEventLog.record(
-                            "DISCOVERY",
-                            "T-Box acknowledged the wake probe on attempt " +
-                                "${attempt + 1}/$WAKE_PROBE_ATTEMPTS."
-                        )
-                        return@withContext true
+        identities.forEachIndexed { position, identity ->
+            val budget = if (position == 0) WAKE_PROBE_ATTEMPTS else 1
+            repeat(budget) { attempt ->
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                try {
+                    link.createSocket().use { socket ->
+                        socket.connect(InetSocketAddress(peerIp, WAKE_PROBE_PORT), WAKE_PROBE_CONNECT_TIMEOUT_MS)
+                        socket.soTimeout = WAKE_PROBE_READ_TIMEOUT_MS
+                        writeWakeProbeFrame(socket.getOutputStream(), identity)
+                        if (readWakeProbeAck(socket.getInputStream())) {
+                            ProjectionEventLog.record(
+                                "DISCOVERY",
+                                "T-Box acknowledged the wake probe as \"$identity\" on attempt " +
+                                    "${attempt + 1}/$budget."
+                            )
+                            EasyConnClientIdentity.remember(identity)
+                            return@withContext identity
+                        }
                     }
+                    ProjectionEventLog.debug(
+                        "DISCOVERY",
+                        "Wake probe attempt ${attempt + 1}/$budget as \"$identity\": " +
+                            "no acknowledgement."
+                    )
+                } catch (failure: Throwable) {
+                    ProjectionEventLog.debug(
+                        "DISCOVERY",
+                        "Wake probe attempt ${attempt + 1}/$budget as \"$identity\" to " +
+                            "${peerIp.hostAddress}:$WAKE_PROBE_PORT failed: ${failure.message}."
+                    )
                 }
-                ProjectionEventLog.debug(
-                    "DISCOVERY",
-                    "Wake probe attempt ${attempt + 1}/$WAKE_PROBE_ATTEMPTS: no acknowledgement."
-                )
-            } catch (failure: Throwable) {
-                ProjectionEventLog.debug(
-                    "DISCOVERY",
-                    "Wake probe attempt ${attempt + 1}/$WAKE_PROBE_ATTEMPTS to " +
-                        "${peerIp.hostAddress}:$WAKE_PROBE_PORT failed: ${failure.message}."
-                )
+                if (attempt < budget - 1) delay(WAKE_PROBE_RETRY_DELAY_MS)
             }
-            if (attempt < WAKE_PROBE_ATTEMPTS - 1) delay(WAKE_PROBE_RETRY_DELAY_MS)
         }
-        false
+        null
     }
 
     /** 16-byte little-endian header (cmd, totalLen, cmd xor totalLen, reserved) plus JSON payload. */
-    private fun writeWakeProbeFrame(out: OutputStream) {
-        val payload = WAKE_PROBE_JSON.toByteArray(Charsets.UTF_8)
+    private fun writeWakeProbeFrame(out: OutputStream, identity: String) {
+        val payload = EasyConnClientIdentity.probeBody(identity).toByteArray(Charsets.UTF_8)
         val totalLen = WAKE_PROBE_HEADER_SIZE + payload.size
         val header = ByteBuffer.allocate(WAKE_PROBE_HEADER_SIZE).order(ByteOrder.LITTLE_ENDIAN)
         header.putInt(0, CMD_MDNS_RESPOND)
@@ -1012,12 +1044,9 @@ class RideDaemonTransport(
         const val WAKE_PROBE_HEADER_SIZE = 16
         const val CMD_MDNS_RESPOND = 0x70000010
         const val CMD_MDNS_RESPOND_ACK = 0x70000011
-        // Only used to build a TBoxHost when a Wi-Fi Direct group has confirmed the EC endpoint via
-        // a wake-probe ACK but NSD cannot resolve the package (no bindable Network over P2P). This
-        // is the package the reference implementations present to CFMoto dashes.
-        const val SYNTHESIZED_EASYCONN_PACKAGE = "com.cfmoto.cfmotointernational"
-        const val WAKE_PROBE_JSON =
-            "{\"phoneType\":\"Android\",\"packageName\":\"com.cfmoto.cfmotointernational\"}"
+        // The identity presented in the probe body - and, on a Wi-Fi Direct group where NSD has no
+        // bindable Network to resolve a package from, the one recorded on the resulting TBoxHost -
+        // is whichever candidate the dash acknowledged. See EasyConnClientIdentity.
         const val MEDIA_CONTROL_EVENT_SOURCE = 3L
         const val PXC_EVENT_SOURCE = 2L
         /** Bounds for the always-on first-occurrence dump of unknown protocol commands. */

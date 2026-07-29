@@ -56,15 +56,25 @@ object TBoxQrPhotoDecoder {
             onResult(result)
         }
 
+        // A photo of a dash can also catch a poster, a sticker or a second screen. When a crop
+        // yields credentials from an unfamiliar host we hold on to it and keep looking: a Carbit
+        // code found in a later crop is the better answer, and the held candidate is only returned
+        // once every crop has been tried.
+        var unverified: TBoxQrPayload? = null
+
         fun attempt(index: Int, lastFailure: Throwable?) {
             if (index > photoSpecs.size) {
                 onProgress(totalAttempts, totalAttempts)
+                val held = unverified
                 finish(
-                    Result.failure(
-                        lastFailure ?: IllegalArgumentException(
-                            "The selected photo does not contain a readable EasyConn T-Box QR code."
+                    when {
+                        held != null -> Result.success(held)
+                        else -> Result.failure(
+                            lastFailure ?: IllegalArgumentException(
+                                "The selected photo does not contain a readable QR code."
+                            )
                         )
-                    )
+                    }
                 )
                 return
             }
@@ -86,12 +96,13 @@ object TBoxQrPhotoDecoder {
             // still the authority for accepting the decoded payload.
             val zxingPayload = prepared?.bitmap?.let(::decodeWithZxing)
             if (zxingPayload != null) {
-                val parsed = TBoxQrParser.parse(zxingPayload)
-                if (parsed.isSuccess) {
+                val parsed = TBoxQrParser.parse(zxingPayload).getOrNull()
+                if (parsed?.origin == TBoxQrOrigin.CARBIT) {
                     prepared.recycle()
-                    finish(parsed)
+                    finish(Result.success(parsed))
                     return
                 }
+                if (parsed != null && unverified == null) unverified = parsed
             }
 
             scanner.process(image)
@@ -100,11 +111,15 @@ object TBoxQrPhotoDecoder {
                     var parseFailure: Throwable? = null
                     for (rawValue in codes.mapNotNull { it.rawValue }) {
                         val parsed = TBoxQrParser.parse(rawValue)
-                        if (parsed.isSuccess) {
-                            finish(parsed)
-                            return@addOnSuccessListener
+                        val payload = parsed.getOrNull()
+                        when {
+                            payload?.origin == TBoxQrOrigin.CARBIT -> {
+                                finish(Result.success(payload))
+                                return@addOnSuccessListener
+                            }
+                            payload != null -> if (unverified == null) unverified = payload
+                            else -> parseFailure = parsed.exceptionOrNull()
                         }
-                        parseFailure = parsed.exceptionOrNull()
                     }
                     attempt(index + 1, parseFailure ?: lastFailure)
                 }

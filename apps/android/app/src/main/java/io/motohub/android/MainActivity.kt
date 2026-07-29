@@ -73,10 +73,12 @@ import io.motohub.android.feature.diagnostics.NetworkDiagnosticsViewModel
 import io.motohub.android.feature.diagnostics.ApplicationLogScreen
 import io.motohub.android.feature.diagnostics.DiagnosticLogShare
 import io.motohub.android.feature.pairing.ManualPairingScreen
-import io.motohub.android.feature.pairing.TBoxQrParser
+import io.motohub.android.feature.pairing.TBoxQrOrigin
+import io.motohub.android.feature.pairing.TBoxQrPayload
 import io.motohub.android.feature.pairing.TBoxQrPhotoDecoder
 import io.motohub.android.feature.pairing.TBoxQrPhotoProcessingDialog
 import io.motohub.android.feature.pairing.TBoxQrScannerScreen
+import io.motohub.android.feature.pairing.UnverifiedQrDialog
 import io.motohub.android.feature.safety.SafetyDisclaimerDialog
 import io.motohub.android.feature.settings.MotoHubSettings
 import io.motohub.android.feature.settings.SettingsTabContent
@@ -193,12 +195,28 @@ class MainActivity : ComponentActivity() {
                 var installingUpdateProgress by remember { mutableStateOf<DownloadProgress?>(null) }
                 var qrPhotoProcessing by remember { mutableStateOf(false) }
                 var qrPhotoProgress by remember { mutableStateOf(0 to 0) }
+                var pendingUnverifiedQr by remember { mutableStateOf<TBoxQrPayload?>(null) }
                 var lastAutoConnectAttemptAt by remember { mutableStateOf(0L) }
                 var editorProfileId by rememberSaveable { mutableStateOf<String?>(null) }
                 var capabilityProfileId by rememberSaveable { mutableStateOf<String?>(null) }
                 var photoTargetProfileId by rememberSaveable { mutableStateOf<String?>(null) }
                 var returnToGarageAfterPairing by rememberSaveable { mutableStateOf(false) }
                 val context = LocalContext.current
+
+                // A code served by a Carbit address is saved straight away; anything else decoded
+                // cleanly but from an address we cannot vouch for waits for the rider to confirm.
+                fun acceptQrPayload(payload: TBoxQrPayload) {
+                    if (payload.origin == TBoxQrOrigin.CARBIT) {
+                        viewModel.applyQrPairing(payload)
+                    } else {
+                        ProjectionEventLog.record(
+                            "PAIRING",
+                            "QR decoded from an unrecognised provisioning source; " +
+                                "asking the rider before saving ssid=${payload.ssid}."
+                        )
+                        pendingUnverifiedQr = payload
+                    }
+                }
                 LaunchedEffect(Unit) {
                     // Cold start: the launch Intent is available before composition, so start
                     // directly here; the SharedFlow event below is only for warm starts.
@@ -641,14 +659,14 @@ class MainActivity : ComponentActivity() {
                     ) { result ->
                         qrPhotoProcessing = false
                         result
-                            .onSuccess(viewModel::applyQrPairing)
+                            .onSuccess(::acceptQrPayload)
                             .onFailure { failure ->
                                 ProjectionEventLog.debug(
                                     "PAIRING",
                                     "QR photo decoding failed after preprocessing attempts: ${failure.message}"
                                 )
                                 viewModel.onQrImportFailed(
-                                    "The photo does not contain a readable EasyConn T-Box QR code."
+                                    "No QR code with motorcycle Wi-Fi details could be read from the photo."
                                 )
                             }
                     }
@@ -838,7 +856,7 @@ class MainActivity : ComponentActivity() {
                 } else if (showQrScanner) {
                     TBoxQrScannerScreen(
                         onPayload = { payload ->
-                            viewModel.applyQrPairing(payload)
+                            acceptQrPayload(payload)
                             ProjectionEventLog.record("UI", "QR scanner closed after a valid code.")
                             showQrScanner = false
                             if (returnToGarageAfterPairing) {
@@ -931,7 +949,7 @@ class MainActivity : ComponentActivity() {
                             // plain retry for after the user has force-stopped the official app.
                             ProjectionEventLog.record(
                                 "CONNECTION",
-                                "Retry requested from the port-conflict help."
+                                "Retry requested from the official-app conflict help."
                             )
                             lifecycleScope.launch {
                                 delay(OFFICIAL_APP_CLOSE_RETRY_DELAY_MS)
@@ -1178,6 +1196,26 @@ class MainActivity : ComponentActivity() {
                     TBoxQrPhotoProcessingDialog(
                         completedAttempts = qrPhotoProgress.first,
                         totalAttempts = qrPhotoProgress.second
+                    )
+                }
+                pendingUnverifiedQr?.let { payload ->
+                    UnverifiedQrDialog(
+                        payload = payload,
+                        onConfirm = {
+                            pendingUnverifiedQr = null
+                            ProjectionEventLog.record(
+                                "PAIRING",
+                                "Rider confirmed the unrecognised pairing code for ssid=${payload.ssid}."
+                            )
+                            viewModel.applyQrPairing(payload)
+                        },
+                        onDismiss = {
+                            pendingUnverifiedQr = null
+                            ProjectionEventLog.record(
+                                "PAIRING",
+                                "Rider declined the unrecognised pairing code for ssid=${payload.ssid}."
+                            )
+                        }
                     )
                 }
                 if (showOfficialCfmotoWarning) {

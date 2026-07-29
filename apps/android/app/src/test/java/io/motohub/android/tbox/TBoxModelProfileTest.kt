@@ -33,6 +33,39 @@ class TBoxModelProfileTest {
     }
 
     @Test
+    fun `pinning the generic override beats a recognised model id`() {
+        // Detection would land on CFMOTO_800NK here. A rider who pinned Generic is saying the
+        // match is wrong, so the pin has to win over the model id, not merely over an empty one.
+        assertEquals(
+            TBoxModelProfile.GENERIC,
+            TBoxModelProfile.resolve("66660703", null, ProfileOverride.GENERIC)
+        )
+        assertEquals(
+            TBoxEvent.VideoArea(800, 480),
+            TBoxModelProfile.fallbackVideoArea("66660703", null, ProfileOverride.GENERIC)
+        )
+    }
+
+    @Test
+    fun `pinning the generic override withdraws the validated-preset veto`() {
+        assertEquals(
+            true,
+            TBoxModelProfile.hasValidatedAndroidAutoPreset("66660703", null)
+        )
+        // Without this, a pinned Generic would keep vetoing learned geometry on the strength of
+        // the very profile the rider rejected.
+        assertFalse(
+            TBoxModelProfile.hasValidatedAndroidAutoPreset("66660703", null, ProfileOverride.GENERIC)
+        )
+    }
+
+    @Test
+    fun `the generic override key survives a persistence round trip`() {
+        assertEquals(ProfileOverride.GENERIC, ProfileOverride.byKey(ProfileOverride.GENERIC.key))
+        assertEquals(TBoxModelProfile.GENERIC, ProfileOverride.GENERIC.resolve())
+    }
+
+    @Test
     fun `capabilities can resolve an ambiguous model id`() {
         assertEquals(
             TBoxModelProfile.CFMOTO_800NK,

@@ -1267,4 +1267,16 @@
     <string name="legacy_the_official_cfmoto_motoplay_easyconn_app_can_st_7e0ae938">A aplicação oficial CFMOTO MotoPlay/EasyConn pode ainda assumir a ligação à T-Box enquanto está em segundo plano. Para uma projeção fiável, force a paragem nas definições Android antes de continuar.</string>
     <string name="legacy_continue_with_android_auto_f6c7ef01">Continuar com Android Auto</string>
     <string name="legacy_open_motoplay_settings_99bbfe9c">Abrir definições do MotoPlay</string>
+    <!-- Source: tbox/ProfileOverride.kt -->
+    <string name="legacy_generic_dashboard_53d1376b">Painel genérico</string>
+    <!-- Source: tbox/ProfileOverride.kt -->
+    <string name="legacy_neutral_defaults_for_a_dashboard_that_is_not_rec_8d299cf0">Definições neutras para um painel não reconhecido</string>
+    <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
+    <string name="legacy_unfamiliar_pairing_code_714f8ce7">Código de emparelhamento desconhecido</string>
+    <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
+    <string name="legacy_this_code_carries_wi_fi_details_for_1_s_but_it_w_422a5994">Este código contém os dados de Wi-Fi de %1$s, mas não foi emitido por um endereço Carbit como os painéis que o MOTO-HUB conhece.</string>
+    <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
+    <string name="legacy_several_manufacturers_ship_the_same_dashboard_so_49305d38">Vários fabricantes usam o mesmo software de painel com a sua própria marca, por isso pode muito bem ser a sua mota. Continue apenas se leu o código no painel da sua mota.</string>
+    <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
+    <string name="legacy_use_these_details_52f852ac">Usar estes dados</string>
 </resources>

@@ -685,4 +685,16 @@
     <string name="legacy_the_official_cfmoto_motoplay_easyconn_app_can_st_7e0ae938">L\'app ufficiale CFMOTO MotoPlay/EasyConn può comunque prendere il controllo della connessione T-Box mentre è in background. Per una proiezione affidabile, forzane l\'arresto dalle impostazioni Android prima di continuare.</string>
     <string name="legacy_continue_with_android_auto_f6c7ef01">Continua con Android Auto</string>
     <string name="legacy_open_motoplay_settings_99bbfe9c">Apri impostazioni MotoPlay</string>
+    <!-- Source: tbox/ProfileOverride.kt -->
+    <string name="legacy_generic_dashboard_53d1376b">Cruscotto generico</string>
+    <!-- Source: tbox/ProfileOverride.kt -->
+    <string name="legacy_neutral_defaults_for_a_dashboard_that_is_not_rec_8d299cf0">Impostazioni neutre per un cruscotto non riconosciuto</string>
+    <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
+    <string name="legacy_unfamiliar_pairing_code_714f8ce7">Codice di associazione non riconosciuto</string>
+    <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
+    <string name="legacy_this_code_carries_wi_fi_details_for_1_s_but_it_w_422a5994">Questo codice contiene i dati Wi-Fi di %1$s, ma non proviene da un indirizzo Carbit come i cruscotti che MOTO-HUB conosce.</string>
+    <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
+    <string name="legacy_several_manufacturers_ship_the_same_dashboard_so_49305d38">Diversi produttori usano lo stesso software del cruscotto con il proprio marchio, quindi può benissimo essere la tua moto. Continua solo se hai inquadrato il cruscotto della tua moto.</string>
+    <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
+    <string name="legacy_use_these_details_52f852ac">Usa questi dati</string>
 </resources>
