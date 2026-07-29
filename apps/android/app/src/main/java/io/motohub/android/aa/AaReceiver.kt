@@ -7,6 +7,7 @@
 package io.motohub.android.aa
 
 import android.content.Context
+import android.net.ConnectivityManager
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.view.Surface
@@ -99,7 +100,7 @@ class AaReceiver(
         ConscryptInitializer.initialize()
 
         try {
-            serverSocket = ServerSocket(PORT).apply { reuseAddress = true }
+            serverSocket = bindWirelessServerSocket()
             log("[AA] WirelessServer listening on :$PORT")
         } catch (e: Exception) {
             log("[AA] failed to bind :$PORT — ${e.message}")
@@ -120,6 +121,35 @@ class AaReceiver(
         // Self-mode (launching Google Android Auto) is triggered by MainActivity from the
         // foreground, via AaSelfMode.trigger(), to satisfy background-activity-launch rules.
         return true
+    }
+
+    /**
+     * Binds the loopback listener, clearing a stale process→network pin if that is what stops it.
+     *
+     * The process can still be bound to a T-Box network that has just died: Android delivers
+     * `onLost` seconds after the AP is gone, and the connector cannot release the pin before it
+     * hears about the loss. Until then every socket this process creates fails with ENONET —
+     * including loopback listeners that never route through that network — so a phone-only or
+     * AIDL-preview session started in that window reported "port unavailable" for a port nobody
+     * held. A live pinned network binds loopback fine, which makes the diagnosis safe: this
+     * failure shape proves the pin is dead weight, so drop it and bind again. The connector's own
+     * bookkeeping is not consulted or updated — its `onLost` handler unbinds a second time,
+     * harmlessly, when the verdict finally arrives.
+     */
+    private fun bindWirelessServerSocket(): ServerSocket = try {
+        ServerSocket(PORT).apply { reuseAddress = true }
+    } catch (failure: Exception) {
+        if (!isStaleNetworkPinFailure(failure)) throw failure
+        log(
+            "[AA] bind :$PORT failed on a stale network binding (${failure.message}); " +
+                "clearing the process binding and retrying"
+        )
+        val cleared = runCatching {
+            context.getSystemService(ConnectivityManager::class.java)
+                .bindProcessToNetwork(null)
+        }.getOrDefault(false)
+        if (!cleared) throw failure
+        ServerSocket(PORT).apply { reuseAddress = true }
     }
 
     fun stop() {
@@ -318,3 +348,12 @@ class AaReceiver(
         registrationListener = null
     }
 }
+
+/** ENONET / unreachable from a socket that never leaves the phone: the pin, not the port. */
+internal fun isStaleNetworkPinFailure(failure: Throwable): Boolean =
+    generateSequence(failure) { it.cause }
+        .mapNotNull(Throwable::message)
+        .any { message ->
+            message.contains("ENONET", ignoreCase = true) ||
+                message.contains("network is unreachable", ignoreCase = true)
+        }
