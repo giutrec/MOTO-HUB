@@ -64,6 +64,7 @@ import io.motohub.android.ui.components.MotoHubHeader
 @Composable
 fun TBoxQrScannerScreen(
     onPayload: (TBoxQrPayload) -> Unit,
+    onManualPairing: () -> Unit,
     onClose: () -> Unit
 ) {
     BackHandler(onBack = onClose)
@@ -253,6 +254,12 @@ fun TBoxQrScannerScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
+                // Some dashes print the SSID and passphrase instead of a code, and a code the
+                // parser cannot use leaves this screen scanning indefinitely. Without a way out
+                // from here the rider has to guess that the home screen offers one.
+                TextButton(onClick = onManualPairing) {
+                    Text(motoHubText("No QR? Connect manually"))
+                }
                 if (maxZoomRatio > minZoomRatio + 0.01f) {
                     Text(
                         text = "Zoom ${formatZoom(zoomRatio)}",
@@ -347,7 +354,13 @@ private class TBoxQrAnalyzer(
                 if (rawValue == null) return@addOnSuccessListener
                 onStatus("QR code detected. Checking T-Box details...")
                 val payload = TBoxQrParser.parse(rawValue).getOrElse { failure ->
-                    onStatus("Unrecognized QR code: ${failure.message.orEmpty()}")
+                    // The parser names what it actually read (vehicle-info code, a bare web
+                    // address, the wrong Moto Morini screen), so its own words beat a generic
+                    // "unrecognized" that leaves the rider polishing the display.
+                    onStatus(
+                        failure.message?.takeIf(String::isNotBlank)
+                            ?: "Unrecognized QR code."
+                    )
                     return@addOnSuccessListener
                 }
                 if (payload.origin == TBoxQrOrigin.UNVERIFIED) {

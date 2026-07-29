@@ -57,9 +57,9 @@ object TBoxQrPhotoDecoder {
         }
 
         // A photo of a dash can also catch a poster, a sticker or a second screen. When a crop
-        // yields credentials from an unfamiliar host we hold on to it and keep looking: a Carbit
-        // code found in a later crop is the better answer, and the held candidate is only returned
-        // once every crop has been tried.
+        // yields credentials from an unfamiliar source we hold on to it and keep looking: a code
+        // that corroborates itself in a later crop is the better answer, and the held candidate is
+        // only returned once every crop has been tried.
         var unverified: TBoxQrPayload? = null
 
         fun attempt(index: Int, lastFailure: Throwable?) {
@@ -97,7 +97,7 @@ object TBoxQrPhotoDecoder {
             val zxingPayload = prepared?.bitmap?.let(::decodeWithZxing)
             if (zxingPayload != null) {
                 val parsed = TBoxQrParser.parse(zxingPayload).getOrNull()
-                if (parsed?.origin == TBoxQrOrigin.CARBIT) {
+                if (parsed?.origin == TBoxQrOrigin.RECOGNISED) {
                     prepared.recycle()
                     finish(Result.success(parsed))
                     return
@@ -113,7 +113,7 @@ object TBoxQrPhotoDecoder {
                         val parsed = TBoxQrParser.parse(rawValue)
                         val payload = parsed.getOrNull()
                         when {
-                            payload?.origin == TBoxQrOrigin.CARBIT -> {
+                            payload?.origin == TBoxQrOrigin.RECOGNISED -> {
                                 finish(Result.success(payload))
                                 return@addOnSuccessListener
                             }

@@ -203,10 +203,10 @@ class MainActivity : ComponentActivity() {
                 var returnToGarageAfterPairing by rememberSaveable { mutableStateOf(false) }
                 val context = LocalContext.current
 
-                // A code served by a Carbit address is saved straight away; anything else decoded
-                // cleanly but from an address we cannot vouch for waits for the rider to confirm.
+                // A code that corroborates itself is saved straight away; anything else decoded
+                // cleanly but from a source we cannot vouch for waits for the rider to confirm.
                 fun acceptQrPayload(payload: TBoxQrPayload) {
-                    if (payload.origin == TBoxQrOrigin.CARBIT) {
+                    if (payload.origin == TBoxQrOrigin.RECOGNISED) {
                         viewModel.applyQrPairing(payload)
                     } else {
                         ProjectionEventLog.record(
@@ -863,6 +863,15 @@ class MainActivity : ComponentActivity() {
                                 returnToGarageAfterPairing = false
                                 selectedTab = HubTab.GARAGE
                             }
+                        },
+                        onManualPairing = {
+                            ProjectionEventLog.record(
+                                "UI",
+                                "QR scanner handed over to manual pairing."
+                            )
+                            showQrScanner = false
+                            viewModel.resetManualPairingForm()
+                            showManualPairing = true
                         },
                         onClose = {
                             ProjectionEventLog.record("UI", "QR scanner cancelled by the user.")

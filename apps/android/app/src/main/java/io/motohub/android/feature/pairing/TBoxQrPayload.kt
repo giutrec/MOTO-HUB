@@ -14,8 +14,12 @@ import java.nio.charset.StandardCharsets
  * a payload, marked so the caller can put the decision in front of the rider instead of guessing.
  */
 enum class TBoxQrOrigin {
-    /** Served by a Carbit provisioning host — both the shape and the source check out. */
-    CARBIT,
+    /**
+     * Shape and source both check out — a known provisioning host, or a dialect specific enough
+     * to identify itself (see [TBoxQrParser.parse]). Not a vendor name: several manufacturers
+     * reach this level, which is why it is not called `CARBIT`.
+     */
+    RECOGNISED,
 
     /** Usable credentials from a source MOTO-HUB cannot vouch for. Confirm before saving. */
     UNVERIFIED
@@ -35,13 +39,20 @@ object TBoxQrParser {
     private const val WIFI_SCHEME = "WIFI:"
 
     /**
-     * Decodes either a Carbit-style provisioning URL or a plain `WIFI:` network code. Failure is
-     * reserved for content that carries no network name at all — anything with usable credentials
-     * comes back with an [TBoxQrOrigin] describing how much it can be trusted.
+     * Decodes any of the three pairing codes seen in the field. Failure is reserved for content
+     * that carries no network name at all — anything with usable credentials comes back with an
+     * [TBoxQrOrigin] describing how much it can be trusted.
+     *
+     * The MotoFun dialect is tried before the query-string one because it is recognised by shape
+     * (`Wifi=<ssid>#<password>`) rather than by a parameter name, and returns null the moment that
+     * shape is absent — so a Carbit code carrying an unrelated `wifi=` parameter still falls
+     * through to [parseProvisioningUrl]. That one throws instead of returning null, so it is last.
      */
     fun parse(rawValue: String): Result<TBoxQrPayload> = runCatching {
         val trimmed = rawValue.trim()
-        parseWifiNetworkCode(trimmed) ?: parseProvisioningUrl(trimmed)
+        parseWifiNetworkCode(trimmed)
+            ?: parseMotoFunUrl(trimmed)
+            ?: parseProvisioningUrl(trimmed)
     }
 
     private fun parseProvisioningUrl(rawValue: String): TBoxQrPayload {
@@ -55,10 +66,12 @@ object TBoxQrParser {
             .filter(String::isNotBlank)
             .associate { item ->
                 val keyAndValue = item.split('=', limit = 2)
-                decode(keyAndValue[0]) to decode(keyAndValue.getOrElse(1) { "" })
+                // Parameter names are folded: OEM firmware is not consistent about their case,
+                // and an `SSID=` that reads as absent costs a pairing for a cosmetic difference.
+                decode(keyAndValue[0]).lowercase() to decode(keyAndValue.getOrElse(1) { "" })
             }
         val ssid = parameters["ssid"].orEmpty().trim()
-        check(ssid.isNotEmpty()) { "The QR code does not carry a T-Box network name." }
+        check(ssid.isNotEmpty()) { describeUnusableCode(rawValue) }
 
         val host = (uri?.host ?: hostOf(rawValue))?.lowercase()
         return TBoxQrPayload(
@@ -67,11 +80,59 @@ object TBoxQrParser {
             encryption = parameters["auth"],
             modelId = parameters["modelid"],
             displayName = parameters["name"],
-            origin = if (host != null && isCarbitHost(host)) {
-                TBoxQrOrigin.CARBIT
+            origin = if (host != null && isKnownProvisioningHost(host)) {
+                TBoxQrOrigin.RECOGNISED
             } else {
                 TBoxQrOrigin.UNVERIFIED
             }
+        )
+    }
+
+    /**
+     * The Moto Morini / MotoFun dash code, confirmed on the X-Cape 649 / 700 and the Seiemmezzo:
+     *
+     *     http://admin.motomorini.com/app.html?Wifi=ML174167#12345678#dc0d30da1b6c
+     *       &MachineID=dc0d30da1b6c&ProductID=00297
+     *
+     * `#` is a field separator here, not the start of a URI fragment, so neither [URI] nor the
+     * hand-rolled query split can be used: both stop at the first `#` and hand back a query of
+     * `Wifi=ML174167`, silently dropping the password. The raw string is scanned instead.
+     *
+     * `ProductID` takes the place of `modelid` — like it, an opaque provisioning identifier that is
+     * never read as a motorcycle model. There is no `action` bitmask to honour: the dash is a plain
+     * access point, and the transport is decided from the SSID shape further down.
+     */
+    private fun parseMotoFunUrl(rawValue: String): TBoxQrPayload? {
+        val wifiField = MOTO_FUN_WIFI.find(rawValue) ?: return null
+        val ssid = wifiField.groupValues[1].trim()
+        if (ssid.isEmpty()) return null
+
+        // The match stops at the `#` that ends the SSID, so the remainder starts on the separator.
+        // Its absence means this is some other `wifi=` parameter, not a MotoFun pairing code.
+        val remainder = rawValue.substring(wifiField.range.last + 1)
+        if (!remainder.startsWith('#')) return null
+        val password = remainder.drop(1).substringBefore('#').substringBefore('&').trim()
+        if (password.isEmpty()) return null
+
+        val machineId = MOTO_FUN_MACHINE_ID.find(rawValue)?.groupValues?.get(1)
+        val productId = MOTO_FUN_PRODUCT_ID.find(rawValue)?.groupValues?.get(1)
+        val host = (runCatching { URI(rawValue) }.getOrNull()?.host ?: hostOf(rawValue))?.lowercase()
+
+        // This dialect identifies itself: no other code puts a password behind `Wifi=<ssid>#`, and
+        // the MotoFun identifiers alongside it are a second witness. A rebadged unit serving the
+        // same shape from an unfamiliar host with neither identifier still goes to the rider.
+        val corroborated = (host != null && isKnownProvisioningHost(host)) ||
+            machineId != null || productId != null
+
+        return TBoxQrPayload(
+            ssid = ssid,
+            password = password,
+            // Not carried by this dialect. Every dash seen with it runs a WPA2 access point, and a
+            // passphrase was just read out of the code, so an open network is not a possibility.
+            encryption = "wpa2-psk",
+            modelId = productId,
+            displayName = null,
+            origin = if (corroborated) TBoxQrOrigin.RECOGNISED else TBoxQrOrigin.UNVERIFIED
         )
     }
 
@@ -189,7 +250,53 @@ object TBoxQrParser {
         return authority.substringAfterLast('@').substringBefore(':').takeIf(String::isNotEmpty)
     }
 
-    private fun isCarbitHost(host: String): Boolean =
-        host == "carbit.com" || host.endsWith(".carbit.com") ||
-            host == "carbit.com.cn" || host.endsWith(".carbit.com.cn")
+    /**
+     * Provisioning domains MOTO-HUB has seen serve a real pairing code. Corroboration only — an
+     * absent match costs a confirmation dialog, never the pairing (see [TBoxQrOrigin]), so this
+     * list never needs to be complete.
+     */
+    private val KNOWN_PROVISIONING_DOMAINS = listOf(
+        "carbit.com",
+        "carbit.com.cn",
+        // Moto Morini / MotoFun serves the dialect below from its own domain.
+        "motomorini.com"
+    )
+
+    private fun isKnownProvisioningHost(host: String): Boolean =
+        KNOWN_PROVISIONING_DOMAINS.any { host == it || host.endsWith(".$it") }
+
+    /** `Wifi=<ssid>`, where the SSID runs up to the `#` that introduces the password. */
+    private val MOTO_FUN_WIFI = Regex("""(?:^|[?&])wifi=([^&#\s]+)""", RegexOption.IGNORE_CASE)
+    private val MOTO_FUN_MACHINE_ID = Regex("""machineid=([^&#\s]+)""", RegexOption.IGNORE_CASE)
+    private val MOTO_FUN_PRODUCT_ID = Regex("""productid=([^&#\s]+)""", RegexOption.IGNORE_CASE)
+
+    /**
+     * The QR decoded cleanly but carries no credentials. Naming the actual content is what lets a
+     * rider recover on their own: the dash prints several codes and only one of them pairs, so
+     * "unreadable" sends them polishing the screen instead of changing screens.
+     */
+    private fun describeUnusableCode(rawValue: String): String {
+        val vin = rawValue.contains("vin:", ignoreCase = true)
+        return when {
+            vin && (
+                rawValue.contains("color:", ignoreCase = true) ||
+                    rawValue.contains("engine:", ignoreCase = true) ||
+                    rawValue.startsWith("code:", ignoreCase = true)
+                ) ->
+                "That is the vehicle information code (VIN, engine, colour), not the Wi-Fi " +
+                    "pairing code. Open the phone-connection screen on the dash and scan the " +
+                    "code shown there."
+
+            rawValue.contains("motomorini", ignoreCase = true) ||
+                rawValue.contains("motofun", ignoreCase = true) ->
+                "This Moto Morini code carries no Wifi= field, so it is not the pairing code. " +
+                    "Open the phone-link / MotoFun screen on the dash and scan the code there."
+
+            rawValue.startsWith("http", ignoreCase = true) ->
+                "That is a web address with no network credentials in it. Scan the dash pairing " +
+                    "code instead (MotoPlay / EasyConnect / MotoFun)."
+
+            else -> "The QR code does not carry a T-Box network name."
+        }
+    }
 }
