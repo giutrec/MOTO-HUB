@@ -25,7 +25,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
@@ -132,52 +131,105 @@ class TBoxNetworkConnector(context: Context) {
     @Volatile
     private var simulatorMonitorJob: Job? = null
 
+    /**
+     * SSID of the specifier request currently registered with ConnectivityManager, whether or
+     * not a network has been granted yet. What lets a retry for the same bike join the hunt
+     * already in progress instead of restarting it — see [connect].
+     */
+    @Volatile
+    private var pendingRequestSsid: String? = null
+
+    /** Terminal failure produced by the registered callback, observed by [awaitRequestedNetwork]. */
+    @Volatile
+    private var pendingFailure: Throwable? = null
+
+    @Volatile
+    private var pendingGiveUpJob: Job? = null
+
     suspend fun connect(profile: MotorcycleProfile): Result<Network> {
+        if (TBoxModelProfile.fromModelId(profile.modelId) == TBoxModelProfile.MOTO_HUB_SIMULATOR) {
+            disconnect()
+            activeProfile = profile
+            connectedOnce = false
+            processBindingSuspended = false
+            return try {
+                ProjectionEventLog.record(
+                    "NETWORK",
+                    "Simulator profile detected for SSID ${profile.ssid}; reusing the phone's existing Wi-Fi " +
+                        "instead of requesting a WifiNetworkSpecifier."
+                )
+                val network = withTimeout(CONNECTION_TIMEOUT_MS) { findExistingWifi(profile.ssid) }
+                connectedOnce = true
+                startSimulatorMonitor(profile)
+                Result.success(network)
+            } catch (_: TimeoutCancellationException) {
+                ProjectionEventLog.error("NETWORK", "Wi-Fi setup timed out after ${CONNECTION_TIMEOUT_MS}ms.")
+                disconnect()
+                Result.failure(
+                    IllegalStateException(
+                        "The simulator requires the phone and Mac to be connected to the same Wi-Fi network " +
+                            "with a usable IPv4 address."
+                    )
+                )
+            } catch (cancelled: CancellationException) {
+                // A real cancellation (user cancel, scope teardown) must propagate, not become a Result.
+                throw cancelled
+            } catch (failure: Throwable) {
+                ProjectionEventLog.error("NETWORK", "T-Box AP request failed.", failure)
+                // activeVpnLabel() omitted here: merely having a VpnService-based app present isn't evidence this failure caused it.
+                val vpnMessage = TBoxVpnDiagnostics.userFacingMessage(failure, activeVpnLabel = null)
+                Result.failure(vpnMessage?.let { IllegalStateException(it, failure) } ?: failure)
+            }
+        }
+
+        // Session watchdogs retry through here every ~35s while recovering a dropped ride, and
+        // with the screen off Android scans for Wi-Fi so rarely that a 30s window may not contain
+        // a single scan. Tearing the exclusive request down and re-submitting on every attempt
+        // kept resetting that hunt right before it could succeed (road test 2026-07-29: four
+        // consecutive "Wi-Fi setup timed out" while recovering the CFDL16 mid-ride). Reuse what
+        // is already there instead: first the granted network, then the still-pending request.
+        if (activeProfile?.ssid == profile.ssid) {
+            activeNetwork?.let { existing ->
+                val rebindFailure = runCatching {
+                    if (!processBindingSuspended && processBoundNetwork == null) {
+                        check(connectivityManager.bindProcessToNetwork(existing)) {
+                            "Android cannot restore the binding to the T-Box network."
+                        }
+                        processBoundNetwork = existing
+                    }
+                }.exceptionOrNull()
+                if (rebindFailure == null) {
+                    ProjectionEventLog.record(
+                        "NETWORK",
+                        "Reusing the active T-Box network $existing for ${profile.ssid}."
+                    )
+                    return Result.success(existing)
+                }
+                ProjectionEventLog.warning(
+                    "NETWORK",
+                    "Active T-Box network could not be re-bound; requesting a fresh one.",
+                    rebindFailure
+                )
+            }
+            if (pendingRequestSsid == profile.ssid) {
+                ProjectionEventLog.record(
+                    "NETWORK",
+                    "Joining the pending Wi-Fi request for ${profile.ssid} instead of re-submitting it."
+                )
+                return awaitRequestedNetwork(profile)
+            }
+        }
+
         disconnect()
         activeProfile = profile
         connectedOnce = false
         processBindingSuspended = false
-        return try {
-        if (TBoxModelProfile.fromModelId(profile.modelId) == TBoxModelProfile.MOTO_HUB_SIMULATOR) {
-            ProjectionEventLog.record(
-                "NETWORK",
-                "Simulator profile detected for SSID ${profile.ssid}; reusing the phone's existing Wi-Fi " +
-                    "instead of requesting a WifiNetworkSpecifier."
-            )
-            val network = withTimeout(CONNECTION_TIMEOUT_MS) { findExistingWifi(profile.ssid) }
-            connectedOnce = true
-            startSimulatorMonitor(profile)
-            Result.success(network)
-        } else {
-            ProjectionEventLog.record(
-                "NETWORK",
-                "Requesting Android Wi-Fi network for SSID ${profile.ssid}; passwordPresent=${profile.password.isNotEmpty()}."
-            )
-            Result.success(withTimeout(CONNECTION_TIMEOUT_MS) { requestNetwork(profile) })
-        }
-        } catch (_: TimeoutCancellationException) {
-        // No network was ever established, so there is no evidence to blame a VPN here (unlike the bindProcessToNetwork rejection below).
-        val isSimulator = TBoxModelProfile.fromModelId(profile.modelId) == TBoxModelProfile.MOTO_HUB_SIMULATOR
-        val message = if (isSimulator) {
-            "The simulator requires the phone and Mac to be connected to the same Wi-Fi network " +
-                "with a usable IPv4 address."
-        } else {
-            "Android did not obtain a usable IPv4 address from the requested T-Box AP within " +
-                "${CONNECTION_TIMEOUT_MS}ms. If Android showed a dialog asking to connect to " +
-                "the ${profile.ssid} network, accept it and retry."
-        }
-        ProjectionEventLog.error("NETWORK", "Wi-Fi setup timed out after ${CONNECTION_TIMEOUT_MS}ms.")
-        disconnect()
-        Result.failure(IllegalStateException(message))
-        } catch (cancelled: CancellationException) {
-        // A real cancellation (user cancel, scope teardown) must propagate, not become a Result.
-        throw cancelled
-        } catch (failure: Throwable) {
-        ProjectionEventLog.error("NETWORK", "T-Box AP request failed.", failure)
-        // activeVpnLabel() omitted here: merely having a VpnService-based app present isn't evidence this failure caused it.
-        val vpnMessage = TBoxVpnDiagnostics.userFacingMessage(failure, activeVpnLabel = null)
-        Result.failure(vpnMessage?.let { IllegalStateException(it, failure) } ?: failure)
-        }
+        ProjectionEventLog.record(
+            "NETWORK",
+            "Requesting Android Wi-Fi network for SSID ${profile.ssid}; passwordPresent=${profile.password.isNotEmpty()}."
+        )
+        submitSpecifierRequest(profile)
+        return awaitRequestedNetwork(profile)
     }
 
     fun disconnect() {
@@ -203,6 +255,10 @@ class TBoxNetworkConnector(context: Context) {
                 "activeNetwork=$activeNetwork, processBound=$processBoundNetwork."
         )
         callback = null
+        pendingRequestSsid = null
+        pendingFailure = null
+        pendingGiveUpJob?.cancel()
+        pendingGiveUpJob = null
         if (processBoundNetwork != null) {
             connectivityManager.bindProcessToNetwork(null)
             processBoundNetwork = null
@@ -216,7 +272,12 @@ class TBoxNetworkConnector(context: Context) {
     /** Releases one attempt's registration without touching a newer attempt's state. */
     private fun releaseCallback(target: ConnectivityManager.NetworkCallback) {
         synchronized(requestLock) {
-            if (callback === target) callback = null
+            if (callback === target) {
+                callback = null
+                // This registration was the pending request; without it there is nothing left
+                // for a retry to join.
+                pendingRequestSsid = null
+            }
             if (registeredCallbacks.remove(target)) unregister(target)
         }
     }
@@ -285,163 +346,220 @@ class TBoxNetworkConnector(context: Context) {
         return rebindProcessToTBox()
     }
 
-    private suspend fun requestNetwork(profile: MotorcycleProfile): Network =
-        suspendCancellableCoroutine { continuation ->
-            val completed = AtomicBoolean(false)
-            lateinit var networkCallback: ConnectivityManager.NetworkCallback
-
-            fun finish(result: Result<Network>, keepCallback: Boolean) {
-                if (!completed.compareAndSet(false, true)) return
-                // Releasing only this attempt's registration: a late failure must not orphan a
-                // newer attempt's callback, nor tear down the network it just acquired.
-                if (!keepCallback) releaseCallback(networkCallback)
-                continuation.resumeWith(result)
-            }
-
-            networkCallback = object : ConnectivityManager.NetworkCallback() {
-                override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
-                    val addresses = linkProperties.linkAddresses.mapNotNull { it.address.hostAddress }
-                    val gateways = linkProperties.routes.mapNotNull { it.gateway?.hostAddress }.distinct()
-                    // Dev-only raw logcat line (leaks the phone's Wi-Fi IPs) - the real,
-                    // production diagnostic record is ProjectionEventLog.debug() below, gated
-                    // by the runtime "Enable logging" setting regardless of build type.
-                    if (io.motohub.android.BuildConfig.DEBUG) Log.d(TAG, "Wi-Fi addresses=$addresses")
-                    ProjectionEventLog.debug(
+    /**
+     * Registers the exclusive specifier request and returns immediately; the callback drives the
+     * shared connection state, and [awaitRequestedNetwork] observes the outcome. Deliberately not
+     * a suspend-until-connected call: the registration must be able to outlive any single
+     * caller's patience, because Android keeps matching a live request against every later Wi-Fi
+     * scan — that background hunt is exactly what a screen-off recovery needs.
+     */
+    private fun submitSpecifierRequest(profile: MotorcycleProfile) {
+        pendingFailure = null
+        lateinit var networkCallback: ConnectivityManager.NetworkCallback
+        networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
+                val addresses = linkProperties.linkAddresses.mapNotNull { it.address.hostAddress }
+                val gateways = linkProperties.routes.mapNotNull { it.gateway?.hostAddress }.distinct()
+                // Dev-only raw logcat line (leaks the phone's Wi-Fi IPs) - the real,
+                // production diagnostic record is ProjectionEventLog.debug() below, gated
+                // by the runtime "Enable logging" setting regardless of build type.
+                if (io.motohub.android.BuildConfig.DEBUG) Log.d(TAG, "Wi-Fi addresses=$addresses")
+                ProjectionEventLog.debug(
+                    "NETWORK",
+                    "Link properties changed: network=$network, interface=${linkProperties.interfaceName}, " +
+                        "addresses=$addresses, gateways=$gateways."
+                )
+                val isTBoxNetwork = linkProperties.linkAddresses
+                    .any { isUsableTBoxIpv4Address(it.address) }
+                if (isTBoxNetwork) {
+                    if (processBindingSuspended) {
+                        // The binding was released on purpose while a local projection
+                        // starts. Re-binding here on a routine DHCP/IPv6 link update would
+                        // cut Google Android Auto off the internet mid-handshake; the
+                        // projection flow rebinds explicitly when it is ready.
+                        markConnected(network)
+                        ProjectionEventLog.debug(
+                            "NETWORK",
+                            "T-Box link update accepted without re-binding: the process " +
+                                "binding is deliberately released."
+                        )
+                        return
+                    }
+                    val bindFailure = runCatching {
+                        check(connectivityManager.bindProcessToNetwork(network)) {
+                            "Android cannot bind MOTO-HUB to the T-Box network."
+                        }
+                    }.exceptionOrNull()
+                    if (bindFailure != null) {
+                        val activeVpn = activeVpnLabel()
+                        val message = TBoxVpnDiagnostics.userFacingMessage(bindFailure, activeVpn)
+                            ?: bindFailure.message.orEmpty()
+                        Log.e(TAG, "T-Box process binding rejected; activeVpn=$activeVpn", bindFailure)
+                        ProjectionEventLog.error(
+                            "NETWORK",
+                            "Process binding rejected for network=$network; activeVpn=${activeVpn ?: "none"}; " +
+                                "reason=$message."
+                        )
+                        pendingFailure = IllegalStateException(message, bindFailure)
+                        releaseCallback(networkCallback)
+                        return
+                    }
+                    processBoundNetwork = network
+                    markConnected(network)
+                    Log.i(TAG, "T-Box Wi-Fi is active: ${profile.ssid}, addresses=$addresses")
+                    ProjectionEventLog.record(
                         "NETWORK",
-                        "Link properties changed: network=$network, interface=${linkProperties.interfaceName}, " +
-                            "addresses=$addresses, gateways=$gateways."
+                        "T-Box Wi-Fi validated and process-bound: ssid=${profile.ssid}, network=$network, addresses=$addresses."
                     )
-                    val isTBoxNetwork = linkProperties.linkAddresses
-                        .any { isUsableTBoxIpv4Address(it.address) }
-                    if (isTBoxNetwork) {
-                        if (processBindingSuspended) {
-                            // The binding was released on purpose while a local projection
-                            // starts. Re-binding here on a routine DHCP/IPv6 link update would
-                            // cut Google Android Auto off the internet mid-handshake; the
-                            // projection flow rebinds explicitly when it is ready.
-                            activeNetwork = network
-                            connectedOnce = true
+                    if (MotoHubSettings.verboseTBoxLogging(appContext)) {
+                        runCatching { wifiManager.connectionInfo }.getOrNull()?.let { info ->
                             ProjectionEventLog.debug(
                                 "NETWORK",
-                                "T-Box link update accepted without re-binding: the process " +
-                                    "binding is deliberately released."
+                                "Wi-Fi link (verbose): frequency=${info.frequency}MHz, " +
+                                    "rssi=${info.rssi}dBm, linkSpeed=${info.linkSpeed}Mbps."
                             )
-                            finish(Result.success(network), keepCallback = true)
-                            return
                         }
-                        val bindFailure = runCatching {
-                            check(connectivityManager.bindProcessToNetwork(network)) {
-                                "Android cannot bind MOTO-HUB to the T-Box network."
-                            }
-                        }.exceptionOrNull()
-                        if (bindFailure != null) {
-                            val activeVpn = activeVpnLabel()
-                            val message = TBoxVpnDiagnostics.userFacingMessage(bindFailure, activeVpn)
-                                ?: bindFailure.message.orEmpty()
-                            Log.e(TAG, "T-Box process binding rejected; activeVpn=$activeVpn", bindFailure)
-                            ProjectionEventLog.error(
-                                "NETWORK",
-                                "Process binding rejected for network=$network; activeVpn=${activeVpn ?: "none"}; " +
-                                    "reason=$message."
-                            )
-                            finish(
-                                Result.failure(
-                                    IllegalStateException(message, bindFailure)
-                                ),
-                                keepCallback = false
-                            )
-                            return
-                        }
-                        processBoundNetwork = network
-                        activeNetwork = network
-                        connectedOnce = true
-                        Log.i(TAG, "T-Box Wi-Fi is active: ${profile.ssid}, addresses=$addresses")
-                        ProjectionEventLog.record(
-                            "NETWORK",
-                            "T-Box Wi-Fi validated and process-bound: ssid=${profile.ssid}, network=$network, addresses=$addresses."
-                        )
-                        if (MotoHubSettings.verboseTBoxLogging(appContext)) {
-                            runCatching { wifiManager.connectionInfo }.getOrNull()?.let { info ->
-                                ProjectionEventLog.debug(
-                                    "NETWORK",
-                                    "Wi-Fi link (verbose): frequency=${info.frequency}MHz, " +
-                                        "rssi=${info.rssi}dBm, linkSpeed=${info.linkSpeed}Mbps."
-                                )
-                            }
-                        }
-                        finish(Result.success(network), keepCallback = true)
-                    } else if (network == activeNetwork) {
-                        // OnePlus can briefly publish incomplete LinkProperties while the AP stays
-                        // associated. Only onLost is a real disconnect signal for the active network.
-                        Log.w(TAG, "T-Box network address update is temporarily incomplete")
-                        ProjectionEventLog.warning(
-                            "NETWORK",
-                            "Active T-Box network temporarily has no usable IPv4 address; " +
-                                "waiting for onLost before disconnecting."
-                        )
                     }
-                }
-
-                override fun onLost(network: Network) {
-                    if (network != activeNetwork) return
-                    ProjectionEventLog.warning("NETWORK", "Android onLost received for active T-Box network=$network.")
-                    if (processBoundNetwork == network) {
-                        connectivityManager.bindProcessToNetwork(null)
-                        processBoundNetwork = null
-                    }
-                    activeNetwork = null
-                    mutableEvents.tryEmit(TBoxNetworkEvent.Lost(network))
-                    scheduleRejoin()
-                }
-
-                override fun onUnavailable() {
-                    ProjectionEventLog.error("NETWORK", "Android reported the requested T-Box Wi-Fi as unavailable.")
-                    finish(
-                        Result.failure(
-                            IllegalStateException("Android did not make the requested T-Box AP available.")
-                        ),
-                        keepCallback = false
+                } else if (network == activeNetwork) {
+                    // OnePlus can briefly publish incomplete LinkProperties while the AP stays
+                    // associated. Only onLost is a real disconnect signal for the active network.
+                    Log.w(TAG, "T-Box network address update is temporarily incomplete")
+                    ProjectionEventLog.warning(
+                        "NETWORK",
+                        "Active T-Box network temporarily has no usable IPv4 address; " +
+                            "waiting for onLost before disconnecting."
                     )
                 }
             }
-            val specifier = WifiNetworkSpecifier.Builder()
-                .setSsid(profile.ssid)
-                .apply {
-                    if (profile.password.isNotBlank()) setWpa2Passphrase(profile.password)
+
+            override fun onLost(network: Network) {
+                if (network != activeNetwork) return
+                ProjectionEventLog.warning("NETWORK", "Android onLost received for active T-Box network=$network.")
+                if (processBoundNetwork == network) {
+                    connectivityManager.bindProcessToNetwork(null)
+                    processBoundNetwork = null
                 }
-                .build()
-            val request = NetworkRequest.Builder()
-                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-                .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                .setNetworkSpecifier(specifier)
-                .build()
-
-            ProjectionEventLog.debug(
-                "NETWORK",
-                "Submitting WifiNetworkSpecifier request for ${profile.ssid} without INTERNET capability."
-            )
-
-            continuation.invokeOnCancellation { releaseCallback(networkCallback) }
-            // Drop the previous registration, take ownership and register, with no window in
-            // between for a concurrent caller to slip its own pair through. resumeWith() is kept
-            // out of the lock: it can run continuation code inline on this thread.
-            val requestFailure = synchronized(requestLock) {
-                clearCurrentNetworkRequestLocked()
-                callback = networkCallback
-                registeredCallbacks += networkCallback
-                runCatching {
-                    connectivityManager.requestNetwork(request, networkCallback)
-                }.exceptionOrNull()
+                activeNetwork = null
+                mutableEvents.tryEmit(TBoxNetworkEvent.Lost(network))
+                scheduleRejoin()
             }
-            if (requestFailure != null) {
-                ProjectionEventLog.error(
-                    "NETWORK",
-                    "ConnectivityManager.requestNetwork threw an exception.",
-                    requestFailure
-                )
-                finish(Result.failure(requestFailure), keepCallback = false)
+
+            override fun onUnavailable() {
+                ProjectionEventLog.error("NETWORK", "Android reported the requested T-Box Wi-Fi as unavailable.")
+                pendingFailure = IllegalStateException("Android did not make the requested T-Box AP available.")
+                releaseCallback(networkCallback)
             }
         }
+        val specifier = WifiNetworkSpecifier.Builder()
+            .setSsid(profile.ssid)
+            .apply {
+                if (profile.password.isNotBlank()) setWpa2Passphrase(profile.password)
+            }
+            .build()
+        val request = NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+            .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .setNetworkSpecifier(specifier)
+            .build()
+
+        ProjectionEventLog.debug(
+            "NETWORK",
+            "Submitting WifiNetworkSpecifier request for ${profile.ssid} without INTERNET capability."
+        )
+
+        // Drop the previous registration, take ownership and register, with no window in
+        // between for a concurrent caller to slip its own pair through.
+        val requestFailure = synchronized(requestLock) {
+            clearCurrentNetworkRequestLocked()
+            callback = networkCallback
+            registeredCallbacks += networkCallback
+            pendingRequestSsid = profile.ssid
+            runCatching {
+                connectivityManager.requestNetwork(request, networkCallback)
+            }.exceptionOrNull()
+        }
+        if (requestFailure != null) {
+            ProjectionEventLog.error(
+                "NETWORK",
+                "ConnectivityManager.requestNetwork threw an exception.",
+                requestFailure
+            )
+            pendingFailure = requestFailure
+            releaseCallback(networkCallback)
+            return
+        }
+        schedulePendingGiveUp(profile)
+    }
+
+    /** Success bookkeeping shared by both callback paths (bound and deliberately unbound). */
+    private fun markConnected(network: Network) {
+        activeNetwork = network
+        connectedOnce = true
+        pendingFailure = null
+        pendingGiveUpJob?.cancel()
+        pendingGiveUpJob = null
+    }
+
+    /**
+     * Waits for [submitSpecifierRequest]'s callback to produce a usable network. On timeout the
+     * registration is deliberately left in place: Android keeps matching it against every later
+     * scan, so a recovery retry joins a hunt that has been running the whole time instead of
+     * restarting it from zero. [schedulePendingGiveUp] still bounds how long the radio can be
+     * held by a request nothing ever answers.
+     */
+    private suspend fun awaitRequestedNetwork(profile: MotorcycleProfile): Result<Network> {
+        try {
+            val deadline = SystemClock.elapsedRealtime() + CONNECTION_TIMEOUT_MS
+            while (SystemClock.elapsedRealtime() < deadline) {
+                currentNetwork()?.let { return Result.success(it) }
+                pendingFailure?.let { failure ->
+                    pendingFailure = null
+                    // activeVpnLabel() omitted here: merely having a VpnService-based app present isn't evidence this failure caused it.
+                    val vpnMessage = TBoxVpnDiagnostics.userFacingMessage(failure, activeVpnLabel = null)
+                    return Result.failure(vpnMessage?.let { IllegalStateException(it, failure) } ?: failure)
+                }
+                delay(NETWORK_POLL_MS)
+            }
+        } catch (cancelled: CancellationException) {
+            // A real cancellation (user cancel, scope teardown) must release the exclusive
+            // request and propagate, not become a Result.
+            clearCurrentNetworkRequest()
+            throw cancelled
+        }
+        ProjectionEventLog.error(
+            "NETWORK",
+            "Wi-Fi setup timed out after ${CONNECTION_TIMEOUT_MS}ms; the request stays pending " +
+                "for the next attempt."
+        )
+        return Result.failure(
+            IllegalStateException(
+                "Android did not obtain a usable IPv4 address from the requested T-Box AP within " +
+                    "${CONNECTION_TIMEOUT_MS}ms. If Android showed a dialog asking to connect to " +
+                    "the ${profile.ssid} network, accept it and retry."
+            )
+        )
+    }
+
+    /**
+     * A pending request left in place by [awaitRequestedNetwork] must not outlive every recovery
+     * budget: past that point it only takes the Wi-Fi radio away from whoever asks next —
+     * including the rider reconnecting by hand — so release it once nothing has connected for
+     * [REJOIN_GIVE_UP_MS].
+     */
+    private fun schedulePendingGiveUp(profile: MotorcycleProfile) {
+        pendingGiveUpJob?.cancel()
+        pendingGiveUpJob = reconnectScope.launch {
+            delay(REJOIN_GIVE_UP_MS)
+            if (activeNetwork == null && pendingRequestSsid == profile.ssid) {
+                ProjectionEventLog.warning(
+                    "NETWORK",
+                    "Releasing the pending T-Box Wi-Fi request for ${profile.ssid}: nothing " +
+                        "connected within ${REJOIN_GIVE_UP_MS / 1_000L}s."
+                )
+                clearCurrentNetworkRequest()
+            }
+        }
+    }
 
     private fun scheduleRejoin() {
         val profile = activeProfile ?: return
@@ -478,30 +596,23 @@ class TBoxNetworkConnector(context: Context) {
                     attempt++
                     delay((step as TBoxRejoinStep.WaitThenRetry).delayMillis)
                     if (activeNetwork != null) break@ladder
-                    // Android may never call onUnavailable for a specifier request; without this
-                    // timeout a single silent attempt would block the rejoin loop forever.
-                    val result = try {
-                        Result.success(withTimeout(CONNECTION_TIMEOUT_MS) { requestNetwork(profile) })
-                    } catch (timeout: TimeoutCancellationException) {
-                        Result.failure(timeout)
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (failure: Throwable) {
-                        Result.failure(failure)
-                    }
-                    result.onSuccess { network ->
+                    // A fresh submission per attempt: the ladder exists for devices whose stale
+                    // specifier registration never reconnects on its own, so unlike the connect()
+                    // retry path it deliberately does NOT join the previous pending request.
+                    submitSpecifierRequest(profile)
+                    val network = awaitLadderNetwork()
+                    if (network != null) {
                         ProjectionEventLog.record(
                             "NETWORK",
                             "T-Box Wi-Fi automatically reacquired on attempt $attempt: network=$network."
                         )
                         mutableEvents.tryEmit(TBoxNetworkEvent.Reacquired(network))
                         return@launch
-                    }.onFailure { failure ->
-                        ProjectionEventLog.warning(
-                            "NETWORK",
-                            "T-Box Wi-Fi rejoin attempt $attempt failed: ${failure.message}"
-                        )
                     }
+                    ProjectionEventLog.warning(
+                        "NETWORK",
+                        "T-Box Wi-Fi rejoin attempt $attempt failed."
+                    )
                 }
             } finally {
                 // Order matters: clear the handle before reopening the gate, so a ladder started
@@ -511,6 +622,24 @@ class TBoxNetworkConnector(context: Context) {
                 rejoinActive.set(false)
             }
         }
+    }
+
+    /** One ladder attempt's wait: no timeout error spam, no teardown — the loop resubmits anyway. */
+    private suspend fun awaitLadderNetwork(): Network? {
+        val deadline = SystemClock.elapsedRealtime() + CONNECTION_TIMEOUT_MS
+        while (SystemClock.elapsedRealtime() < deadline) {
+            currentNetwork()?.let { return it }
+            pendingFailure?.let { failure ->
+                pendingFailure = null
+                ProjectionEventLog.warning(
+                    "NETWORK",
+                    "T-Box Wi-Fi rejoin request failed: ${failure.message}"
+                )
+                return null
+            }
+            delay(NETWORK_POLL_MS)
+        }
+        return null
     }
 
     private suspend fun findExistingWifi(ssid: String): Network {
