@@ -280,7 +280,8 @@ class MediaButtonBridge(
         }
         val single = if (delta > 0) HandlebarGesture.VOLUME_UP else HandlebarGesture.VOLUME_DOWN
         log("[BTN] volume ${if (delta > 0) "UP" else "DOWN"}; pinned=$pinnedVolume, delta=$delta")
-        when (val read = interpretVolumeDelta(delta, HandlebarControlStore.action(context, single))) {
+        val streamMax = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        when (val read = interpretVolumeDelta(delta, HandlebarControlStore.action(context, single), streamMax)) {
             null -> Unit
             is VolumeDeltaRead.ScrollClicks -> repeat(read.count) { dispatch(read.gesture) }
             is VolumeDeltaRead.Tap -> detectDoubleTap(read.single, read.double, read.forceDouble)
@@ -630,13 +631,27 @@ internal sealed interface VolumeDeltaRead {
  * of being mistaken for a gesture. Jumps of [DOUBLE_PRESS_VOLUME_STEPS]+ keep the field-proven
  * meaning of a dash-coalesced double press, which is how BACK/HOME stay reachable from a
  * volume-only handlebar.
+ *
+ * Real motorcycles break the ±1-step assumption: the CFDL16 dash does not nudge the pinned
+ * volume, it overwrites the stream with its own absolute value (road test 2026-07-29: pin 159,
+ * bike wrote 70 → delta −89), so a jump of a quarter of the stream range or more is read as ONE
+ * press of that sign. A genuine double press arrives as two separate overwrites and still
+ * becomes a double through the tap window.
  */
-internal fun interpretVolumeDelta(delta: Int, singleAction: HandlebarAction): VolumeDeltaRead? {
+internal fun interpretVolumeDelta(
+    delta: Int,
+    singleAction: HandlebarAction,
+    streamMax: Int
+): VolumeDeltaRead? {
     if (delta == 0) return null
     val up = delta > 0
     val single = if (up) HandlebarGesture.VOLUME_UP else HandlebarGesture.VOLUME_DOWN
     val double = if (up) HandlebarGesture.VOLUME_UP_DOUBLE else HandlebarGesture.VOLUME_DOWN_DOUBLE
     val magnitude = abs(delta)
+    val absoluteOverwriteFloor = maxOf(streamMax / 4, DOUBLE_PRESS_VOLUME_STEPS + 2)
+    if (magnitude >= absoluteOverwriteFloor) {
+        return VolumeDeltaRead.Tap(single, double, forceDouble = false)
+    }
     val scrollMapped = singleAction == HandlebarAction.SCROLL_FORWARD ||
         singleAction == HandlebarAction.SCROLL_BACK
     if (scrollMapped && magnitude in 2 until DOUBLE_PRESS_VOLUME_STEPS) {
