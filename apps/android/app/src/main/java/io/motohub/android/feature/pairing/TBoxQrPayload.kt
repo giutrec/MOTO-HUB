@@ -1,7 +1,7 @@
 package io.motohub.android.feature.pairing
 
+import java.io.ByteArrayOutputStream
 import java.net.URI
-import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
 /**
@@ -45,8 +45,12 @@ object TBoxQrParser {
     }
 
     private fun parseProvisioningUrl(rawValue: String): TBoxQrPayload {
-        val uri = URI(rawValue)
-        val parameters = uri.rawQuery.orEmpty()
+        // URI rejects the whole string over one unescaped character - a `%` in a passphrase is
+        // enough - so a dash whose QR is slightly off spec would be unpairable. Fall back to
+        // reading the query and host by hand; content that carries no SSID is still rejected
+        // below, which is the only rejection this parser owes the caller.
+        val uri = runCatching { URI(rawValue) }.getOrNull()
+        val parameters = (uri?.rawQuery ?: rawValue.substringAfter('?', "").substringBefore('#'))
             .split('&')
             .filter(String::isNotBlank)
             .associate { item ->
@@ -56,7 +60,7 @@ object TBoxQrParser {
         val ssid = parameters["ssid"].orEmpty().trim()
         check(ssid.isNotEmpty()) { "The QR code does not carry a T-Box network name." }
 
-        val host = uri.host?.lowercase()
+        val host = (uri?.host ?: hostOf(rawValue))?.lowercase()
         return TBoxQrPayload(
             ssid = ssid,
             password = parameters["pwd"].orEmpty(),
@@ -130,8 +134,60 @@ object TBoxQrParser {
         return fields
     }
 
-    private fun decode(value: String): String =
-        URLDecoder.decode(value, StandardCharsets.UTF_8)
+    /**
+     * Percent-decodes one query component, leaving `+` and a stray `%` exactly as they were.
+     *
+     * `URLDecoder` implements `application/x-www-form-urlencoded`, where `+` stands for a space.
+     * A Carbit provisioning QR is a plain query string, not a submitted form: a passphrase
+     * containing a literal `+` was saved with a space in its place, and every join then failed
+     * association with nothing in the log to say why. An unescaped `%` made `URLDecoder` throw,
+     * which rejected the whole QR - passing the byte through beats refusing to pair at all.
+     * Percent-escapes are still decoded, so `%2B` remains a `+` and `%20` remains a space.
+     */
+    private fun decode(value: String): String {
+        if (!value.contains('%')) return value
+        val decoded = StringBuilder(value.length)
+        val escaped = ByteArrayOutputStream()
+
+        // Consecutive escapes are one UTF-8 sequence: they have to be decoded together, so the
+        // bytes are only turned into text once a literal character (or the end) interrupts them.
+        fun flushEscaped() {
+            if (escaped.size() == 0) return
+            decoded.append(String(escaped.toByteArray(), StandardCharsets.UTF_8))
+            escaped.reset()
+        }
+
+        var index = 0
+        while (index < value.length) {
+            val byte = if (value[index] == '%') hexByteAt(value, index + 1) else null
+            if (byte == null) {
+                flushEscaped()
+                decoded.append(value[index])
+                index++
+            } else {
+                escaped.write(byte)
+                index += 3
+            }
+        }
+        flushEscaped()
+        return decoded.toString()
+    }
+
+    /** The byte spelled by the two hex digits at [start], or null if they are not two hex digits. */
+    private fun hexByteAt(value: String, start: Int): Int? {
+        if (start + 1 >= value.length) return null
+        val high = Character.digit(value[start], 16)
+        val low = Character.digit(value[start + 1], 16)
+        if (high < 0 || low < 0) return null
+        return (high shl 4) or low
+    }
+
+    /** Authority host of a URL [URI] refused to parse, so an off-spec QR can still be vouched for. */
+    private fun hostOf(rawValue: String): String? {
+        val authority = rawValue.substringAfter("://", missingDelimiterValue = "")
+            .takeWhile { it != '/' && it != '?' && it != '#' }
+        return authority.substringAfterLast('@').substringBefore(':').takeIf(String::isNotEmpty)
+    }
 
     private fun isCarbitHost(host: String): Boolean =
         host == "carbit.com" || host.endsWith(".carbit.com") ||

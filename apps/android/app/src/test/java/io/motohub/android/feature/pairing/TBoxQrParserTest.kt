@@ -19,6 +19,40 @@ class TBoxQrParserTest {
     }
 
     @Test
+    fun keepsALiteralPlusInsideAPassphrase() {
+        // A provisioning URL is a query string, not a submitted form: URLDecoder's form rules
+        // turned this passphrase into "rider 2026" and every join failed association silently.
+        val payload = TBoxQrParser.parse(
+            "https://setup.carbit.com/connect?ssid=VOGE-5G-58e4&pwd=rider+2026&auth=wpa2-psk"
+        ).getOrThrow()
+
+        assertEquals("rider+2026", payload.password)
+        assertEquals("VOGE-5G-58e4", payload.ssid)
+    }
+
+    @Test
+    fun keepsAnUnescapedPercentInsteadOfRejectingTheWholeCode() {
+        val payload = TBoxQrParser.parse(
+            "https://setup.carbit.com/connect?ssid=TBOX-9f21&pwd=100%pure&auth=wpa2-psk"
+        ).getOrThrow()
+
+        assertEquals("100%pure", payload.password)
+        assertEquals("TBOX-9f21", payload.ssid)
+        // The host still has to be recognised on the hand-rolled path, or a valid Carbit QR
+        // would silently drop to UNVERIFIED just because its passphrase held a `%`.
+        assertEquals(TBoxQrOrigin.CARBIT, payload.origin)
+    }
+
+    @Test
+    fun decodesMultiByteEscapeSequencesAsOneCharacter() {
+        val payload = TBoxQrParser.parse(
+            "https://setup.carbit.com/connect?ssid=TBOX-9f21&pwd=secret&name=Moto%C3%A8"
+        ).getOrThrow()
+
+        assertEquals("Motoè", payload.displayName)
+    }
+
+    @Test
     fun preservesTheQrModelIdAsAnOpaqueTboxIdentifier() {
         val result = TBoxQrParser.parse(
             "http://www.carbit.com.cn/downsdk/657/658/_sdk?modelid=37416&sn=test&action=9&ssid=TBOX-test&pwd=example&auth=wpa2-psk&mac=00%3A00%3A00%3A00%3A00%3A00&name=TBOX-test"
