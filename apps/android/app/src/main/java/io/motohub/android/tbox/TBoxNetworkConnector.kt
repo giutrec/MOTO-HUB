@@ -143,6 +143,17 @@ class TBoxNetworkConnector(context: Context) {
     @Volatile
     private var pendingFailure: Throwable? = null
 
+    /**
+     * Whether Android ever granted a network for the request currently registered - set by
+     * `onAvailable`, which fires on association, well before any IP address exists.
+     *
+     * Separates the two ways a join can run out of time: the phone never associated to the AP at
+     * all, or it associated and the dash never handed out a usable IPv4. They have different
+     * causes and different remedies, and used to share one message that named only the second.
+     */
+    @Volatile
+    private var networkGranted = false
+
     @Volatile
     private var pendingGiveUpJob: Job? = null
 
@@ -257,6 +268,7 @@ class TBoxNetworkConnector(context: Context) {
         callback = null
         pendingRequestSsid = null
         pendingFailure = null
+        networkGranted = false
         pendingGiveUpJob?.cancel()
         pendingGiveUpJob = null
         if (processBoundNetwork != null) {
@@ -355,8 +367,20 @@ class TBoxNetworkConnector(context: Context) {
      */
     private fun submitSpecifierRequest(profile: MotorcycleProfile) {
         pendingFailure = null
+        networkGranted = false
         lateinit var networkCallback: ConnectivityManager.NetworkCallback
         networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                // Association only - there is no address yet, so this is not success. It is the
+                // one signal that separates "never joined the AP" from "joined it and got no IP",
+                // and its absence across a whole rider log is itself the diagnosis.
+                networkGranted = true
+                ProjectionEventLog.debug(
+                    "NETWORK",
+                    "Android granted network=$network for ${profile.ssid}; awaiting a usable IPv4 address."
+                )
+            }
+
             override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
                 val addresses = linkProperties.linkAddresses.mapNotNull { it.address.hostAddress }
                 val gateways = linkProperties.routes.mapNotNull { it.gateway?.hostAddress }.distinct()
@@ -445,8 +469,19 @@ class TBoxNetworkConnector(context: Context) {
             }
 
             override fun onUnavailable() {
-                ProjectionEventLog.error("NETWORK", "Android reported the requested T-Box Wi-Fi as unavailable.")
-                pendingFailure = IllegalStateException("Android did not make the requested T-Box AP available.")
+                ProjectionEventLog.error(
+                    "NETWORK",
+                    "Android reported the requested T-Box Wi-Fi as unavailable; granted=$networkGranted."
+                )
+                pendingFailure = IllegalStateException(
+                    if (networkGranted) {
+                        "Android dropped the ${profile.ssid} network before it became usable."
+                    } else {
+                        "Android gave up connecting to ${profile.ssid}: either the dash was not " +
+                            "broadcasting it, the saved password no longer matches, or the " +
+                            "connection dialog was dismissed. Rescan the dash QR code and retry."
+                    }
+                )
                 releaseCallback(networkCallback)
             }
         }
@@ -506,19 +541,20 @@ class TBoxNetworkConnector(context: Context) {
      * scan, so a recovery retry joins a hunt that has been running the whole time instead of
      * restarting it from zero. [schedulePendingGiveUp] still bounds how long the radio can be
      * held by a request nothing ever answers.
+     *
+     * The wait can run [UNAVAILABLE_GRACE_MS] past [CONNECTION_TIMEOUT_MS], but only while
+     * nothing has been granted - the window exists to catch Android's own late verdict.
      */
     private suspend fun awaitRequestedNetwork(profile: MotorcycleProfile): Result<Network> {
         try {
-            val deadline = SystemClock.elapsedRealtime() + CONNECTION_TIMEOUT_MS
-            while (SystemClock.elapsedRealtime() < deadline) {
-                currentNetwork()?.let { return Result.success(it) }
-                pendingFailure?.let { failure ->
-                    pendingFailure = null
-                    // activeVpnLabel() omitted here: merely having a VpnService-based app present isn't evidence this failure caused it.
-                    val vpnMessage = TBoxVpnDiagnostics.userFacingMessage(failure, activeVpnLabel = null)
-                    return Result.failure(vpnMessage?.let { IllegalStateException(it, failure) } ?: failure)
-                }
-                delay(NETWORK_POLL_MS)
+            pollForOutcome(SystemClock.elapsedRealtime() + CONNECTION_TIMEOUT_MS)?.let { return it }
+            if (!networkGranted) {
+                ProjectionEventLog.debug(
+                    "NETWORK",
+                    "Nothing granted for ${profile.ssid} within ${CONNECTION_TIMEOUT_MS}ms; waiting up " +
+                        "to ${UNAVAILABLE_GRACE_MS}ms for Android's own verdict."
+                )
+                pollForOutcome(SystemClock.elapsedRealtime() + UNAVAILABLE_GRACE_MS)?.let { return it }
             }
         } catch (cancelled: CancellationException) {
             // A real cancellation (user cancel, scope teardown) must release the exclusive
@@ -528,16 +564,44 @@ class TBoxNetworkConnector(context: Context) {
         }
         ProjectionEventLog.error(
             "NETWORK",
-            "Wi-Fi setup timed out after ${CONNECTION_TIMEOUT_MS}ms; the request stays pending " +
-                "for the next attempt."
+            "Wi-Fi setup timed out after ${CONNECTION_TIMEOUT_MS}ms with " +
+                (if (networkGranted) "the network granted but no usable IPv4 address" else "no network granted") +
+                "; the request stays pending for the next attempt."
         )
-        return Result.failure(
-            IllegalStateException(
-                "Android did not obtain a usable IPv4 address from the requested T-Box AP within " +
-                    "${CONNECTION_TIMEOUT_MS}ms. If Android showed a dialog asking to connect to " +
-                    "the ${profile.ssid} network, accept it and retry."
-            )
-        )
+        return Result.failure(IllegalStateException(setupTimeoutMessage(profile)))
+    }
+
+    /**
+     * Polls the shared connection state until [deadline], returning null if it runs out with
+     * neither a network nor a failure - the caller decides whether that is worth waiting past.
+     */
+    private suspend fun pollForOutcome(deadline: Long): Result<Network>? {
+        while (SystemClock.elapsedRealtime() < deadline) {
+            currentNetwork()?.let { return Result.success(it) }
+            pendingFailure?.let { failure ->
+                pendingFailure = null
+                // activeVpnLabel() omitted here: merely having a VpnService-based app present isn't evidence this failure caused it.
+                val vpnMessage = TBoxVpnDiagnostics.userFacingMessage(failure, activeVpnLabel = null)
+                return Result.failure(vpnMessage?.let { IllegalStateException(it, failure) } ?: failure)
+            }
+            delay(NETWORK_POLL_MS)
+        }
+        return null
+    }
+
+    /**
+     * Names which half of the join ran out of time. One message used to cover both, and it named
+     * only the second: a rider whose phone never associated at all was told Android had not got
+     * an IP address *from the AP*, which points at the bike when the AP was never reached.
+     */
+    private fun setupTimeoutMessage(profile: MotorcycleProfile): String = if (networkGranted) {
+        "The phone joined ${profile.ssid} but Android never obtained a usable IPv4 address from " +
+            "it within ${CONNECTION_TIMEOUT_MS}ms. Switch the dash off and on again, then retry."
+    } else {
+        "The phone never joined ${profile.ssid}: Android did not associate to it within " +
+            "${CONNECTION_TIMEOUT_MS}ms. Check that ${profile.ssid} is listed in the phone's Wi-Fi " +
+            "settings while the dash shows its pairing screen - if it is not, the dash is not " +
+            "broadcasting. If Android showed a dialog asking to connect to it, accept it and retry."
     }
 
     /**
@@ -763,6 +827,16 @@ class TBoxNetworkConnector(context: Context) {
     private companion object {
         const val TAG = "TBoxNetwork"
         const val CONNECTION_TIMEOUT_MS = 30_000L
+
+        /**
+         * Extra wait for Android's own `onUnavailable` verdict once [CONNECTION_TIMEOUT_MS] has
+         * run out with nothing granted. Android times a specifier request out 30s after the rider
+         * approves the picker, so its verdict always lands a few seconds after ours - in a rider
+         * log of twelve consecutive failures it arrived 2.8-4.4s late every single time, which
+         * meant the specific "Android could not deliver this network" reason was never the one
+         * reported. Bounded, because a rider who leaves the picker open pushes it out of reach.
+         */
+        const val UNAVAILABLE_GRACE_MS = 6_000L
         const val EXISTING_WIFI_POLL_MS = 250L
         const val NETWORK_POLL_MS = 250L
         const val SIMULATOR_MONITOR_POLL_MS = 1_000L
