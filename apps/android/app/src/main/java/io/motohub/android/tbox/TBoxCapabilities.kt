@@ -31,7 +31,20 @@ data class TBoxCapabilities(
     val phoneSignal: Boolean? = null,
     val syncCorrectTime: Boolean? = null,
     val bluetoothCall: Boolean? = null,
-    val bluetoothSettings: Boolean? = null
+    val bluetoothSettings: Boolean? = null,
+    /**
+     * The EasyConn SDK "flavor": which manufacturer licensed this dashboard. Numeric in
+     * shipped firmware (65536 CFMOTO, 65540 CFMOTO international, 65561 ZONTES, 65569 Benda,
+     * …), a plain string in the MOTO-HUB simulator, so it is kept as text. The SDK pairs it
+     * with a phone package name it expects the companion app to use, which is why a rebadged
+     * non-CFMOTO dash can complete the handshake and still refuse to project.
+     *
+     * Declared last, with [channel], so a positional [TBoxCapabilities] call site cannot
+     * silently rebind one of the other nullable strings.
+     */
+    val flavor: String? = null,
+    /** CLIENT_INFO echoes the pairing QR's modelId here; useful to confirm the two agree. */
+    val channel: String? = null
 )
 
 internal fun decodeTBoxCapabilities(payload: ByteArray): TBoxCapabilities? = runCatching {
@@ -73,7 +86,9 @@ internal fun tBoxCapabilitiesFrom(fields: Map<String, Any?>): TBoxCapabilities =
         phoneSignal = fields["supportPhoneSignal"].asBoolean(),
         syncCorrectTime = fields["supportSyncCorrectTime"].asBoolean(),
         bluetoothCall = fields["supportBTCall"].asBoolean(),
-        bluetoothSettings = fields["supportBTSetting"].asBoolean()
+        bluetoothSettings = fields["supportBTSetting"].asBoolean(),
+        flavor = fields["flavor"].asString(),
+        channel = fields["channel"].asString()
     )
 
 private fun Any?.asString(): String? = when (this) {
@@ -98,6 +113,8 @@ private val CLIENT_INFO_KEYS = setOf(
     "HUName",
     "carBrand",
     "carModel",
+    "flavor",
+    "channel",
     "package_name",
     "pxcVersion",
     "sdkVersion",

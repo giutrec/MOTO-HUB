@@ -44,4 +44,34 @@ class TBoxCapabilitiesTest {
         assertNull(result.microphone)
     }
 
+    @Test
+    fun `keeps a numeric manufacturer flavor as text`() {
+        // Shipped firmware reports flavor as an int (65561 is ZONTES in the EasyConn SDK's
+        // ECP_FLAVOR_APP_SDK_* table); the simulator reports a string. Both must survive.
+        val result = tBoxCapabilitiesFrom(mapOf("flavor" to 65561, "channel" to 48405))
+
+        assertEquals("65561", result.flavor)
+        assertEquals("48405", result.channel)
+    }
+
+    @Test
+    fun `keeps a string manufacturer flavor`() {
+        val result = tBoxCapabilitiesFrom(mapOf("flavor" to "simulator"))
+
+        assertEquals("simulator", result.flavor)
+        assertNull(result.channel)
+    }
+
+    @Test
+    fun `decodes flavor and channel from a raw CLIENT_INFO payload`() {
+        // Guards the CLIENT_INFO_KEYS whitelist: a field absent from it is dropped before
+        // tBoxCapabilitiesFrom ever sees it, so mapping alone is not enough.
+        val payload = """{"HUName":"ZT-DASH","flavor":65561,"channel":"48405"}"""
+            .toByteArray(Charsets.UTF_8)
+
+        val result = decodeTBoxCapabilities(payload)
+
+        assertEquals("65561", result?.flavor)
+        assertEquals("48405", result?.channel)
+    }
 }

@@ -83,8 +83,8 @@ android {
         // keep this identical to the PRO worktree's build.gradle.kts. They drifted after v1.1.4
         // (CORE reached 1.1.14/108 while ADVANCED sat at 1.1.6/100), which left a rider's
         // "MOTO-HUB 1.1.x" unable to identify which pair they actually had installed.
-        versionCode = 113
-        versionName = "1.1.19"
+        versionCode = 114
+        versionName = "1.1.20"
         buildConfigField("boolean", "IS_PRO", "false")
         buildConfigField("String", "SENTRY_DSN", asBuildConfigString(coreSentryDsn))
         // -PsentryDebug=true makes the SDK narrate what it is doing to logcat. Telemetry that
@@ -323,6 +323,9 @@ dependencies {
     implementation(libs.sentry.android)
 
     testImplementation(libs.junit)
+    // See the comment on `json` in libs.versions.toml: android.jar's org.json throws on every
+    // call under unit tests, so the real implementation is needed to test any JSON parser.
+    testImplementation(libs.json)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

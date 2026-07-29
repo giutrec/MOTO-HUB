@@ -33,6 +33,33 @@ class TBoxModelProfileTest {
     }
 
     @Test
+    fun `pinning a real profile rescues an unrecognised model id`() {
+        // The Zontes case: modelId 48405 is claimed by no profile, so detection can only reach
+        // GENERIC and CLIENT_INFO scoring has nothing to score. Pinning is the rider's only way
+        // to put a different supportFunction and PXC heartbeat on the wire, and both the session
+        // registry's log line and CoreTBoxConnector's protocol profile depend on this resolving
+        // to the pin rather than to GENERIC.
+        assertEquals(TBoxModelProfile.GENERIC, TBoxModelProfile.resolve("48405", null))
+        assertEquals(
+            TBoxModelProfile.CFMOTO_800NK,
+            TBoxModelProfile.resolve("48405", null, ProfileOverride.CFMOTO_800NK)
+        )
+        assertEquals(
+            128,
+            TBoxModelProfile.resolve("48405", null, ProfileOverride.CFMOTO_800NK)
+                .advertisedSupportFunction
+        )
+        assertEquals(
+            true,
+            TBoxModelProfile.resolve("48405", null, ProfileOverride.CFMOTO_800NK)
+                .requiresProactivePxcHeartbeat
+        )
+        // GENERIC is what the same dash gets with no pin, and it advertises neither.
+        assertEquals(0, TBoxModelProfile.GENERIC.advertisedSupportFunction)
+        assertFalse(TBoxModelProfile.GENERIC.requiresProactivePxcHeartbeat)
+    }
+
+    @Test
     fun `pinning the generic override beats a recognised model id`() {
         // Detection would land on CFMOTO_800NK here. A rider who pinned Generic is saying the
         // match is wrong, so the pin has to win over the model id, not merely over an empty one.

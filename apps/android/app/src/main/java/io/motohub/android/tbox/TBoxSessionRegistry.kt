@@ -52,7 +52,15 @@ object TBoxSessionRegistry {
     fun install(handle: TBoxSessionHandle) {
         activeHandle = handle
         consumers.clear()
-        val modelProfile = TBoxModelProfile.fromModelId(handle.motorcycle.modelId)
+        // Honour the rider's manual pin. Reporting the modelId's own answer here made the log
+        // contradict itself for anyone who had overridden the profile - the session line said
+        // "Generic EasyConn dashboard" while the mode that started moments later reported the
+        // pinned profile, which reads as "the override was ignored" when it was not.
+        val modelProfile = TBoxModelProfile.resolve(
+            handle.motorcycle.modelId,
+            null,
+            ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
+        )
         ProjectionEventLog.record(
             "SESSION",
             "Registry installed T-Box ${handle.host.ipAddress}:${handle.host.port} for " +

@@ -919,10 +919,15 @@ class RideDaemonTransport(
                 if (capabilities == null) {
                     ProjectionEventLog.warning("TBOX", "Unable to decode the T-Box CLIENT_INFO payload.")
                 } else {
+                    // Full raw CLIENT_INFO, not just the few fields TBoxCapabilities extracts -
+                    // ProjectionEventLog.redact() strips password/pin-shaped fields (including
+                    // btPin) before this reaches the log file. Deliberately stays behind the
+                    // verbose setting: the raw payload also carries HUID and uuid, which redact()
+                    // does not touch and which TBoxCapabilities refuses to keep on purpose, so
+                    // logging it by default would put a stable hardware identifier into logs
+                    // riders paste into public issues. The unrecognised-dashboard branch below
+                    // gets the diagnostic value from the whitelisted subset instead.
                     if (verbose) {
-                        // Full raw CLIENT_INFO, not just the few fields TBoxCapabilities
-                        // extracts - ProjectionEventLog.redact() strips password/pin-shaped
-                        // fields (including btPin) before this reaches the log file.
                         val rawJson = payload.toString(Charsets.UTF_8).trim().trimEnd(' ')
                         ProjectionEventLog.debug("TBOX", "CLIENT_INFO raw (verbose): $rawJson")
                     }
@@ -932,6 +937,46 @@ class RideDaemonTransport(
                             "pxc=${capabilities.pxcVersion ?: "not reported"}, " +
                             "touch=${capabilities.screenTouch ?: "not reported"}."
                     )
+                    // Brand identity, always. Carbit licenses the same dashboard stack well beyond
+                    // CFMOTO and its SDK pairs each manufacturer's flavor with the phone package
+                    // name it expects the companion app to advertise, so a rebadged dash can
+                    // complete the whole handshake and still refuse to project. Two short fields,
+                    // and the first thing worth knowing about an unfamiliar dashboard.
+                    ProjectionEventLog.record(
+                        "TBOX",
+                        "Dashboard identity: flavor=${capabilities.flavor ?: "not reported"}, " +
+                            "channel=${capabilities.channel ?: "not reported"}, " +
+                            "brand=${capabilities.carBrand ?: "not reported"}, " +
+                            "model=${capabilities.carModel ?: "not reported"}, " +
+                            "profile=${protocolProfile.key}."
+                    )
+                    // Nothing claimed this dashboard, so no profile knows its geometry, touch
+                    // behaviour or firmware quirks - the one case a rider cannot diagnose from
+                    // the outside. Report the whitelisted CLIENT_INFO subset and every candidate
+                    // profile's score unconditionally, the same rule AndroidAutoSessionService
+                    // already applies to the scores. Every field here is one TBoxCapabilities
+                    // already keeps, so this adds no identifier the log did not carry before.
+                    if (protocolProfile == TBoxModelProfile.GENERIC) {
+                        ProjectionEventLog.record(
+                            "TBOX",
+                            "Unrecognised dashboard: package=${capabilities.packageName ?: "?"}, " +
+                                "version=${capabilities.versionName ?: "?"}" +
+                                "(${capabilities.versionCode ?: "?"}), " +
+                                "sdk=${capabilities.sdkVersion ?: "?"}, " +
+                                "dashSupportFunction=${capabilities.supportFunction ?: "?"}, " +
+                                "socketTimeoutWifi=${capabilities.socketTimeoutPeriodWifi ?: "?"}ms, " +
+                                "sockAuth=${capabilities.socketServerAuth ?: "?"}, " +
+                                "dpi=${capabilities.dpi ?: "?"}, " +
+                                "productType=${capabilities.productType ?: "?"}, " +
+                                "screenType=${capabilities.screenType ?: "?"}, " +
+                                "landscapeAdaptive=${capabilities.landscapeAdaptive ?: "?"}, " +
+                                "mirrorOverlayTouch=${capabilities.mirrorOverlayTouch ?: "?"}."
+                        )
+                        ProjectionEventLog.record(
+                            "TBOX",
+                            "Profile scores: ${TBoxModelProfile.scoreBreakdown(capabilities)}."
+                        )
+                    }
                     mutableEvents.tryEmit(TBoxEvent.Capabilities(capabilities))
                 }
                 return
