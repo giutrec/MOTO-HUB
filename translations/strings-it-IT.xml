@@ -685,6 +685,7 @@
     <string name="legacy_the_official_cfmoto_motoplay_easyconn_app_can_st_7e0ae938">L\'app ufficiale CFMOTO MotoPlay/EasyConn può comunque prendere il controllo della connessione T-Box mentre è in background. Per una proiezione affidabile, forzane l\'arresto dalle impostazioni Android prima di continuare.</string>
     <string name="legacy_continue_with_android_auto_f6c7ef01">Continua con Android Auto</string>
     <string name="legacy_open_motoplay_settings_99bbfe9c">Apri impostazioni MotoPlay</string>
+    <string name="legacy_do_not_show_this_warning_again_d3abf59b">Non mostrare più questo avviso</string>
     <!-- Source: tbox/ProfileOverride.kt -->
     <string name="legacy_generic_dashboard_53d1376b">Cruscotto generico</string>
     <!-- Source: tbox/ProfileOverride.kt -->

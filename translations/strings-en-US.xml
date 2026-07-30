@@ -1261,6 +1261,7 @@
     <string name="legacy_the_official_cfmoto_motoplay_easyconn_app_can_st_7e0ae938">The official CFMOTO MotoPlay/EasyConn app can still take over the T-Box connection while it is in the background. For reliable projection, force-stop it in Android settings before continuing.</string>
     <string name="legacy_continue_with_android_auto_f6c7ef01">Continue with Android Auto</string>
     <string name="legacy_open_motoplay_settings_99bbfe9c">Open MotoPlay settings</string>
+    <string name="legacy_do_not_show_this_warning_again_d3abf59b">Do not show this warning again</string>
     <!-- Source: tbox/ProfileOverride.kt -->
     <string name="legacy_generic_dashboard_53d1376b">Generic dashboard</string>
     <!-- Source: tbox/ProfileOverride.kt -->

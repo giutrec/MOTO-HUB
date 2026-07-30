@@ -1267,6 +1267,7 @@
     <string name="legacy_the_official_cfmoto_motoplay_easyconn_app_can_st_7e0ae938">A aplicação oficial CFMOTO MotoPlay/EasyConn pode ainda assumir a ligação à T-Box enquanto está em segundo plano. Para uma projeção fiável, force a paragem nas definições Android antes de continuar.</string>
     <string name="legacy_continue_with_android_auto_f6c7ef01">Continuar com Android Auto</string>
     <string name="legacy_open_motoplay_settings_99bbfe9c">Abrir definições do MotoPlay</string>
+    <string name="legacy_do_not_show_this_warning_again_d3abf59b">Não mostrar novamente este aviso</string>
     <!-- Source: tbox/ProfileOverride.kt -->
     <string name="legacy_generic_dashboard_53d1376b">Painel genérico</string>
     <!-- Source: tbox/ProfileOverride.kt -->

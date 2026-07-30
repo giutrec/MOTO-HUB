@@ -1009,7 +1009,9 @@ class MainActivity : ComponentActivity() {
                         androidAutoActive = androidAutoActive,
                         androidAutoStreaming = androidAutoStreaming,
                         onStartAndroidAuto = {
-                            if (OfficialCfmotoClient.isInstalled(context)) {
+                            if (OfficialCfmotoClient.isInstalled(context) &&
+                                !MotoHubSettings.motoPlayWarningSuppressed(context)
+                            ) {
                                 ProjectionEventLog.record(
                                     "ANDROID_AUTO",
                                     "Official CFMOTO app is installed; showing MotoPlay conflict warning before launch."
@@ -1228,8 +1230,16 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 if (showOfficialCfmotoWarning) {
+                    var doNotShowMotoPlayWarningAgain by rememberSaveable { mutableStateOf(false) }
                     OfficialCfmotoWarningDialog(
-                        onDismiss = { showOfficialCfmotoWarning = false },
+                        doNotShowAgain = doNotShowMotoPlayWarningAgain,
+                        onDoNotShowAgainChanged = { doNotShowMotoPlayWarningAgain = it },
+                        onDismiss = {
+                            if (doNotShowMotoPlayWarningAgain) {
+                                MotoHubSettings.setMotoPlayWarningSuppressed(context, true)
+                            }
+                            showOfficialCfmotoWarning = false
+                        },
                         onOpenOfficialAppSettings = {
                             if (!OfficialCfmotoClient.openAppSettings(context)) {
                                 Toast.makeText(
@@ -1240,10 +1250,14 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onContinue = {
+                            if (doNotShowMotoPlayWarningAgain) {
+                                MotoHubSettings.setMotoPlayWarningSuppressed(context, true)
+                            }
                             showOfficialCfmotoWarning = false
                             ProjectionEventLog.record(
                                 "ANDROID_AUTO",
-                                "User continued Android Auto launch after MotoPlay conflict warning."
+                                "User continued Android Auto launch after MotoPlay conflict warning; " +
+                                    "doNotShowAgain=$doNotShowMotoPlayWarningAgain."
                             )
                             continueAndroidAutoStart()
                         }
