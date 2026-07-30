@@ -17,7 +17,7 @@ object TBoxLinkResolver {
         networkConnector: TBoxNetworkConnector,
         profile: MotorcycleProfile
     ): Result<TBoxLink> =
-        if (profile.usesWifiDirect()) {
+        if (usesWifiDirect(profile)) {
             ProjectionEventLog.record(
                 "NETWORK",
                 "Connecting to ${profile.ssid} through Wi-Fi Direct (${profile.connectionMode})."
@@ -38,7 +38,7 @@ object TBoxLinkResolver {
         profile: MotorcycleProfile,
         awaitNetworkMillis: Long
     ): TBoxLink {
-        if (profile.usesWifiDirect()) {
+        if (usesWifiDirect(profile)) {
             // A P2P group has no ConnectivityManager-visible network to await; rejoin directly.
             return TBoxWifiDirectConnector(context).connect(profile).getOrThrow()
         }
@@ -48,9 +48,14 @@ object TBoxLinkResolver {
         return TBoxLink.Infrastructure(network)
     }
 
-    private fun MotorcycleProfile.usesWifiDirect(): Boolean = when (connectionMode) {
+    /**
+     * Public so a caller can find out which transport a profile will take *before* asking for it.
+     * PRO needs this: the Wi-Fi Direct join runs in CORE's process and has a permission gate the
+     * access-point path does not, so PRO has to know which one it is about to trigger.
+     */
+    fun usesWifiDirect(profile: MotorcycleProfile): Boolean = when (profile.connectionMode) {
         TBoxConnectionMode.WIFI_DIRECT -> true
         TBoxConnectionMode.ACCESS_POINT -> false
-        TBoxConnectionMode.AUTO -> TBoxWifiDirectConnector.isWifiDirectSsid(ssid)
+        TBoxConnectionMode.AUTO -> TBoxWifiDirectConnector.isWifiDirectSsid(profile.ssid)
     }
 }

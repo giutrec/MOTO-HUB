@@ -58,6 +58,21 @@ class TBoxWifiDirectConnector(
 
     suspend fun connect(profile: MotorcycleProfile): Result<TBoxLink.WifiDirect> =
         withContext(Dispatchers.IO) {
+            // Before the framework, not after: a process without NEARBY_WIFI_DEVICES gets the same
+            // bare "internal error" from discoverPeers() and connect() that a wedged P2P stack
+            // gives, and no amount of retrying or state-clearing can tell the two apart or fix
+            // either. Checked here rather than in the UI because the join also runs headless, on
+            // behalf of a companion app whose own grant says nothing about this process's.
+            if (!WifiDirectGate.hasNearbyDevicesPermission(appContext)) {
+                log(
+                    "Wi-Fi Direct join refused before it started: this app has no " +
+                        "NEARBY_WIFI_DEVICES permission, so the framework would reject every " +
+                        "discoverPeers()/connect() with a bare internal error."
+                )
+                return@withContext Result.failure(
+                    IllegalStateException(WifiDirectGate.missingPermissionMessage(appName()))
+                )
+            }
             val manager = appContext.getSystemService(Context.WIFI_P2P_SERVICE) as? WifiP2pManager
                 ?: return@withContext Result.failure(
                     IllegalStateException("This device has no Wi-Fi Direct (P2P) support.")
@@ -288,9 +303,20 @@ class TBoxWifiDirectConnector(
                 else -> {
                     if (attempt == CONNECT_ATTEMPTS - 1) {
                         logConnectRejectionDiagnostics(manager, channel, profile, peer)
+                        // The permission is already ruled out by connect()'s preflight, so the
+                        // remaining rider-fixable cause of a bare rejection is the phone-wide
+                        // location toggle. Named only when it is actually off - a hint that
+                        // appears on every failure is one riders learn to skip.
+                        val hint = if (WifiDirectGate.isLocationEnabled(appContext)) {
+                            ""
+                        } else {
+                            " ${WifiDirectGate.LOCATION_OFF_HINT}"
+                        }
                         outcome.complete(
                             Result.failure(
-                                IllegalStateException("Wi-Fi Direct connect() failed: ${reasonName(reason)}.")
+                                IllegalStateException(
+                                    "Wi-Fi Direct connect() failed: ${reasonName(reason)}.$hint"
+                                )
                             )
                         )
                         return
@@ -349,8 +375,21 @@ class TBoxWifiDirectConnector(
                 "groupFormed=${connection?.groupFormed == true}, group=$groupDescription, " +
                 "dash peer=${dash?.let { statusName(it.status) } ?: "not in the peer list"}."
         } ?: "P2P state after the rejection: the framework did not answer the state queries."
-        log(line)
+        // Appended even when the framework went silent: these two are what it consults before
+        // answering at all, and reading them costs no framework call. Without them a bare ERROR
+        // is indistinguishable from a hardware fault in a mailed-in log.
+        log(
+            "$line Permission gate: nearbyDevices=" +
+                (if (WifiDirectGate.hasNearbyDevicesPermission(appContext)) "granted" else "DENIED") +
+                ", locationServices=" +
+                (if (WifiDirectGate.isLocationEnabled(appContext)) "on" else "OFF") + "."
+        )
     }
+
+    /** This app's own display name, so a permission message names the app the rider must open. */
+    private fun appName(): String = runCatching {
+        appContext.applicationInfo.loadLabel(appContext.packageManager).toString()
+    }.getOrDefault("MOTO-HUB")
 
     /** Runs one framework state query and waits briefly for its callback; null when it never answers. */
     private suspend fun <T> awaitQuery(query: (resume: (T?) -> Unit) -> Unit): T? =
