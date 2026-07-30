@@ -212,6 +212,29 @@ class IpcBridgeService : Service() {
         override fun closeVideoStream() {
             closeVideoStreamPipe()
         }
+
+        /**
+         * The companion app mirrors this log next to its own so a rider shares one file
+         * instead of exporting from two apps. A real file, not a pipe: the export is
+         * bounded (log ring + message caps) and a file descriptor stays readable even
+         * after this service is unbound.
+         */
+        override fun openDiagnosticLogSnapshot(): ParcelFileDescriptor? = runCatching {
+            val text = ProjectionEventLog.exportText()
+            if (text.isBlank()) return@runCatching null
+            val file = java.io.File(cacheDir, "ipc-diagnostics-snapshot.txt")
+            file.writeText(text, Charsets.UTF_8)
+            ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+        }.onFailure {
+            ProjectionEventLog.warning("IPC", "Diagnostic log snapshot failed.", it)
+        }.getOrNull()
+
+        override fun clearDiagnosticLog() {
+            ProjectionEventLog.clear()
+            // After the clear so it survives it: without this line a rider who cleared from
+            // the companion app sees a Core log that "emptied itself" with nothing to say why.
+            ProjectionEventLog.record("IPC", "Diagnostic log cleared at the companion app's request.")
+        }
     }
 
     /**

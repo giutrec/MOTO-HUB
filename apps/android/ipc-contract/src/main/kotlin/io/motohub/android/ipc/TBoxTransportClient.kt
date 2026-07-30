@@ -106,6 +106,18 @@ class TBoxTransportClient(
         service?.disconnect()
     }
 
+    /**
+     * Read-only snapshot of Core's diagnostic log, or null when the service is not bound,
+     * the log is empty, or an older Core predates the method (the dead transaction surfaces
+     * here as an exception, caught like openVideoStream()'s "older Binder-only Core" case).
+     */
+    fun openDiagnosticLogSnapshot(): ParcelFileDescriptor? =
+        runCatching { service?.openDiagnosticLogSnapshot() }.getOrNull()
+
+    /** True when the clear reached Core; false when unbound or Core predates the method. */
+    fun clearDiagnosticLog(): Boolean =
+        runCatching { service?.also { it.clearDiagnosticLog() } != null }.getOrDefault(false)
+
     private companion object {
         const val TAG = "TBoxTransportClient"
     }

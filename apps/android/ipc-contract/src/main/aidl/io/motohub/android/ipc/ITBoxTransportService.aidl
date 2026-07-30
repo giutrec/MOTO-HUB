@@ -59,4 +59,20 @@ interface ITBoxTransportService {
 
     /** Closes the pipe returned by openVideoStream(). */
     void closeVideoStream();
+
+    /**
+     * Read-only snapshot of Core's diagnostic log, already formatted for sharing. A file
+     * descriptor rather than a String: the export can exceed the 1 MB Binder transaction
+     * buffer. Null when the log is empty or the snapshot cannot be produced. Declared last
+     * so the preceding methods keep their transaction ids - a caller talking to an older
+     * Core gets a dead transaction (surfaced as null by the client), not a misrouted one.
+     */
+    ParcelFileDescriptor openDiagnosticLogSnapshot();
+
+    /**
+     * Clears Core's diagnostic log. The companion app's own Clear calls this so "clear the
+     * log" means the same thing it does everywhere else in the pair: both halves, one gesture.
+     * Same tail-position rule as above for compatibility with older Cores.
+     */
+    void clearDiagnosticLog();
 }
