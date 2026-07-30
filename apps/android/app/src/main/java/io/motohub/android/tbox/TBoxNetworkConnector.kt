@@ -112,6 +112,12 @@ class TBoxNetworkConnector(context: Context) {
     private var activeNetwork: Network? = null
     @Volatile
     private var processBoundNetwork: Network? = null
+    // Radio trail for the active network; see sampleLinkQuality. All written from the network
+    // callback thread and read from it or from onLost, which the framework serialises.
+    private var lastLinkSampleAtMs = 0L
+    private var lastSampleTakenAtMs = 0L
+    private var lastSampledRssi = UNSAMPLED_RSSI
+    private var lastSampleDescription: String? = null
     @Volatile
     private var activeProfile: MotorcycleProfile? = null
     @Volatile
@@ -381,6 +387,67 @@ class TBoxNetworkConnector(context: Context) {
      * BSSIDs are deliberately not logged: they are stable hardware identifiers and these logs get
      * pasted into public threads.
      */
+    /**
+     * Follows the radio for as long as the T-Box network lives, so a session that dies has a
+     * signal trail behind it instead of a single reading taken at association.
+     *
+     * This is the datum that separates the two ways a ride session ends, which a rider log could
+     * not tell apart: a link that fades (RSSI walking down over seconds, link speed collapsing)
+     * versus an AP that simply vanishes at full strength - the dash rebooting its hotspot, or
+     * handing the radio to something else. Both surface identically upstream, as a dead TCP
+     * connection and an `onLost` a few seconds later. Zontes log 2026-07-30: the dash measured
+     * -50dBm at 5180MHz when joined, then the session died 56s later with nothing recorded in
+     * between.
+     *
+     * Driven by `onCapabilitiesChanged`, which Android already delivers on signal changes, so
+     * there is no timer to own and nothing to stop when the session ends. The rate limit is
+     * deliberately two-sided: at most one line per [LINK_SAMPLE_INTERVAL_MS] while the link is
+     * steady, but every change of [LINK_SAMPLE_RSSI_STEP_DBM] or more regardless of how recently
+     * one was logged - dense exactly while the link is moving, near-silent when it is not. The
+     * lesson from `decode fps=` is that an unconditional per-event line costs more diagnostic
+     * value than it adds.
+     */
+    private fun sampleLinkQuality(capabilities: NetworkCapabilities) {
+        val wifiInfo = capabilities.transportInfo as? android.net.wifi.WifiInfo ?: return
+        val rssi = wifiInfo.rssi
+        // The framework redacts WifiInfo from callers it does not trust with location, and hands
+        // back its "no reading" sentinel otherwise. Logging that value would read as a link on
+        // the brink, which is the opposite of "we do not know".
+        if (rssi <= INVALID_RSSI_DBM) return
+        val now = SystemClock.elapsedRealtime()
+        val moved = lastSampledRssi != UNSAMPLED_RSSI &&
+            kotlin.math.abs(rssi - lastSampledRssi) >= LINK_SAMPLE_RSSI_STEP_DBM
+        val due = lastLinkSampleAtMs == 0L ||
+            now - lastLinkSampleAtMs >= LINK_SAMPLE_INTERVAL_MS
+        lastSampledRssi = rssi
+        lastSampleDescription = "rssi=${rssi}dBm, frequency=${wifiInfo.frequency}MHz, " +
+            "linkSpeed=${wifiInfo.linkSpeed}Mbps"
+        lastSampleTakenAtMs = now
+        if (!due && !moved) return
+        lastLinkSampleAtMs = now
+        ProjectionEventLog.debug("NETWORK", "T-Box link: $lastSampleDescription.")
+    }
+
+    /**
+     * The single most useful line in a log of a session that died: what the radio looked like the
+     * last time anyone measured it, and how stale that measurement was. A strong final sample
+     * taken a moment earlier means the AP went away rather than faded.
+     */
+    private fun logLastLinkSample() {
+        val description = lastSampleDescription ?: run {
+            ProjectionEventLog.debug(
+                "NETWORK",
+                "No T-Box link measurement was available before the network was lost."
+            )
+            return
+        }
+        val age = SystemClock.elapsedRealtime() - lastSampleTakenAtMs
+        ProjectionEventLog.warning(
+            "NETWORK",
+            "Last T-Box link measurement before the loss: $description, taken ${age}ms earlier."
+        )
+    }
+
     @SuppressLint("MissingPermission")
     private fun logVisibleApSnapshot(profile: MotorcycleProfile) {
         val target = profile.ssid.trim().removeSurrounding("\"")
@@ -397,6 +464,21 @@ class TBoxNetworkConnector(context: Context) {
                 ?.removeSurrounding("\"")
                 ?: @Suppress("DEPRECATION") SSID.orEmpty().removeSurrounding("\"")
 
+        // An EMPTY result list is not evidence about the dash: it means this phone handed back no
+        // scan at all - a cache the platform has not refreshed, scan throttling, or the
+        // location/permission gate on getScanResults() - and a phone that can see nothing
+        // whatsoever is describing itself, not the air. Saying "$target is NOT in the scan" there
+        // convicts the dash of being silent on no evidence. A rider's log (Zontes ZT_…,
+        // 2026-07-30) printed that verdict four times while the same dash measured -50dBm on
+        // 5180MHz two minutes later.
+        if (results.isEmpty()) {
+            ProjectionEventLog.debug(
+                "NETWORK",
+                "The phone's Wi-Fi scan came back empty (0 networks), so it says nothing about " +
+                    "whether $target is in range."
+            )
+            return
+        }
         val match = results.firstOrNull { it.ssidText().equals(target, ignoreCase = true) }
         if (match == null) {
             ProjectionEventLog.warning(
@@ -450,6 +532,12 @@ class TBoxNetworkConnector(context: Context) {
     private fun submitSpecifierRequest(profile: MotorcycleProfile) {
         pendingFailure = null
         networkGranted = false
+        // Per join, not per connector: a stale "last measurement before the loss" carried over
+        // from the previous session would be read as this one's, which is worse than none.
+        lastLinkSampleAtMs = 0L
+        lastSampleTakenAtMs = 0L
+        lastSampledRssi = UNSAMPLED_RSSI
+        lastSampleDescription = null
         logVisibleApSnapshot(profile)
         specifierSubmittedAt = SystemClock.elapsedRealtime()
         lateinit var networkCallback: ConnectivityManager.NetworkCallback
@@ -463,6 +551,14 @@ class TBoxNetworkConnector(context: Context) {
                     "NETWORK",
                     "Android granted network=$network for ${profile.ssid}; awaiting a usable IPv4 address."
                 )
+            }
+
+            override fun onCapabilitiesChanged(
+                network: Network,
+                networkCapabilities: NetworkCapabilities
+            ) {
+                if (network != activeNetwork) return
+                sampleLinkQuality(networkCapabilities)
             }
 
             override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
@@ -543,6 +639,7 @@ class TBoxNetworkConnector(context: Context) {
             override fun onLost(network: Network) {
                 if (network != activeNetwork) return
                 ProjectionEventLog.warning("NETWORK", "Android onLost received for active T-Box network=$network.")
+                logLastLinkSample()
                 if (processBoundNetwork == network) {
                     connectivityManager.bindProcessToNetwork(null)
                     processBoundNetwork = null
@@ -946,6 +1043,25 @@ class TBoxNetworkConnector(context: Context) {
         const val REJOIN_GIVE_UP_MS = 180_000L
         /** Enough to show a band twin without turning a busy scan into a wall of text. */
         const val SIBLING_AP_LOG_LIMIT = 4
+
+        /** Steady-link cadence for the radio trail; a moving link logs sooner (sampleLinkQuality). */
+        const val LINK_SAMPLE_INTERVAL_MS = 15_000L
+
+        /**
+         * RSSI change that logs a sample regardless of the cadence. 6dB is a quarter of the
+         * received power - large enough that Wi-Fi's own noise does not trip it, small enough
+         * that a link on its way out produces several lines before it goes.
+         */
+        const val LINK_SAMPLE_RSSI_STEP_DBM = 6
+
+        /** No sample taken yet; not a valid RSSI, so it cannot be mistaken for a reading. */
+        const val UNSAMPLED_RSSI = Int.MIN_VALUE
+
+        /**
+         * "No reading" from the framework. `WifiInfo.INVALID_RSSI` is -127 but is not public API,
+         * so the value is spelled out; anything at or below it is a sentinel, not a measurement.
+         */
+        const val INVALID_RSSI_DBM = -127
     }
 
     private val contextPackageManager = context.applicationContext.packageManager
