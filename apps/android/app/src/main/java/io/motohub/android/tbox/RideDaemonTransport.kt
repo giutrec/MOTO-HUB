@@ -354,6 +354,52 @@ class RideDaemonTransport(
             ?.onFailure { ProjectionEventLog.warning("TBOX", "RideDaemon stopSession failed.", it) }
     }
 
+    /**
+     * The link this attempt should actually open its socket on.
+     *
+     * [TBoxLink.Infrastructure] holds one immutable [Network], captured when `discover()` ran.
+     * Android replaces that `Network` whenever the association is rebuilt - a specifier network
+     * that drops and is re-granted arrives as a *different* object - and binding a socket to the
+     * old one fails with `EPERM`. The retry loop above was therefore structurally unable to
+     * recover from the one failure it exists to absorb: it re-sent the identical dead handle
+     * until it ran out of attempts.
+     *
+     * Field log 2026-07-30 (Zontes `ZT_…`): network 206 granted, lost 233ms later, 207 granted
+     * two seconds after that - while all three handshake attempts bound to network 204, an even
+     * older handle, and failed with EPERM in ~10ms each. The rider was then told the TFT had
+     * refused the video stream.
+     *
+     * The process binding is the authority, not this class's own bookkeeping:
+     * [TBoxNetworkConnector] binds the process on every successful join and clears the binding in
+     * `onLost`, so it is exactly "the network T-Box traffic egresses over right now". A null
+     * binding is deliberately NOT treated as fatal - the connector also unbinds briefly on
+     * purpose - so the attempt falls back to the captured link and the retry gets another chance
+     * once the replacement network is bound.
+     */
+    private fun linkForThisAttempt(link: TBoxLink): TBoxLink {
+        if (link !is TBoxLink.Infrastructure) return link
+        val bound = connectivityManager?.boundNetworkForProcess
+        if (bound == null) {
+            ProjectionEventLog.debug(
+                "TBOX",
+                "No T-Box network is bound to this process right now; the handshake keeps using " +
+                    "the link from discovery (${link.label})."
+            )
+            return link
+        }
+        if (bound == link.network) return link
+        ProjectionEventLog.warning(
+            "TBOX",
+            "The T-Box network was replaced during the EasyConn handshake " +
+                "(${link.label} -> network=$bound); reopening the command socket on the current one."
+        )
+        // The session's link genuinely moved: leaving the dead handle in place would make every
+        // later call on this session repeat the same EPERM.
+        val refreshed = TBoxLink.Infrastructure(bound)
+        sessionLink = refreshed
+        return refreshed
+    }
+
     /** Opens the EasyConn command socket over the established T-Box link. */
     private suspend fun startWithNetworkSocket(
         activeSession: MobileSession,
@@ -373,12 +419,13 @@ class RideDaemonTransport(
             }
         ) { attempt ->
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            val attemptLink = linkForThisAttempt(link)
             ProjectionEventLog.debug(
                 "TBOX",
                 "EasyConn attempt $attempt/${policy.maxAttempts}: opening link-bound command " +
-                    "socket to ${host.ipAddress}:${host.port} (${link.label})."
+                    "socket to ${host.ipAddress}:${host.port} (${attemptLink.label})."
             )
-            val socket = link.createSocket()
+            val socket = attemptLink.createSocket()
             try {
                 socket.connect(InetSocketAddress(host.ipAddress, host.port), EC_CONNECT_TIMEOUT_MS)
                 ProjectionEventLog.record("TBOX", "EasyConn TCP command socket connected.")
