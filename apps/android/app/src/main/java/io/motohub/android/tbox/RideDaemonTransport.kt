@@ -920,13 +920,12 @@ class RideDaemonTransport(
                     ProjectionEventLog.warning("TBOX", "Unable to decode the T-Box CLIENT_INFO payload.")
                 } else {
                     // Full raw CLIENT_INFO, not just the few fields TBoxCapabilities extracts -
-                    // ProjectionEventLog.redact() strips password/pin-shaped fields (including
-                    // btPin) before this reaches the log file. Deliberately stays behind the
-                    // verbose setting: the raw payload also carries HUID and uuid, which redact()
-                    // does not touch and which TBoxCapabilities refuses to keep on purpose, so
-                    // logging it by default would put a stable hardware identifier into logs
-                    // riders paste into public issues. The unrecognised-dashboard branch below
-                    // gets the diagnostic value from the whitelisted subset instead.
+                    // ProjectionEventLog.redact() strips password/pin-shaped fields (btPin) and,
+                    // since verbose became the default, the stable hardware identifiers too
+                    // (HUID/uuid) - that redaction is what made defaulting verbose on safe to
+                    // do. The gate is now about volume, not identifiers: one JSON blob per
+                    // handshake is fine, and a rider who turns verbose off still gets the
+                    // whitelisted subset from the unrecognised-dashboard branch below.
                     if (verbose) {
                         val rawJson = payload.toString(Charsets.UTF_8).trim().trimEnd(' ')
                         ProjectionEventLog.debug("TBOX", "CLIENT_INFO raw (verbose): $rawJson")

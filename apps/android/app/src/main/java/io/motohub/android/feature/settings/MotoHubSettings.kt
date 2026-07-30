@@ -248,8 +248,13 @@ object MotoHubSettings {
      * more expensive to format than the app's normal event log, and only
      * useful when a rider is actively helping diagnose a connection problem.
      */
+    // On by default (2026-07-30): a connection problem's first occurrence is the one that
+    // matters, and with verbose off it produced a log with the diagnosis missing - riders had
+    // to reproduce the failure after finding this switch. The stable identifiers that once
+    // justified defaulting off (HUID/uuid in the raw CLIENT_INFO) are redacted since the same
+    // change. A rider who turns it off stays off - this is a default, not an override.
     fun verboseTBoxLogging(context: Context): Boolean =
-        preferences(context).getBoolean(KEY_VERBOSE_TBOX_LOGGING, false)
+        preferences(context).getBoolean(KEY_VERBOSE_TBOX_LOGGING, true)
 
     fun setVerboseTBoxLogging(context: Context, enabled: Boolean) {
         preferences(context).edit().putBoolean(KEY_VERBOSE_TBOX_LOGGING, enabled).apply()

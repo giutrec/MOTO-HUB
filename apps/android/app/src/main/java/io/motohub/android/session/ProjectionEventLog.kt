@@ -205,8 +205,11 @@ object ProjectionEventLog {
     // "pwd":"1234", not just bare key=value/key: value - needed now that verbose T-Box
     // logging (Settings > Diagnostics) can log a raw CLIENT_INFO JSON blob, which carries
     // btPin among other fields.
+    // huid/uuid joined when verbose T-Box logging became the default: the raw CLIENT_INFO dump
+    // carries both, they identify the dashboard hardware forever, and logs get pasted into
+    // public Discord threads. Redacting them here is what made the default flip safe.
     private val SECRET_PATTERN = Regex(
-        "(?i)\"?(password|pwd|passphrase|psk|btpin|bt_pin)\"?\\s*[:=]\\s*\"?[^\\s,;\"]+\"?"
+        "(?i)\"?(password|pwd|passphrase|psk|btpin|bt_pin|huid|uuid)\"?\\s*[:=]\\s*\"?[^\\s,;\"]+\"?"
     )
     // Catches MAC addresses and literal IPv4 addresses wherever they surface in a message
     // or exception text (e.g. "failed to connect to /192.168.49.1"), not just at known

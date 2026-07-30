@@ -452,9 +452,9 @@ private fun DiagnosticsDetail(
         ToggleRow(
             title = motoHubText("Verbose T-Box logging"),
             description = motoHubText("Full CLIENT_INFO, every candidate profile's score, unknown command ") +
-                "hex dumps, and Wi-Fi link quality. Off by default: heavier than the normal " +
-                "log, only useful while diagnosing a connection problem. Has no effect while " +
-                "logging above is off.",
+                "hex dumps, and Wi-Fi link quality. On by default so a problem's first " +
+                "occurrence is already captured; turn off for a lighter log. Has no effect " +
+                "while logging above is off.",
             checked = verboseLogging,
             enabled = loggingEnabled,
             onCheckedChange = {
