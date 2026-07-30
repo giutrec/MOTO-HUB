@@ -10,6 +10,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.os.SystemClock
 import android.view.Surface
 import io.motohub.android.androidauto.AaInputBridge
 import io.motohub.android.androidauto.AndroidAutoCapabilityProfile
@@ -39,6 +40,9 @@ class AaReceiver(
         const val HEAD_UNIT_SERVER_PORT = 5277
         private const val HEAD_UNIT_SERVER_POLL_MS = 1_500L
         private const val HEAD_UNIT_SERVER_CONNECT_TIMEOUT_MS = 400
+
+        /** How often the decoder's per-second frame rate is summarised into the log. */
+        private const val FPS_SUMMARY_WINDOW_MS = 30_000L
 
         /**
          * Process-wide "Android Auto has opened the local AAP socket" flag. The self-mode trigger
@@ -82,8 +86,54 @@ class AaReceiver(
             }
         }
         onFpsChanged = { fps ->
-            log("[AA] decode fps=$fps")
+            recordDecodeFps(fps)
         }
+    }
+
+    // One decoder-reported frame rate per second, folded into a window instead of a log line.
+    private var fpsWindowStartedAtMs = 0L
+    private var fpsSampleCount = 0
+    private var fpsSampleTotal = 0
+    private var fpsSampleMin = Int.MAX_VALUE
+    private var fpsSampleMax = 0
+
+    /**
+     * The decoder reports its frame rate once a second. Logging every sample cost one line per
+     * second of Android Auto, which is enough to evict the whole 800-entry diagnostic ring buffer
+     * in about thirteen minutes: a rider's exported CORE log was 762 entries of `decode fps=` and
+     * nothing about the connection that had failed before it. A summary every
+     * [FPS_SUMMARY_WINDOW_MS] keeps what the line is actually read for - a stalling decoder shows
+     * up as a low minimum - at a thirtieth of the volume.
+     */
+    private fun recordDecodeFps(fps: Int) {
+        val now = SystemClock.elapsedRealtime()
+        fpsSampleCount++
+        fpsSampleTotal += fps
+        if (fps < fpsSampleMin) fpsSampleMin = fps
+        if (fps > fpsSampleMax) fpsSampleMax = fps
+        if (fpsWindowStartedAtMs == 0L) {
+            // The first sample goes out immediately: "video is decoding at all" is the answer
+            // wanted right after the hand-off, not thirty seconds later.
+            fpsWindowStartedAtMs = now
+            log("[AA] decode fps=$fps")
+            resetFpsWindow(now)
+            return
+        }
+        if (now - fpsWindowStartedAtMs < FPS_SUMMARY_WINDOW_MS) return
+        val seconds = (now - fpsWindowStartedAtMs) / 1000
+        log(
+            "[AA] decode fps over ${seconds}s: avg=${fpsSampleTotal / fpsSampleCount}, " +
+                "min=$fpsSampleMin, max=$fpsSampleMax"
+        )
+        resetFpsWindow(now)
+    }
+
+    private fun resetFpsWindow(now: Long) {
+        fpsWindowStartedAtMs = now
+        fpsSampleCount = 0
+        fpsSampleTotal = 0
+        fpsSampleMin = Int.MAX_VALUE
+        fpsSampleMax = 0
     }
 
     /** Ensure Conscrypt/AAP logging are wired before anything touches SSL. */
