@@ -1,13 +1,16 @@
 package io.motohub.android.tbox
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.net.wifi.ScanResult
 import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
+import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import io.motohub.android.feature.settings.MotoHubSettings
@@ -138,6 +141,9 @@ class TBoxNetworkConnector(context: Context) {
      */
     @Volatile
     private var pendingRequestSsid: String? = null
+    /** When the live specifier request was submitted, so onUnavailable can say how fast it came. */
+    @Volatile
+    private var specifierSubmittedAt = 0L
 
     /** Terminal failure produced by the registered callback, observed by [awaitRequestedNetwork]. */
     @Volatile
@@ -359,6 +365,82 @@ class TBoxNetworkConnector(context: Context) {
     }
 
     /**
+     * Records what the radio can actually see, immediately before the request is submitted.
+     *
+     * This is the datum a rider log was missing. When Android never grants the network there is no
+     * `onAvailable` and no link properties either, so the log says only that nothing happened - and
+     * "the dash is not broadcasting", "the dash is on a channel this phone will not join" and "the
+     * saved password is wrong" all look identical. A VOGE dash (SSID `VOGE-5G-58e4`, 2026-07-30)
+     * cost a full log analysis and a round trip to the rider to get no further than that.
+     *
+     * The band matters on its own: an SSID advertising 5G is a hint, not evidence, and a dash whose
+     * only AP sits on a 5GHz channel the phone's regulatory domain forbids can never be joined. The
+     * sibling scan exists for the same reason - several of these dashboards broadcast a 2.4GHz twin
+     * of the same network, and if one is in range it is almost certainly the one to pair with.
+     *
+     * BSSIDs are deliberately not logged: they are stable hardware identifiers and these logs get
+     * pasted into public threads.
+     */
+    @SuppressLint("MissingPermission")
+    private fun logVisibleApSnapshot(profile: MotorcycleProfile) {
+        val target = profile.ssid.trim().removeSurrounding("\"")
+        val results = runCatching { wifiManager.scanResults }.getOrNull()
+        if (results == null) {
+            ProjectionEventLog.debug(
+                "NETWORK",
+                "Wi-Fi scan results are unavailable, so it cannot be said whether $target is in range."
+            )
+            return
+        }
+        fun ScanResult.ssidText(): String =
+            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) wifiSsid?.toString() else null)
+                ?.removeSurrounding("\"")
+                ?: @Suppress("DEPRECATION") SSID.orEmpty().removeSurrounding("\"")
+
+        val match = results.firstOrNull { it.ssidText().equals(target, ignoreCase = true) }
+        if (match == null) {
+            ProjectionEventLog.warning(
+                "NETWORK",
+                "$target is NOT in the phone's latest Wi-Fi scan (${results.size} networks seen). " +
+                    "Either the dash is not broadcasting it right now, or the phone cannot see " +
+                    "that channel."
+            )
+        } else {
+            // The security line is the one that can convict us rather than the dash. The specifier
+            // below only ever offers setWpa2Passphrase, so an AP that requires WPA3/SAE can never
+            // be matched no matter how correct the password is, and the failure is indistinguishable
+            // from a dash that is not broadcasting. Logging what the AP actually advertises is what
+            // separates those two, and nothing in a rider log has been able to so far.
+            ProjectionEventLog.record(
+                "NETWORK",
+                "$target is in range: ${bandName(match.frequency)} (${match.frequency}MHz), " +
+                    "rssi=${match.level}dBm, security=${securityName(match.capabilities)}."
+            )
+        }
+        // A twin on the other band shares the dash's serial-looking last token.
+        val tail = target.substringAfterLast('-', "").takeIf { it.length >= 3 }
+        if (tail != null) {
+            val siblings = results
+                .map { it.ssidText() to it.frequency }
+                .filter { (ssid, _) ->
+                    ssid.isNotEmpty() &&
+                        !ssid.equals(target, ignoreCase = true) &&
+                        ssid.endsWith(tail, ignoreCase = true)
+                }
+                .distinctBy { it.first }
+                .take(SIBLING_AP_LOG_LIMIT)
+            if (siblings.isNotEmpty()) {
+                ProjectionEventLog.record(
+                    "NETWORK",
+                    "The same dash also broadcasts: " +
+                        siblings.joinToString { (ssid, frequency) -> "$ssid on ${bandName(frequency)}" } +
+                        ". If $target will not join, one of these may."
+                )
+            }
+        }
+    }
+
+    /**
      * Registers the exclusive specifier request and returns immediately; the callback drives the
      * shared connection state, and [awaitRequestedNetwork] observes the outcome. Deliberately not
      * a suspend-until-connected call: the registration must be able to outlive any single
@@ -368,6 +450,8 @@ class TBoxNetworkConnector(context: Context) {
     private fun submitSpecifierRequest(profile: MotorcycleProfile) {
         pendingFailure = null
         networkGranted = false
+        logVisibleApSnapshot(profile)
+        specifierSubmittedAt = SystemClock.elapsedRealtime()
         lateinit var networkCallback: ConnectivityManager.NetworkCallback
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
@@ -469,9 +553,18 @@ class TBoxNetworkConnector(context: Context) {
             }
 
             override fun onUnavailable() {
+                // The elapsed time is the diagnosis, not decoration. Android takes seconds to scan
+                // for a network it is genuinely hunting; a verdict inside a few tens of
+                // milliseconds means the request was refused outright rather than attempted, and
+                // reading that off two timestamps by hand is how it gets missed.
+                val elapsed = specifierSubmittedAt
+                    .takeIf { it > 0L }
+                    ?.let { "${SystemClock.elapsedRealtime() - it}ms after the request" }
+                    ?: "with no recorded request time"
                 ProjectionEventLog.error(
                     "NETWORK",
-                    "Android reported the requested T-Box Wi-Fi as unavailable; granted=$networkGranted."
+                    "Android reported the requested T-Box Wi-Fi as unavailable $elapsed; " +
+                        "granted=$networkGranted."
                 )
                 pendingFailure = IllegalStateException(
                     if (networkGranted) {
@@ -851,9 +944,42 @@ class TBoxNetworkConnector(context: Context) {
          * that is simply switched off does not leave the radio under an exclusive request.
          */
         const val REJOIN_GIVE_UP_MS = 180_000L
+        /** Enough to show a band twin without turning a busy scan into a wall of text. */
+        const val SIBLING_AP_LOG_LIMIT = 4
     }
 
     private val contextPackageManager = context.applicationContext.packageManager
+}
+
+/**
+ * Summarises what an AP requires to be joined, from the raw `ScanResult.capabilities` string.
+ *
+ * WPA3 is called out on its own because it is the one answer that indicts this app: the specifier
+ * only offers a WPA2 passphrase, so a dash that requires SAE cannot be joined at all.
+ */
+internal fun securityName(capabilities: String?): String {
+    val caps = capabilities.orEmpty().uppercase()
+    val schemes = buildList {
+        if (caps.contains("SAE")) add("WPA3/SAE")
+        if (caps.contains("RSN") || caps.contains("WPA2")) add("WPA2")
+        if (caps.contains("WPA-") || caps.contains("WPA_") || Regex("(^|[^23A-Z])WPA($|[^23])").containsMatchIn(caps)) {
+            add("WPA")
+        }
+        if (caps.contains("WEP")) add("WEP")
+    }
+    return when {
+        schemes.isNotEmpty() -> schemes.joinToString("+")
+        caps.isBlank() -> "not reported"
+        else -> "open or unrecognised ($caps)"
+    }
+}
+
+/** Names the band a scan frequency sits in; "?" rather than a guess when it is out of range. */
+internal fun bandName(frequencyMhz: Int): String = when (frequencyMhz) {
+    in 2400..2500 -> "2.4GHz"
+    in 4900..5900 -> "5GHz"
+    in 5925..7125 -> "6GHz"
+    else -> "an unknown band"
 }
 
 internal fun isUsableTBoxIpv4Address(address: InetAddress): Boolean =

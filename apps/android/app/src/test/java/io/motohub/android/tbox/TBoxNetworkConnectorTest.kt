@@ -104,4 +104,41 @@ class TBoxNetworkConnectorTest {
         assertNull(parseUsableEasyConnIpv4Literal("0.0.0.0"))
         assertNull(parseUsableEasyConnIpv4Literal("224.0.0.251"))
     }
+
+    @Test
+    fun namesTheBandOfAScannedAccessPoint() {
+        // The band is what tells a "VOGE-5G-..." style SSID apart from a dash that really is on
+        // 5GHz, and a 5GHz-only dash is one the phone may be unable to join at all.
+        assertEquals("2.4GHz", bandName(2412))
+        assertEquals("2.4GHz", bandName(2484))
+        assertEquals("5GHz", bandName(5180))
+        assertEquals("5GHz", bandName(5885))
+        assertEquals("6GHz", bandName(6115))
+    }
+
+    @Test
+    fun namesWpa3SeparatelyBecauseTheSpecifierCannotOfferIt() {
+        // Only ever setWpa2Passphrase is offered, so an SAE-only dash is unjoinable and the log has
+        // to be able to say so instead of blaming the dash for not broadcasting.
+        assertEquals("WPA3/SAE", securityName("[ESS][SAE][MFPR][MFPC]"))
+        assertEquals("WPA3/SAE+WPA2", securityName("[ESS][RSN-SAE+PSK-CCMP][MFPC]"))
+        assertEquals("WPA2", securityName("[ESS][WPA2-PSK-CCMP][RSN-PSK-CCMP]"))
+        assertEquals("WEP", securityName("[ESS][WEP]"))
+    }
+
+    @Test
+    fun reportsAnUnsecuredOrUnreadableApHonestly() {
+        assertEquals("open or unrecognised ([ESS]", securityName("[ESS]").substringBefore(')'))
+        assertEquals("not reported", securityName(null))
+        assertEquals("not reported", securityName(""))
+    }
+
+    @Test
+    fun refusesToGuessABandItDoesNotRecognise() {
+        // Better an explicit unknown in a rider's log than a confident wrong band.
+        assertEquals("an unknown band", bandName(0))
+        assertEquals("an unknown band", bandName(-1))
+        assertEquals("an unknown band", bandName(900))
+        assertEquals("an unknown band", bandName(5910))
+    }
 }
