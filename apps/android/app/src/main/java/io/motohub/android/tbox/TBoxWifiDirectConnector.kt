@@ -21,6 +21,7 @@ import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -67,6 +68,7 @@ class TBoxWifiDirectConnector(
                 )
             var receiver: BroadcastReceiver? = null
             var handedOff = false
+            val footprint = P2pJoinFootprint()
             // Settled exactly once: CompletableDeferred.complete() ignores every later call, so
             // racing connection-changed broadcasts (each spawning an async requestConnectionInfo)
             // cannot resume this twice.
@@ -74,7 +76,7 @@ class TBoxWifiDirectConnector(
             try {
                 val link = withTimeout(CONNECT_TIMEOUT_MS) {
                     receiver = registerReceiver(manager, channel, profile, outcome)
-                    join(manager, channel, profile, outcome)
+                    join(manager, channel, profile, outcome, footprint)
                     outcome.await()
                 }.getOrThrow()
                 handedOff = true
@@ -99,7 +101,14 @@ class TBoxWifiDirectConnector(
                 // a dead dash a few milliseconds later. Failed/cancelled joins are still cleaned
                 // up immediately; successful ones are released by TBoxSessionRegistry.clear(),
                 // whose leaveGroup closure also closes the channel.
-                if (!handedOff) removeGroup(manager, channel, closeChannelAfter = true)
+                //
+                // NonCancellable because the cancellation paths - the rider tapping Annulla, the
+                // session scope going away - are precisely the ones that must still hand the
+                // framework back: a suspending cleanup on a cancelled coroutine would return at
+                // its first suspension point and leak everything below it.
+                if (!handedOff) {
+                    withContext(NonCancellable) { releaseP2pState(manager, channel, footprint) }
+                }
             }
         }
 
@@ -157,28 +166,33 @@ class TBoxWifiDirectConnector(
         manager: WifiP2pManager,
         channel: WifiP2pManager.Channel,
         profile: MotorcycleProfile,
-        outcome: CompletableDeferred<Result<TBoxLink.WifiDirect>>
+        outcome: CompletableDeferred<Result<TBoxLink.WifiDirect>>,
+        footprint: P2pJoinFootprint
     ) {
         // A group that was already formed settles through the receiver; joining again would tear
         // down the link the caller is about to use.
         if (outcome.isCompleted) return
-        val peer = discoverPeer(manager, channel, profile, outcome)
+        val peer = discoverPeer(manager, channel, profile, outcome, footprint)
         if (outcome.isCompleted) return
 
         // Discovery and connect() contend for the same radio state machine; leaving the scan
         // running is a known way to get connect() rejected.
         awaitAction { listener -> manager.stopPeerDiscovery(channel, listener) }
 
-        if (peer != null && peer.status == WifiP2pDevice.INVITED) {
-            // A half-open invitation from an earlier attempt keeps failing every new connect()
-            // until it is cancelled. EasyConn cancels and waits before retrying; so do we.
-            log("Dash ${profile.ssid} still has a pending invitation; cancelling it first.")
+        if (peer?.status == WifiP2pDevice.INVITED || footprint.discoveryRefused) {
+            // A half-open invitation keeps failing every new connect() until it is cancelled, and
+            // it is not necessarily ours: the OEM companion app leaves them behind too. EasyConn
+            // cancels and waits before retrying; so do we. A framework that would not even start
+            // discovery is the same wedged stack seen from the other side - riders' logs show
+            // "peer discovery could not start" and an instant connect() rejection together - so
+            // it gets the same clear before we add a request of our own to the pile.
+            log("Clearing a pending Wi-Fi Direct invitation before joining ${profile.ssid}.")
             awaitAction { listener -> manager.cancelConnect(channel, listener) }
             delay(CANCEL_SETTLE_MS)
         }
         if (outcome.isCompleted) return
 
-        connectWithRetry(manager, channel, profile, peer, outcome)
+        connectWithRetry(manager, channel, profile, peer, outcome, footprint)
     }
 
     /**
@@ -192,16 +206,19 @@ class TBoxWifiDirectConnector(
         manager: WifiP2pManager,
         channel: WifiP2pManager.Channel,
         profile: MotorcycleProfile,
-        outcome: CompletableDeferred<Result<TBoxLink.WifiDirect>>
+        outcome: CompletableDeferred<Result<TBoxLink.WifiDirect>>,
+        footprint: P2pJoinFootprint
     ): WifiP2pDevice? {
         val expectedName = peerNameFromGroupSsid(profile.ssid) ?: run {
             log("${profile.ssid} is not a DIRECT-xy-<name> group; joining by credentials.")
             return null
         }
         if (!awaitAction { listener -> manager.discoverPeers(channel, listener) }) {
+            footprint.discoveryRefused = true
             log("Wi-Fi Direct peer discovery could not start; joining by credentials instead.")
             return null
         }
+        footprint.discoveryStarted = true
         val deadline = System.nanoTime() + PEER_DISCOVERY_TIMEOUT_MS * 1_000_000
         while (System.nanoTime() < deadline && !outcome.isCompleted) {
             val match = requestPeers(manager, channel).firstOrNull { peer ->
@@ -234,7 +251,8 @@ class TBoxWifiDirectConnector(
         channel: WifiP2pManager.Channel,
         profile: MotorcycleProfile,
         peer: WifiP2pDevice?,
-        outcome: CompletableDeferred<Result<TBoxLink.WifiDirect>>
+        outcome: CompletableDeferred<Result<TBoxLink.WifiDirect>>,
+        footprint: P2pJoinFootprint
     ) {
         repeat(CONNECT_ATTEMPTS) { attempt ->
             if (outcome.isCompleted) return
@@ -254,6 +272,9 @@ class TBoxWifiDirectConnector(
                 if (joinPeer != null) "Joining the dash at ${joinPeer.deviceAddress} (attempt ${attempt + 1})."
                 else "Joining Wi-Fi Direct group ${profile.ssid} as a legacy client (attempt ${attempt + 1})."
             )
+            // Set before the call, not after: a rejected connect() can still have left an
+            // invitation behind on some frameworks, and the cleanup must know to cancel it.
+            footprint.connectIssued = true
             when (val reason = issueConnect(manager, channel, config)) {
                 null -> {
                     log("Wi-Fi Direct connect() accepted; waiting for the group to form.")
@@ -593,6 +614,48 @@ class TBoxWifiDirectConnector(
         else -> "status $status"
     }
 
+    /**
+     * Hands the P2P state machine back after a join that did not produce a link, in the order the
+     * framework wants it: stop the scan this join started, cancel the invitation it left
+     * outstanding, remove any group it formed, and only then close the channel.
+     *
+     * The invitation is the part that used to leak, and [removeGroup] alone cannot clear it: when
+     * `connect()` was accepted and no group ever formed - the 35s timeout, which is the failure
+     * riders actually report - there is no group to remove and the request stays pending in the
+     * framework. The next attempt then meets a stack that will not start peer discovery and that
+     * rejects `connect()` with a bare `ERROR` in milliseconds, so one failed join used to poison
+     * every retry until Wi-Fi was toggled off and on. Field log 2026-07-30: a 35s timeout at
+     * 10:18:09, and the 10:19:09 attempt never got past "peer discovery could not start".
+     */
+    private suspend fun releaseP2pState(
+        manager: WifiP2pManager,
+        channel: WifiP2pManager.Channel,
+        footprint: P2pJoinFootprint
+    ) {
+        // Bounded as a whole, not per call: this runs while the rider waits for the error message,
+        // and a framework that has stopped answering must not get to add up its timeouts.
+        withTimeoutOrNull(P2P_RELEASE_TIMEOUT_MS) {
+            // Only our own scan: P2P discovery is global, and tearing down a failed join is no
+            // reason to stop one another app started.
+            if (footprint.discoveryStarted) {
+                awaitAction { listener -> manager.stopPeerDiscovery(channel, listener) }
+            }
+            if (footprint.connectIssued) {
+                // A refusal here is the framework saying nothing was pending, which is the
+                // ordinary case; the line worth having in a rider's log is the one that says we
+                // cleared something, because that is the leak this teardown exists for.
+                if (awaitAction { listener -> manager.cancelConnect(channel, listener) }) {
+                    log("Cancelled the pending Wi-Fi Direct invitation.")
+                }
+                // Same settle the OEM app allows itself: the cancel has to land before the next
+                // framework call, or the removeGroup below races it.
+                delay(CANCEL_SETTLE_MS)
+            }
+        }
+        // Outside the budget above: it is fire-and-forget, and it is also what closes the channel.
+        removeGroup(manager, channel, closeChannelAfter = true)
+    }
+
     private fun removeGroup(
         manager: WifiP2pManager,
         channel: WifiP2pManager.Channel,
@@ -614,6 +677,27 @@ class TBoxWifiDirectConnector(
         }.onFailure { finish() }
     }
 
+    /**
+     * What one join actually asked of the P2P state machine, so [releaseP2pState] undoes exactly
+     * that and nothing else. Written by the join, read by the cleanup - which is why it is a
+     * mutable holder rather than a return value: the join can end at a timeout or a cancellation,
+     * both of which skip whatever it would have returned.
+     */
+    private class P2pJoinFootprint {
+        /** `discoverPeers()` was accepted, so a scan of ours may still be running. */
+        var discoveryStarted = false
+
+        /**
+         * `discoverPeers()` was rejected outright - the strongest signal available that something
+         * else already holds the P2P state machine, which is why the join clears an invitation
+         * before adding its own request.
+         */
+        var discoveryRefused = false
+
+        /** `connect()` was called at all, accepted or not, so an invitation may be outstanding. */
+        var connectIssued = false
+    }
+
     companion object {
         /**
          * Whole-join budget: peer discovery, the preparation calls, and the group forming. The
@@ -628,6 +712,8 @@ class TBoxWifiDirectConnector(
         /** Distinguishes "connect() was accepted" from "the framework never answered". */
         private const val CONNECT_ACCEPTED = Int.MIN_VALUE
         private const val CANCEL_SETTLE_MS = 500L
+        /** Whole-teardown budget, spent on a path where the rider is already waiting for an error. */
+        private const val P2P_RELEASE_TIMEOUT_MS = 4_000L
         private const val CONNECT_ATTEMPTS = 2
         private const val CONNECT_RETRY_DELAY_MS = 1_200L
         private const val IP_POLL_TIMEOUT_MS = 10_000L
