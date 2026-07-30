@@ -297,6 +297,15 @@ class AaReceiver(
         log("[AA] read loop started — expecting ServiceDiscovery then video")
     }
 
+    /**
+     * Takes **output-canvas** pixels - a TFT touch, or a phone-only preview whose SurfaceView is
+     * itself the compositor's output - and maps them to Android Auto's UI surface on the way in.
+     *
+     * Coordinates that have already been mapped belong in [sendSourceTouch]. Handing them here
+     * instead applies the canvas mapping twice, which is not a rounding error: it scales by
+     * canvasWidth/sourceWidth about the origin, so taps land correctly in the corner and drift
+     * further out the further the rider presses from it.
+     */
     fun sendTouch(action: Int, pointerId: Int, canvasX: Int, canvasY: Int) {
         val activeInput = input ?: return
         val mapped = mapTouchToSource(canvasX, canvasY) ?: return
@@ -308,6 +317,7 @@ class AaReceiver(
 
     fun sendTouch(action: Int, canvasX: Int, canvasY: Int) = sendTouch(action, 0, canvasX, canvasY)
 
+    /** Takes coordinates already in Android Auto's UI space and forwards them untouched. */
     fun sendSourceTouch(action: Int, pointerId: Int, sourceX: Int, sourceY: Int) {
         val activeInput = input ?: return
         activeInput.sendTouch(action, pointerId, sourceX, sourceY)

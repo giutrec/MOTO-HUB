@@ -449,6 +449,9 @@ class IpcBridgeService : Service() {
             AndroidAutoPreviewRuntime.detachAttachedPreview()
         }
 
+        // Touches arriving here come from the TFT, in output-canvas coordinates, which is the
+        // space AaReceiver.sendTouch expects: it runs mapTouchToSource (the compositor's
+        // canvas -> Android Auto UI mapping) on whatever it is given.
         override fun sendTouch(action: Int, x: Int, y: Int): Boolean {
             val activeReceiver = receiver ?: return false
             activeReceiver.sendTouch(action, x, y)
@@ -458,7 +461,15 @@ class IpcBridgeService : Service() {
         override fun sendPreviewTouch(action: Int, x: Int, y: Int): Boolean {
             compositor?.let { activeCompositor ->
                 val mapped = activeCompositor.mapPreviewToUi(x, y) ?: return false
-                receiver?.sendTouch(action, mapped.first, mapped.second) ?: return false
+                // sendSourceTouch, NOT sendTouch: mapPreviewToUi has already produced Android
+                // Auto UI coordinates, and sendTouch would map them a second time as if they
+                // were TFT canvas pixels. That double transform is what made the embedded
+                // "Preview & touch" screen land every tap short of where the rider pressed -
+                // wrong by a factor of canvasWidth/sourceWidth, so exact at the origin and
+                // worse the further out you touch. The full-screen preview path in
+                // AndroidAutoSessionService.sendPreviewTouch already used sendSourceTouch;
+                // only this bridge did not.
+                receiver?.sendSourceTouch(action, mapped.first, mapped.second) ?: return false
                 return true
             }
             if (!AndroidAutoRuntime.isActive()) return false
