@@ -41,6 +41,40 @@ object ProcessExitReport {
      */
     private const val MAX_RECORDS = 10
 
+    private const val KEY_ACKNOWLEDGED_KILL_AT = "acknowledged-kill-at"
+
+    /**
+     * The most recent death that the phone inflicted on this app rather than the app inflicting
+     * on itself, when the rider has not been told about it yet.
+     *
+     * Read by the home screen: a rider whose ride ended mid-session deserves to know it was the
+     * phone that stopped MOTO-HUB and not a fault in it - and, more usefully, what to change so
+     * it stops happening. Only a death the rider has not acknowledged appears, so the notice is
+     * shown once per occurrence rather than becoming another banner people learn to ignore.
+     */
+    @Volatile
+    var unacknowledgedSystemKill: SystemKill? = null
+        private set
+
+    /** A death caused by the system, in the terms the rider's notice needs. */
+    data class SystemKill(
+        val at: Long,
+        val reason: String,
+        val description: String?,
+        val rssMegabytes: Long
+    )
+
+    /** Stops the current [unacknowledgedSystemKill] from being shown again. */
+    fun acknowledgeSystemKill(context: Context) {
+        val kill = unacknowledgedSystemKill ?: return
+        unacknowledgedSystemKill = null
+        context.applicationContext
+            .getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(KEY_ACKNOWLEDGED_KILL_AT, kill.at)
+            .apply()
+    }
+
     /** Reports every process death not reported before, oldest first. */
     fun reportPreviousExits(context: Context) {
         val appContext = context.applicationContext
@@ -59,10 +93,41 @@ object ProcessExitReport {
             return
         }
 
+        // The notice is decided from the whole history, not just the unreported part: the death
+        // that matters may already have been logged by an earlier launch that the rider never
+        // opened, and it is still the thing they need to be told about.
+        val acknowledgedAt = preferences.getLong(KEY_ACKNOWLEDGED_KILL_AT, 0L)
+        unacknowledgedSystemKill = exits
+            .filter { it.timestamp > acknowledgedAt && isSystemKill(it.reason) }
+            .maxByOrNull { it.timestamp }
+            ?.let { exit ->
+                SystemKill(
+                    at = exit.timestamp,
+                    reason = reasonName(exit.reason),
+                    description = exit.description?.takeIf(String::isNotBlank),
+                    rssMegabytes = exit.rss / 1024
+                )
+            }
+
         val fresh = exits.filter { it.timestamp > lastReportedAt }.sortedBy { it.timestamp }
         if (fresh.isEmpty()) return
         fresh.forEach(::report)
         preferences.edit().putLong(KEY_LAST_REPORTED_AT, fresh.last().timestamp).apply()
+    }
+
+    /**
+     * Whether the phone took the process away, as opposed to the process ending for a reason of
+     * its own. Narrower than [isWorthInvestigating]: a crash or an ANR is our fault and telling
+     * the rider to change a phone setting would be misdirection. These are the ones where the
+     * app was working and the system stopped it anyway.
+     */
+    private fun isSystemKill(reason: Int): Boolean = when (reason) {
+        ApplicationExitInfo.REASON_LOW_MEMORY,
+        ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE,
+        ApplicationExitInfo.REASON_USER_REQUESTED,
+        ApplicationExitInfo.REASON_OTHER,
+        ApplicationExitInfo.REASON_FREEZER -> true
+        else -> false
     }
 
     private fun report(exit: ApplicationExitInfo) {

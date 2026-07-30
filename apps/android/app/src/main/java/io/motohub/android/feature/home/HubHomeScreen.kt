@@ -67,6 +67,7 @@ import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.session.SessionPhase
 import io.motohub.android.feature.garage.MotorcyclePhoto
 import io.motohub.android.ui.components.ConnectionRail
+import io.motohub.android.ui.components.SystemKillNotice
 import io.motohub.android.ui.components.ConnectionState
 import io.motohub.android.ui.components.HubAppBar
 import io.motohub.android.ui.components.HubBottomNavigation
@@ -223,6 +224,10 @@ private fun HomeTabContent(
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         Spacer(Modifier.height(4.dp))
+
+        // Above the motorcycle, and only after the phone has actually stopped a session: this is
+        // the one thing on screen that explains something the rider has already lived through.
+        SystemKillNotice()
 
         // The motorcycle identity (photo, name, SSID) stays on screen across every
         // destination once a profile is chosen, instead of each destination re-deriving
