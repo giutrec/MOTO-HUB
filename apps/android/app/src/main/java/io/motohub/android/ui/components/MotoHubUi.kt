@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -438,6 +439,12 @@ fun MotoHubDetailScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // Before verticalScroll so the inset shrinks the viewport instead of scrolling
+            // away with the content. Screens reached from the hub sit inside a parent that
+            // already applied - and therefore consumed - this inset, so it adds nothing
+            // there; screens shown as a full-screen overlay straight from MainActivity have
+            // no such parent, and without this the back link renders behind the clock.
+            .statusBarsPadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
