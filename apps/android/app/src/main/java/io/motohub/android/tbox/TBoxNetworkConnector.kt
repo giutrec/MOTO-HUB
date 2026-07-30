@@ -105,6 +105,8 @@ class TBoxNetworkConnector(context: Context) {
      * current attempt owns; this set is what guarantees none of the others can be orphaned.
      */
     private val registeredCallbacks = mutableSetOf<ConnectivityManager.NetworkCallback>()
+    /** Whether this connector is one of [liveRequesters]; see syncLiveRequesterCount. */
+    private var countedAsLiveRequester = false
 
     @Volatile
     private var callback: ConnectivityManager.NetworkCallback? = null
@@ -290,6 +292,7 @@ class TBoxNetworkConnector(context: Context) {
         activeNetwork = null
         val released = registeredCallbacks.toList()
         registeredCallbacks.clear()
+        syncLiveRequesterCount()
         released.forEach { unregister(it) }
     }
 
@@ -303,6 +306,43 @@ class TBoxNetworkConnector(context: Context) {
                 pendingRequestSsid = null
             }
             if (registeredCallbacks.remove(target)) unregister(target)
+            syncLiveRequesterCount()
+        }
+    }
+
+    /**
+     * Keeps the process-wide count of connectors that currently hold a Wi-Fi request, and says so
+     * the moment there is more than one.
+     *
+     * Two live connectors mean two `WifiNetworkSpecifier` requests for the same SSID, each with
+     * its own rejoin ladder - and releasing either one tears down the association the other is
+     * using. The phone then disconnects itself from the dash at full signal, which is
+     * indistinguishable from the dash hanging up unless you happen to notice that every network
+     * line in the log appears two or three times. That is how it was found (OnePlus, 1.1.24,
+     * 2026-07-30, after the companion app's process was killed mid-session), and it is not
+     * something a rider can reproduce on request: this line exists so the next log states it
+     * outright instead of requiring someone to spot duplicated timestamps by eye.
+     *
+     * Counted per connector rather than per registration: one connector legitimately holds a
+     * second callback for a moment while a rejoin attempt overlaps the previous one.
+     */
+    private fun syncLiveRequesterCount() {
+        val holdsRequest = registeredCallbacks.isNotEmpty()
+        if (holdsRequest == countedAsLiveRequester) return
+        countedAsLiveRequester = holdsRequest
+        val live = if (holdsRequest) {
+            liveRequesters.incrementAndGet()
+        } else {
+            liveRequesters.decrementAndGet()
+        }
+        if (holdsRequest && live > 1) {
+            ProjectionEventLog.warning(
+                "NETWORK",
+                "$live T-Box network connectors now hold a Wi-Fi request at the same time. They " +
+                    "compete for the same association and releasing one drops the others, so " +
+                    "expect connections that are granted and lost within a second. This is a " +
+                    "MOTO-HUB fault, not the dash."
+            )
         }
     }
 
@@ -698,6 +738,7 @@ class TBoxNetworkConnector(context: Context) {
             clearCurrentNetworkRequestLocked()
             callback = networkCallback
             registeredCallbacks += networkCallback
+            syncLiveRequesterCount()
             pendingRequestSsid = profile.ssid
             runCatching {
                 connectivityManager.requestNetwork(request, networkCallback)
@@ -1056,6 +1097,14 @@ class TBoxNetworkConnector(context: Context) {
 
         /** No sample taken yet; not a valid RSSI, so it cannot be mistaken for a reading. */
         const val UNSAMPLED_RSSI = Int.MIN_VALUE
+
+        /**
+         * How many connectors in this process currently hold a Wi-Fi request. Process-wide on
+         * purpose: [requestLock] already makes one connector's own registrations safe, and cannot
+         * see a second connector doing the same thing beside it - which is the failure this
+         * counts. See syncLiveRequesterCount.
+         */
+        private val liveRequesters = java.util.concurrent.atomic.AtomicInteger(0)
 
         /**
          * "No reading" from the framework. `WifiInfo.INVALID_RSSI` is -127 but is not public API,

@@ -68,9 +68,21 @@ class CoreTBoxConnector(private val context: Context) {
         TBoxSessionRegistry.clear()
     }
 
-    suspend fun disconnect() {
-        val handle = TBoxSessionRegistry.current()
-        if (handle != null) {
+    suspend fun disconnect() = disconnectActiveSession()
+
+    companion object {
+        /**
+         * Tears down whatever session the registry holds, whoever established it.
+         *
+         * Instance-independent by nature - it reads the registry, not this object - so it is
+         * exposed here rather than forcing a caller to build a connector just to reach it.
+         * Constructing one had a cost that was not obvious: every throwaway connector brought its
+         * own [TBoxNetworkConnector][io.motohub.android.tbox.TBoxNetworkConnector] and its own
+         * exclusive Wi-Fi request, so a disconnect could leave behind exactly the orphan it was
+         * supposed to be clearing up.
+         */
+        suspend fun disconnectActiveSession() {
+            val handle = TBoxSessionRegistry.current() ?: return
             handle.transport.stop()
             handle.networkConnector.disconnect()
             TBoxSessionRegistry.clear(handle)

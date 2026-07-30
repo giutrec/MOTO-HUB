@@ -170,11 +170,15 @@ class IpcBridgeService : Service() {
         // cancelConnect() call — arriving on a DIFFERENT binder thread — can actually interrupt
         // it instead of this call only ever returning once the connect attempt times out on
         // its own. See cancelConnect() below.
-        override fun connect(request: MotorcycleConnectRequest): Boolean {
-            val connector = CoreTBoxConnector(applicationContext)
-            val deferred = serviceScope.async { connector.connect(request.toProfile()) }
-            activeConnect = connector to deferred
-            return kotlinx.coroutines.runBlocking {
+        //
+        // The connector comes from CoreTBoxConnectors rather than being built here: a connector
+        // owns an exclusive WifiNetworkSpecifier request, and a second live one fights the first
+        // for the association. Building one per call left an orphan behind on every reconnect.
+        override fun connect(request: MotorcycleConnectRequest): Boolean =
+            kotlinx.coroutines.runBlocking {
+                val connector = CoreTBoxConnectors.replace(applicationContext)
+                val deferred = serviceScope.async { connector.connect(request.toProfile()) }
+                activeConnect = connector to deferred
                 val result = try {
                     deferred.await()
                 } catch (e: kotlinx.coroutines.CancellationException) {
@@ -183,7 +187,6 @@ class IpcBridgeService : Service() {
                 if (activeConnect?.second === deferred) activeConnect = null
                 result
             }
-        }
 
         override fun cancelConnect() {
             val (connector, deferred) = activeConnect ?: return
@@ -194,7 +197,11 @@ class IpcBridgeService : Service() {
         override fun disconnect() {
             closeVideoStreamPipe()
             kotlinx.coroutines.runBlocking {
-                CoreTBoxConnector(applicationContext).disconnect()
+                // Tear down the registry's session first (it may belong to Core's own UI rather
+                // than to this bridge), then release our connector - which also closes the Wi-Fi
+                // request that building a throwaway connector here used to leave behind.
+                CoreTBoxConnector.disconnectActiveSession()
+                CoreTBoxConnectors.clear()
             }
         }
 
