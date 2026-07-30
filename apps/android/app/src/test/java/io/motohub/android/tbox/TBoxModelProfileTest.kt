@@ -54,9 +54,22 @@ class TBoxModelProfileTest {
             TBoxModelProfile.resolve("48405", null, ProfileOverride.CFMOTO_800NK)
                 .requiresProactivePxcHeartbeat
         )
-        // GENERIC is what the same dash gets with no pin, and it advertises neither.
+        // GENERIC is what the same dash gets with no pin, and it advertises no support function.
+        // It does keep the proactive heartbeat: see the generic-profile test below.
         assertEquals(0, TBoxModelProfile.GENERIC.advertisedSupportFunction)
-        assertFalse(TBoxModelProfile.GENERIC.requiresProactivePxcHeartbeat)
+    }
+
+    @Test
+    fun `the generic profile keeps the PXC link alive by itself`() {
+        // GENERIC is the fallback for every dash we cannot identify - a Zontes dash reporting an
+        // empty CLIENT_INFO landed here and lost its session after ~96s of one-way streaming,
+        // because nothing was keeping the reverse PXC socket busy. Firmware that does not need the
+        // keepalive ignores it; firmware that does need it drops the whole session without it.
+        assertEquals(true, TBoxModelProfile.GENERIC.requiresProactivePxcHeartbeat)
+        assertEquals(
+            true,
+            TBoxModelProfile.resolve("21334", null).requiresProactivePxcHeartbeat
+        )
     }
 
     @Test
@@ -110,7 +123,6 @@ class TBoxModelProfileTest {
         assertEquals(22, profile.defaultScreenMargins.top)
         assertFalse(profile.supportsScreenTouch)
         assertEquals(true, profile.requiresProactivePxcHeartbeat)
-        assertEquals(false, TBoxModelProfile.GENERIC.requiresProactivePxcHeartbeat)
     }
 
     @Test

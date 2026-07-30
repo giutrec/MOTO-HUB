@@ -39,7 +39,11 @@ enum class TBoxModelProfile(
     val requiresSockAuth: Boolean = false,
     /** Capability bitmask returned by the MediaCtrlScreenConf response. */
     val advertisedSupportFunction: Int = 0,
-    /** Firmware closes EasyConn unless both reverse PXC channel sockets receive traffic. */
+    /**
+     * Firmware closes EasyConn unless both reverse PXC channel sockets receive traffic. Defaults
+     * to false only so that a profile written for a dash known not to need it can stay silent;
+     * anything unidentified goes through [GENERIC], which turns it on.
+     */
     val requiresProactivePxcHeartbeat: Boolean = false
 ) {
     MOTO_HUB_SIMULATOR(
@@ -172,7 +176,18 @@ enum class TBoxModelProfile(
         modelIds = emptySet(),
         mapTilesRequireCellular = true,
         // Existing generic compatibility profile; never treated as live geometry.
-        fallbackTBoxVideoArea = TBoxEvent.VideoArea(800, 480)
+        fallbackTBoxVideoArea = TBoxEvent.VideoArea(800, 480),
+        // On by default here because GENERIC is what every dashboard we cannot identify lands
+        // on - every non-CFMOTO brand included - and that is exactly the population whose
+        // firmware behaviour is unknown. A Zontes dash (package tayo.com.ZontesIntelligence,
+        // modelId 21334, field log 2026-07-30) sent its opening PXC burst, requested the
+        // capture area, sent STREAM_START and one heartbeat, then went silent and closed the
+        // socket 96s later while the app streamed 1857 frames into it and told the rider that
+        // projection was live. The reference implementation heartbeats unconditionally and
+        // documents why: some firmware never initiates heartbeats and then drops the idle PXC
+        // socket. Sending a keepalive to a dash that does not need one is harmless; not
+        // sending one to a dash that does costs the whole session.
+        requiresProactivePxcHeartbeat = true
     );
 
     companion object {

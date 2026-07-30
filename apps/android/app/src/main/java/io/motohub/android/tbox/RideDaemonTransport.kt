@@ -26,7 +26,9 @@ import java.net.ServerSocket
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.Executors
 import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.TimeUnit
@@ -48,6 +50,21 @@ internal const val RIDE_DAEMON_STARTUP_TIMEOUT_SEC = 25L
 private const val REVERSE_PORT_WAIT_MS = 12_000L
 private const val REVERSE_PORT_POLL_MS = 400L
 private const val PXC_STALL_WARNING_MS = 6_000L
+/**
+ * How long the dash may say nothing at all on the PXC control link, while we are still feeding it
+ * video, before the session is declared dead. The reverse channel keepalive runs every 2s, so this
+ * is ten missed beats; a rider log that showed a 16.6s gap had the dash tear down all three
+ * sockets straight afterwards, so nothing shorter than that gap is worth waiting for.
+ */
+private const val PXC_STALL_FATAL_MS = 20_000L
+/** How often the watchdog looks; a fraction of the budget above, not a precise alarm. */
+private const val PXC_WATCHDOG_INTERVAL_MS = 2_000L
+/**
+ * A frame offered more recently than this means we are actively streaming, which is the only state
+ * where silence is a fault worth killing the session over: a paused dashboard is not a dead dash,
+ * and it is not telling the rider anything untrue either.
+ */
+private const val PXC_STALL_STREAMING_WINDOW_MS = 5_000L
 private const val PUSH_FRAME_TIMEOUT_MS = 5_000L
 private const val PUSH_FRAME_SUBMIT_WAIT_MS = 1_000L
 private const val PUSH_FRAME_SUBMIT_RETRY_DELAY_MS = 5L
@@ -99,6 +116,13 @@ class RideDaemonTransport(
     private val lastPxcEventElapsed = AtomicLong(0L)
     private val lastMediaControlEventElapsed = AtomicLong(0L)
     private val lastFrameOfferedElapsed = AtomicLong(0L)
+    private val pxcWatchdogExecutor = Executors.newSingleThreadScheduledExecutor { runnable ->
+        Thread(runnable, "MotoHubPxcWatchdog").apply { isDaemon = true }
+    }
+    @Volatile
+    private var pxcWatchdogTask: ScheduledFuture<*>? = null
+    /** One report per session: the rider needs the failure once, not every tick. */
+    private val pxcStallReported = AtomicBoolean(false)
     /** Distinct (source, command) pairs already dumped this session for opcode identification. */
     private val unknownCommandsLogged =
         java.util.concurrent.ConcurrentHashMap.newKeySet<Pair<Long, Long>>()
@@ -173,6 +197,7 @@ class RideDaemonTransport(
                 )
                 startWithNetworkSocket(activeSession, host, activeLink)
                 ProjectionEventLog.record("TBOX", "RideDaemon startSessionWithSocketFd returned successfully.")
+                armPxcWatchdog(activeSessionGeneration)
             }.onFailure {
                 // The native call may already have opened 10920/10921/10922 before it
                 // reports a timeout. Stop that session before the next user attempt.
@@ -312,6 +337,7 @@ class RideDaemonTransport(
     }
 
     private fun stopSession() {
+        cancelPxcWatchdog()
         val sessionToStop: MobileSession?
         synchronized(sessionLock) {
             // Invalidate callbacks before asking the native session to stop. RideDaemon can
@@ -917,7 +943,24 @@ class RideDaemonTransport(
             if (type == PXC_EVENT_SOURCE && command == PXC_HUD_CONFIG_COMMAND) {
                 val capabilities = payload?.let(::decodeTBoxCapabilities)
                 if (capabilities == null) {
-                    ProjectionEventLog.warning("TBOX", "Unable to decode the T-Box CLIENT_INFO payload.")
+                    // An empty CLIENT_INFO and an unparseable one are different faults and lead
+                    // to the same place - the GENERIC profile - so the log has to tell them
+                    // apart. A Zontes dash sends this command with a zero-length body (field log
+                    // 2026-07-30), and "unable to decode" sent us looking for a parser bug that
+                    // was never there: there was simply nothing to parse.
+                    if (payload == null || payload.isEmpty()) {
+                        ProjectionEventLog.warning(
+                            "TBOX",
+                            "The T-Box announced CLIENT_INFO with an empty body; it reports no " +
+                                "capabilities at all, so the generic dashboard profile applies."
+                        )
+                    } else {
+                        ProjectionEventLog.warning(
+                            "TBOX",
+                            "Unable to decode the T-Box CLIENT_INFO payload (${payload.size} bytes); " +
+                                "the generic dashboard profile applies."
+                        )
+                    }
                 } else {
                     // Full raw CLIENT_INFO, not just the few fields TBoxCapabilities extracts -
                     // ProjectionEventLog.redact() strips password/pin-shaped fields (btPin) and,
@@ -1038,6 +1081,68 @@ class RideDaemonTransport(
 
     }
 
+    /**
+     * Starts watching the PXC control link for silence.
+     *
+     * The gap check in [SessionCallback.onEvent] only fires when the *next* event arrives, which
+     * makes it useless for the failure riders actually hit: the dash stops talking and never comes
+     * back, so there is no next event to carry the warning. A Zontes dash (field log 2026-07-30)
+     * sent its last heartbeat 3s into the session, stayed silent for 96s while we pushed 1857
+     * frames at it, and only then closed the socket - and for that whole minute and a half the app
+     * told the rider "streaming is active on the motorcycle TFT". That claim is what this timer
+     * exists to stop making.
+     *
+     * [PXC_STALL_FATAL_MS] of silence ends the session as a failure rather than trying to recover
+     * in place: the caller's own retry path re-runs discovery and the handshake, which is the only
+     * thing that has ever brought one of these links back.
+     */
+    private fun armPxcWatchdog(generation: Long) {
+        cancelPxcWatchdog()
+        if (generation == 0L) return
+        pxcWatchdogTask = runCatching {
+            pxcWatchdogExecutor.scheduleWithFixedDelay(
+                { checkPxcLiveness(generation) },
+                PXC_WATCHDOG_INTERVAL_MS,
+                PXC_WATCHDOG_INTERVAL_MS,
+                TimeUnit.MILLISECONDS
+            )
+        }.getOrNull()
+    }
+
+    private fun cancelPxcWatchdog() {
+        pxcWatchdogTask?.cancel(false)
+        pxcWatchdogTask = null
+    }
+
+    private fun checkPxcLiveness(generation: Long) {
+        // Generation-scoped: a tick that was already queued when the session was replaced must not
+        // be able to kill its successor.
+        if (!isCurrentRideDaemonSession(generation, activeSessionGeneration)) return
+        if (session?.isRunning != true) return
+        val now = SystemClock.elapsedRealtime()
+        val lastFrame = lastFrameOfferedElapsed.get()
+        if (lastFrame <= 0L || now - lastFrame > PXC_STALL_STREAMING_WINDOW_MS) return
+        val lastPxc = lastPxcEventElapsed.get()
+        // Never received anything: that is a handshake that did not complete, not a link that
+        // died, and start() already reports it.
+        if (lastPxc <= 0L) return
+        val silence = now - lastPxc
+        if (silence < PXC_STALL_FATAL_MS) return
+        if (!pxcStallReported.compareAndSet(false, true)) return
+        ProjectionEventLog.error(
+            "TBOX",
+            "The T-Box control link has been silent for ${silence}ms while video was still being " +
+                "sent; treating the session as dead. ${protocolSnapshot()}"
+        )
+        mutableEvents.tryEmit(
+            TBoxEvent.FatalError(
+                "The dash stopped responding while MOTO-HUB was still sending video. Put the bike " +
+                    "on its phone-connection screen, make sure no other app is connected to the " +
+                    "T-Box, and connect again."
+            )
+        )
+    }
+
     private fun resetProtocolStats() {
         pxcEvents.set(0L)
         mediaControlEvents.set(0L)
@@ -1047,6 +1152,7 @@ class RideDaemonTransport(
         lastPxcEventElapsed.set(0L)
         lastMediaControlEventElapsed.set(0L)
         lastFrameOfferedElapsed.set(0L)
+        pxcStallReported.set(false)
         unknownCommandsLogged.clear()
     }
 
