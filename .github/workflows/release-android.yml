@@ -1,4 +1,4 @@
-name: Release Android APK
+name: Verify tagged release build
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: android-release-${{ github.ref }}
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   release:
-    name: Build, verify, and publish
+    name: Build and verify
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -171,25 +171,17 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          APK_PATH: ${{ steps.package.outputs.apk_path }}
-          CHECKSUM_PATH: ${{ steps.package.outputs.checksum_path }}
-        run: |
-          set -euo pipefail
-          release_flags=()
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
-            release_flags+=(--prerelease)
-          fi
-          gh release create "$GITHUB_REF_NAME" \
-            "$APK_PATH" \
-            "$CHECKSUM_PATH" \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "MOTO-HUB $GITHUB_REF_NAME" \
-            --generate-notes \
-            "${release_flags[@]}" \
-            --verify-tag
+      # This workflow deliberately does NOT create the GitHub release.
+      #
+      # It used to, and it failed on every single tag from v1.1.1 onwards - always with "a release
+      # with the same tag name already exists". Releases are published by hand, because the rider
+      # facing notes are written by hand: the step used `--generate-notes`, which would have
+      # replaced them with a list of commit subjects, and titled the release "MOTO-HUB v1.1.22"
+      # instead of "MOTO-HUB CORE 1.1.22". It could only ever have won that race by making the
+      # release worse, so a red cross on every release was all it ever produced.
+      #
+      # What it still does is worth keeping: it proves the tagged commit builds, signs and verifies
+      # away from anyone's laptop, and leaves that APK as a workflow artifact for comparison.
 
       - name: Remove provisioned private material
         if: always()
