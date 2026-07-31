@@ -102,11 +102,19 @@ class AapTransport(
         return 0
     }
 
+    /**
+     * Sends the AAP byebye and tears the transport down.
+     *
+     * This used to sleep 150ms hoping the byebye reached the wire before [quit] discarded the
+     * send queue - and it runs on whatever thread stops the session, which for a service
+     * onDestroy() is the MAIN thread. The wait is gone: [quit] now drains the send thread with
+     * quitSafely(), so the byebye is delivered because the looper is told to finish its queue,
+     * not because the caller was blocked long enough for it to be likely.
+     */
     internal fun stop() {
         AaLog.i("AapTransport stopping and sending byebye")
         val byebye = Control.ByeByeRequest.newBuilder().setReason(Control.ByeByeReason.USER_SELECTION).build()
         send(AapMessage(Channel.ID_CTR, Control.ControlMsgType.MESSAGE_BYEBYE_REQUEST_VALUE, byebye))
-        SystemClock.sleep(150)
         quit()
     }
 
@@ -116,8 +124,12 @@ class AapTransport(
        AaLog.i("AapTransport quitting (clean=$clean)")
         microphone?.stop("AAP transport stopped")
         microphone = null
+        // Reads in flight are worth nothing once we are quitting, so the poll thread is dropped
+        // outright. The send queue is not: it may still hold the byebye [stop] just posted, and
+        // plain quit() discards pending messages. quitSafely() delivers what is already queued
+        // and then terminates, which is what the old sleep(150) was approximating.
         pollThread?.quit()
-        sendThread?.quit()
+        sendThread?.quitSafely()
         aapVideo.release()
         videoDecoder.onDecoderError = null
         try {

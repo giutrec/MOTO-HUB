@@ -100,8 +100,16 @@ class SimulatorHandlebarBridge(
             writeResponse(client, 400, "Invalid body")
             return
         }
+        // Read until the declared length or EOF: a single read() returns whatever happens to be
+        // buffered, so a body split across TCP segments used to be rejected as "Incomplete"
+        // even though the rest was on its way.
         val body = CharArray(contentLength)
-        val read = reader.read(body)
+        var read = 0
+        while (read < contentLength) {
+            val n = reader.read(body, read, contentLength - read)
+            if (n < 0) break
+            read += n
+        }
         if (read != contentLength) {
             writeResponse(client, 400, "Incomplete body")
             return

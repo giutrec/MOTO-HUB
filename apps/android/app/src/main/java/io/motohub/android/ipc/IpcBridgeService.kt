@@ -339,6 +339,17 @@ class IpcBridgeService : Service() {
         if (sessionPollJob?.isActive == true) return
         sessionPollJob = serviceScope.launch {
             while (true) {
+                // Nobody is listening: this loop exists only to feed remote callbacks, and it
+                // used to keep ticking for the life of the process after the last companion
+                // unbound. registerSessionListener() calls back in here, so a later listener
+                // restarts it.
+                if (sessionListeners.registeredCallbackCount == 0) {
+                    ProjectionEventLog.debug(
+                        "IPC",
+                        "No session listeners left; stopping the session poll until one registers."
+                    )
+                    return@launch
+                }
                 val handle = TBoxSessionRegistry.current()
                 if ((handle != null) != (lastKnownHandle != null)) {
                     val ready = handle != null

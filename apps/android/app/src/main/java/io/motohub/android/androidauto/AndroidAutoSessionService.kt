@@ -53,6 +53,7 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -961,15 +962,25 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         tBoxHandle = null
         if (releasedHandle != null) {
             serviceScope.launch {
-                // Another mode may still be streaming on this session; only the last one out
-                // stops the transport and drops the network.
-                if (TBoxSessionRegistry.releaseAndClear(SESSION_CONSUMER, releasedHandle)) {
-                    releasedHandle.transport.stop()
-                    releasedHandle.networkConnector.disconnect()
+                try {
+                    // Another mode may still be streaming on this session; only the last one out
+                    // stops the transport and drops the network.
+                    if (TBoxSessionRegistry.releaseAndClear(SESSION_CONSUMER, releasedHandle)) {
+                        releasedHandle.transport.stop()
+                        releasedHandle.networkConnector.disconnect()
+                    }
+                } finally {
+                    // Last thing this service ever does: the scope outlived stopSelf() before,
+                    // so anything still suspended in it (a recovery mid-delay, an event
+                    // collector) kept running against a service Android had already destroyed.
+                    // Cancelling from inside is safe because this is the final statement -
+                    // the work above has already completed.
+                    serviceScope.cancel()
                 }
             }
         } else {
             TBoxSessionRegistry.release(SESSION_CONSUMER)
+            serviceScope.cancel()
         }
         if (AndroidAutoRuntime.state.value !is AndroidAutoRuntimeState.Failed) {
             AndroidAutoRuntime.publish(AndroidAutoRuntimeState.Stopped(reason))
