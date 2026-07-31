@@ -26,6 +26,26 @@ class CoreTBoxConnector(private val context: Context) {
     private val capabilityStore = TBoxCapabilityStore(context)
 
     suspend fun connect(profile: MotorcycleProfile): Boolean {
+        // A session CORE started for itself outlives the activity on purpose - a projection has to
+        // survive the screen going away - and a companion app asking to connect in that moment used
+        // to build a SECOND TBoxNetworkConnector beside it. Two exclusive WifiNetworkSpecifier
+        // requests for the same SSID do not queue, they fight: each grant drops the other's network.
+        // Field log 2026-07-31 (OnePlus CPH2653, EASYCONN_5G-F3116E): the rider left an Android Auto
+        // session running, started the Ride Dashboard from the companion app, and got networks
+        // 202 through 207 granted and lost within a second each, one dashboard frame, a broken pipe,
+        // then eleven rejoin attempts refused by Android in 2-10ms before it gave up 3.5 minutes
+        // later. Refusing here costs that rider one clear sentence instead.
+        val holder = TBoxSessionRegistry.current()
+        val consumers = TBoxSessionRegistry.activeConsumers()
+        if (holder != null && holder.networkConnector !== networkConnector && consumers.isNotEmpty()) {
+            ProjectionEventLog.error(
+                "IPC_TBOX",
+                "AIDL connect refused: MOTO-HUB Core is already using this dash for $consumers. " +
+                    "Two connectors would compete for the same Wi-Fi association and drop each " +
+                    "other's network. Stop that session first, then connect again."
+            )
+            return false
+        }
         val connected = TBoxLinkResolver.connect(context, networkConnector, profile)
         val link = connected.getOrElse {
             ProjectionEventLog.error("IPC_TBOX", "AIDL connect: T-Box network connection failed.", it)

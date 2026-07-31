@@ -343,6 +343,12 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                             "Android Auto connected without delivering video. " +
                                 "The AAP session was closed; start Android Auto again."
                         )
+                    } else if (io.motohub.android.aa.AaSelfMode.anyEntryPointAccepted) {
+                        // Android Auto took the request and ignored it, which is the "Add new
+                        // cars" switch, not the release having closed self-mode. Sending these
+                        // riders to the head unit server was answering a question they had not
+                        // asked - see AndroidAutoSelfModeHelp.ACCEPTED_BUT_SILENT_MESSAGE.
+                        fail(AndroidAutoSelfModeHelp.ACCEPTED_BUT_SILENT_MESSAGE)
                     } else {
                         fail(AndroidAutoSelfModeHelp.NEVER_CONNECTED_MESSAGE)
                     }

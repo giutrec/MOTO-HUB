@@ -110,6 +110,15 @@ object AaSelfMode {
             }
         }
 
+        // Whether Android Auto ever ACCEPTED one of these intents, which is the whole diagnosis.
+        // A component that answers "Permission Denial: not exported" has been closed by the
+        // release; a component that takes the intent and then does nothing is Android Auto
+        // deciding not to project, and the reason for that is almost always the one prerequisite
+        // this app cannot read - "Add new cars to Android Auto" being off. Field log 2026-07-31
+        // (OnePlus CPH2653) on Android Auto 17.2.662634, the exact build this project calls
+        // verified working: the activity was refused, and a broadcast plus two services were all
+        // accepted and stayed silent. The message that followed blamed 17.4.
+        var accepted = false
         attempts.forEachIndexed { index, attempt ->
             if (isConnected()) return
             // The rider sees this in the session card and the preview screen: several seconds of
@@ -121,6 +130,7 @@ object AaSelfMode {
                 ComponentKind.SERVICE -> startServiceComponent(context, attempt.className, extras, log)
             }
             if (!dispatched) return@forEachIndexed
+            accepted = true
             onProgress("Waiting for Android Auto to answer (${index + 1}/${attempts.size})…")
             if (awaitConnection(isConnected)) {
                 log("[AA] Android Auto connected after ${attempt.describe()}.")
@@ -131,16 +141,40 @@ object AaSelfMode {
         }
 
         if (isConnected()) return
-        onProgress("Start \"head unit server\" in Android Auto ▸ Developer settings ▸ ⋮ menu…")
+        anyEntryPointAccepted = accepted
+        val diagnosis = if (accepted) {
+            "Android Auto ${version ?: "(version unknown)"} ACCEPTED at least one of them and then " +
+                "did nothing, which is what a refusal looks like from here: it projects only to a " +
+                "head unit it is willing to accept, and a sideloaded one counts as unknown until " +
+                "\"Add new cars to Android Auto\" is enabled in its own Developer settings."
+        } else {
+            "Android Auto ${version ?: "(version unknown)"} refused every one of them as not " +
+                "exported - the release has closed self-mode off (same wall headunit-revived hit " +
+                "in its issue #698)."
+        }
+        onProgress(
+            if (accepted) {
+                "Enable \"Add new cars to Android Auto\" in Android Auto ▸ Developer settings…"
+            } else {
+                "Start \"head unit server\" in Android Auto ▸ Developer settings ▸ ⋮ menu…"
+            }
+        )
         log(
             "[AA] Self-mode could not be triggered: none of ${attempts.size} entry points produced " +
-                "a connection. Android Auto 17.4 closed them all - the activity is no longer " +
-                "exported and WirelessStartupReceiver ships disabled (same wall headunit-revived " +
-                "hit in its issue #698). The receiver keeps polling Android Auto's own head unit " +
+                "a connection. $diagnosis The receiver keeps polling Android Auto's own head unit " +
                 "server on :${AaReceiver.HEAD_UNIT_SERVER_PORT}, so starting it from Android Auto's " +
-                "Developer settings connects without any downgrade."
+                "Developer settings connects either way."
         )
     }
+
+    /**
+     * Whether the last [trigger] round had an entry point accept its intent, which decides which
+     * remedy the rider is shown. Process-global because the failure surfaces later and elsewhere -
+     * the video-ready timeout in the session service, long after this coroutine has returned.
+     */
+    @Volatile
+    var anyEntryPointAccepted: Boolean = false
+        private set
 
     /** Polls the receiver rather than trusting the dispatch result. See [trigger]. */
     private suspend fun awaitConnection(isConnected: () -> Boolean): Boolean {

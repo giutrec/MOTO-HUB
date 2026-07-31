@@ -72,6 +72,13 @@ object TBoxSessionRegistry {
     @Synchronized
     fun current(): TBoxSessionHandle? = activeHandle
 
+    /**
+     * Who is using the active session right now, for a caller deciding whether it may take the
+     * radio. Empty when nobody holds it - including when there is no session at all.
+     */
+    @Synchronized
+    fun activeConsumers(): String = if (activeHandle == null) "" else consumers.describe()
+
     /** Registers [consumer] as a user of the active session. No-op when there is none. */
     @Synchronized
     fun claim(consumer: String): Boolean {
