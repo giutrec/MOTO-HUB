@@ -51,10 +51,53 @@ object SentryIntegration {
             Sentry.withScope { scope ->
                 scope.setTag("motohub.source", source)
                 scope.setTag("motohub.edition", "core")
+                scope.fingerprint = fingerprintOf(source, message)
                 Sentry.captureMessage(message, SentryLevel.ERROR)
             }
         }.onFailure { failure ->
             Log.w(LOG_TAG, "Unable to send diagnostic event", failure)
         }
     }
+
+    /**
+     * Attaches low-cardinality facts to every event this process sends from here on.
+     *
+     * Tags rather than a context, because only tags can be grouped and counted across the fleet -
+     * and that is the whole reason these exist. The most useful diagnostic the app writes, what
+     * the Wi-Fi scan could see in the moment before a join, is a warning, so it never left the
+     * phone: 109 riders hit "no network granted" in four days and not one of those reports could
+     * say whether the dash was in the air at all.
+     *
+     * Values must stay coarse. A tag carrying a rider's exact RSSI is a new tag value per rider,
+     * which costs Sentry's indexing and answers nothing.
+     */
+    fun setDiagnosticTags(tags: Map<String, String>) {
+        if (!enabled) return
+        runCatching {
+            Sentry.configureScope { scope ->
+                tags.forEach { (key, value) -> scope.setTag(key, value) }
+            }
+        }.onFailure { failure ->
+            Log.w(LOG_TAG, "Unable to attach diagnostic tags", failure)
+        }
+    }
+
+    /**
+     * Groups a report by what it SAYS rather than by the numbers and the frame names in it.
+     *
+     * Two things were splitting one report into dozens of issues. Elapsed times land in the
+     * message - one rider's "unavailable 727144ms" and another's "48772ms" are the same event -
+     * and the appended stack trace is obfuscated per build, so `zZ.c` and `qZ.c` are the same
+     * frame from two releases. Split that way neither the user counts nor [setDiagnosticTags]
+     * mean anything. Only the first two lines are kept: the message the call site chose, and the
+     * exception line under it. The SSID in that second line still separates one bike from
+     * another, which is deliberate - it is the difference between one dash that is off and a
+     * model that cannot be joined.
+     */
+    private fun fingerprintOf(source: String, message: String): List<String> = listOf(
+        source,
+        message.lineSequence().take(2).joinToString("\n").replace(NUMBERS, "#")
+    )
+
+    private val NUMBERS = Regex("\\d+")
 }

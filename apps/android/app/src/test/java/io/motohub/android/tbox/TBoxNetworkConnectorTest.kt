@@ -141,4 +141,32 @@ class TBoxNetworkConnectorTest {
         assertEquals("an unknown band", bandName(900))
         assertEquals("an unknown band", bandName(5910))
     }
+
+    @Test
+    fun reportsHowFarUpTheFiveGigahertzBandThePhoneCanSee() {
+        // Channels 149-165 are ordinary in China and unavailable under EU rules, so a dash parked
+        // there is as invisible as one switched off. This says which of the two a log is looking at.
+        assertEquals("no 5GHz seen", regulatoryReach(null))
+        assertEquals("up to UNII-1/2A", regulatoryReach(5180))
+        assertEquals("up to UNII-1/2A", regulatoryReach(5320))
+        assertEquals("up to UNII-2C", regulatoryReach(5500))
+        assertEquals("up to UNII-2C", regulatoryReach(5700))
+        assertEquals("up to UNII-3", regulatoryReach(5745))
+        assertEquals("up to UNII-3", regulatoryReach(5825))
+    }
+
+    @Test
+    fun bucketsSignalAndCountsBecauseTagsAreNotMeasurements() {
+        // These become Sentry tags: an exact dBm reading would be one tag value per rider.
+        assertEquals("strong", rssiBand(-45))
+        assertEquals("strong", rssiBand(-60))
+        assertEquals("ok", rssiBand(-61))
+        assertEquals("ok", rssiBand(-75))
+        assertEquals("weak", rssiBand(-76))
+        assertEquals("0", scanCountBand(0))
+        assertEquals("0", scanCountBand(-1))
+        assertEquals("1-3", scanCountBand(1))
+        assertEquals("1-3", scanCountBand(3))
+        assertEquals("4+", scanCountBand(4))
+    }
 }

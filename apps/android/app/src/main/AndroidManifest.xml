@@ -102,6 +102,14 @@
             </intent-filter>
         </service>
 
+        <!--
+            Not exported: it is only ever woken by this app's own alarm, which exists because a
+            frozen process cannot honour its own timers. See TBoxRequestGiveUpAlarm.
+        -->
+        <receiver
+            android:name=".tbox.TBoxRequestGiveUpReceiver"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

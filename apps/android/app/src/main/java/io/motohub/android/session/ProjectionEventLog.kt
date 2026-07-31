@@ -262,6 +262,20 @@ object ProjectionEventLog {
         record(source, message, LogLevel.ERROR, throwable)
 
     /**
+     * Records facts about the state of the world rather than an event: what the radio could see,
+     * what band it was on. They belong on every later report instead of on a line of their own,
+     * so they ride along as tags rather than as log entries.
+     *
+     * Behind this funnel because [SentryIntegration] has exactly one caller in the app, and gated
+     * by the same master switch as [record]: a rider who turned logging off has turned telemetry
+     * off too, and that has to stay true for facts as much as for events.
+     */
+    fun setTelemetryFacts(facts: Map<String, String>) {
+        if (!isLoggingEnabled()) return
+        SentryIntegration.setDiagnosticTags(facts)
+    }
+
+    /**
      * Records a message from a stream this app does not author - the ported AAP stack hands
      * out plain strings with no level - by GUESSING a level from its wording.
      *

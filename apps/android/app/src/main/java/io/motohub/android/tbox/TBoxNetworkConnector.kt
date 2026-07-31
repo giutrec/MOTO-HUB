@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import io.motohub.android.feature.settings.MotoHubSettings
+import io.motohub.android.session.LogLevel
 import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.session.ProjectionEventLog
 import java.net.Inet4Address
@@ -289,6 +290,7 @@ class TBoxNetworkConnector(context: Context) {
                 "activeNetwork=$activeNetwork, processBound=$processBoundNetwork."
         )
         callback = null
+        pendingRequestSsid?.let { TBoxRequestGiveUpAlarm.disarm(appContext, it) }
         pendingRequestSsid = null
         pendingFailure = null
         networkGranted = false
@@ -345,12 +347,21 @@ class TBoxNetworkConnector(context: Context) {
             liveRequesters.decrementAndGet()
         }
         if (holdsRequest && live > 1) {
-            ProjectionEventLog.warning(
+            // ERROR, because this is a fault in this app and nothing about it is the rider's
+            // doing - and because at WARNING it never left the phone, so a bug we can already
+            // detect exactly had no fleet numbers behind it at all. Only the first occurrence
+            // per process is reported: once two connectors are fighting they re-register for as
+            // long as the thrash lasts (thirteen times in the 2026-07-31 OnePlus log), and the
+            // repeats say nothing the first one did not.
+            val firstInProcess = duplicateRequestReported.compareAndSet(false, true)
+            ProjectionEventLog.record(
                 "NETWORK",
                 "$live T-Box network connectors now hold a Wi-Fi request at the same time. They " +
                     "compete for the same association and releasing one drops the others, so " +
                     "expect connections that are granted and lost within a second. This is a " +
-                    "MOTO-HUB fault, not the dash."
+                    "MOTO-HUB fault, not the dash.",
+                LogLevel.ERROR,
+                reportToTelemetry = firstInProcess
             )
         }
     }
@@ -506,6 +517,7 @@ class TBoxNetworkConnector(context: Context) {
                 "NETWORK",
                 "Wi-Fi scan results are unavailable, so it cannot be said whether $target is in range."
             )
+            publishScanFacts(visibility = "scan_unavailable")
             return
         }
         fun ScanResult.ssidText(): String =
@@ -526,15 +538,29 @@ class TBoxNetworkConnector(context: Context) {
                 "The phone's Wi-Fi scan came back empty (0 networks), so it says nothing about " +
                     "whether $target is in range."
             )
+            publishScanFacts(visibility = "scan_empty")
             return
         }
         val match = results.firstOrNull { it.ssidText().equals(target, ignoreCase = true) }
+        // What the phone can see AT ALL is the other half of the answer, and the half that was
+        // missing. "Not in the scan" convicts the dash; it stops doing so the moment the same
+        // line shows the phone saw no 5GHz network whatsoever, and it convicts the dash's channel
+        // rather than the dash when the phone demonstrably reaches the top of the band. A
+        // China-market unit parked on channel 149-165 is invisible to a phone in an EU
+        // regulatory domain, and no rider log so far has been able to tell that apart from a dash
+        // that was simply switched off (VOGE 2026-07-30, QJ 2026-07-31 - both never once seen).
+        val perBand = results.groupingBy { bandName(it.frequency) }.eachCount()
+        val bandSummary = perBand.entries
+            .sortedByDescending { it.value }
+            .joinToString { (band, count) -> "$count on $band" }
+        val topFiveGhzMhz = results.map { it.frequency }.filter { it in FIVE_GHZ_MHZ }.maxOrNull()
+        val reach = topFiveGhzMhz?.let { ", highest 5GHz channel seen ${it}MHz" }.orEmpty()
         if (match == null) {
             ProjectionEventLog.warning(
                 "NETWORK",
-                "$target is NOT in the phone's latest Wi-Fi scan (${results.size} networks seen). " +
-                    "Either the dash is not broadcasting it right now, or the phone cannot see " +
-                    "that channel."
+                "$target is NOT in the phone's latest Wi-Fi scan (${results.size} networks seen: " +
+                    "$bandSummary$reach). Either the dash is not broadcasting it right now, or " +
+                    "the phone cannot see that channel."
             )
         } else {
             // The security line is the one that can convict us rather than the dash. The specifier
@@ -550,8 +576,10 @@ class TBoxNetworkConnector(context: Context) {
         }
         // A twin on the other band shares the dash's serial-looking last token.
         val tail = target.substringAfterLast('-', "").takeIf { it.length >= 3 }
-        if (tail != null) {
-            val siblings = results
+        val siblings = if (tail == null) {
+            emptyList()
+        } else {
+            results
                 .map { it.ssidText() to it.frequency }
                 .filter { (ssid, _) ->
                     ssid.isNotEmpty() &&
@@ -560,15 +588,48 @@ class TBoxNetworkConnector(context: Context) {
                 }
                 .distinctBy { it.first }
                 .take(SIBLING_AP_LOG_LIMIT)
-            if (siblings.isNotEmpty()) {
-                ProjectionEventLog.record(
-                    "NETWORK",
-                    "The same dash also broadcasts: " +
-                        siblings.joinToString { (ssid, frequency) -> "$ssid on ${bandName(frequency)}" } +
-                        ". If $target will not join, one of these may."
-                )
-            }
         }
+        if (siblings.isNotEmpty()) {
+            ProjectionEventLog.record(
+                "NETWORK",
+                "The same dash also broadcasts: " +
+                    siblings.joinToString { (ssid, frequency) -> "$ssid on ${bandName(frequency)}" } +
+                    ". If $target will not join, one of these may."
+            )
+        }
+        publishScanFacts(
+            visibility = if (match == null) "no" else "yes",
+            match = match,
+            fiveGhzSeen = perBand["5GHz"] ?: 0,
+            topFiveGhzMhz = topFiveGhzMhz,
+            siblingBand = siblings.firstOrNull()?.let { (_, frequency) -> bandName(frequency) }
+        )
+    }
+
+    /**
+     * Sends the SHAPE of the scan - never an SSID, never a BSSID - to telemetry, so the question
+     * this snapshot exists to answer gets settled on fleet numbers instead of one shared log at a
+     * time. Riders paste these logs into public threads and the fleet has no business knowing a
+     * neighbour's network name; every value here is a bucket for the same reason.
+     */
+    private fun publishScanFacts(
+        visibility: String,
+        match: ScanResult? = null,
+        fiveGhzSeen: Int? = null,
+        topFiveGhzMhz: Int? = null,
+        siblingBand: String? = null
+    ) {
+        ProjectionEventLog.setTelemetryFacts(
+            mapOf(
+                "tbox.ap_visible" to visibility,
+                "tbox.ap_band" to (match?.let { bandName(it.frequency) } ?: "none"),
+                "tbox.ap_security" to (match?.let { securityName(it.capabilities) } ?: "none"),
+                "tbox.ap_rssi" to (match?.let { rssiBand(it.level) } ?: "none"),
+                "tbox.scan_5ghz" to (fiveGhzSeen?.let(::scanCountBand) ?: "unknown"),
+                "tbox.scan_5ghz_reach" to regulatoryReach(topFiveGhzMhz),
+                "tbox.ap_sibling_band" to (siblingBand ?: "none")
+            )
+        )
     }
 
     /**
@@ -778,6 +839,9 @@ class TBoxNetworkConnector(context: Context) {
         pendingFailure = null
         pendingGiveUpJob?.cancel()
         pendingGiveUpJob = null
+        // The registration deliberately outlives the join, but nothing needs to give it up any
+        // more - and an alarm left armed would fire mid-ride.
+        pendingRequestSsid?.let { TBoxRequestGiveUpAlarm.disarm(appContext, it) }
     }
 
     /**
@@ -807,11 +871,30 @@ class TBoxNetworkConnector(context: Context) {
             clearCurrentNetworkRequest()
             throw cancelled
         }
+        // Two things this line used to state as fact and could not know. Whether the request is
+        // still pending: [schedulePendingGiveUp] may have released it while this wait was
+        // running, and a 2026-07-31 rider log has "Releasing the pending request" printed
+        // immediately above "the request stays pending for the next attempt". And how long the
+        // wait actually took: a cached process is frozen by Android, every coroutine delay inside
+        // it stops, and this loop only notices once the app is thawed - in that same log a 6s
+        // grace took 505s and the elapsed time was reported as the 30s budget. That gap is the
+        // difference between "the dash never answered" and "this app was not running to hear it".
+        val stillPending = pendingRequestSsid == profile.ssid
+        val elapsed = specifierSubmittedAt.takeIf { it > 0L }
+            ?.let { SystemClock.elapsedRealtime() - it }
+        val frozen = elapsed != null && elapsed > (CONNECTION_TIMEOUT_MS + UNAVAILABLE_GRACE_MS) * 2
+        ProjectionEventLog.setTelemetryFacts(mapOf("tbox.wait_frozen" to if (frozen) "yes" else "no"))
         ProjectionEventLog.error(
             "NETWORK",
             "Wi-Fi setup timed out after ${CONNECTION_TIMEOUT_MS}ms with " +
                 (if (networkGranted) "the network granted but no usable IPv4 address" else "no network granted") +
-                "; the request stays pending for the next attempt."
+                "; " +
+                (if (stillPending) {
+                    "the request stays pending for the next attempt."
+                } else {
+                    "the request has already been released."
+                }) +
+                (if (frozen) " The wait itself took ${elapsed}ms: this process was frozen while it ran." else "")
         )
         return Result.failure(IllegalStateException(setupTimeoutMessage(profile)))
     }
@@ -859,20 +942,39 @@ class TBoxNetworkConnector(context: Context) {
         pendingGiveUpJob?.cancel()
         pendingGiveUpJob = reconnectScope.launch {
             delay(REJOIN_GIVE_UP_MS)
-            // Decide and act as ONE step under the lock. markConnected() cancels this job, but a
-            // job already past its own check cannot be cancelled out of the clear that follows:
-            // a grant landing in that window had its brand-new network released immediately.
-            // Re-reading activeNetwork inside the lock closes it, because markConnected() runs
-            // from the network callback and its write is visible here.
-            synchronized(requestLock) {
-                if (activeNetwork != null || pendingRequestSsid != profile.ssid) return@synchronized
-                ProjectionEventLog.warning(
-                    "NETWORK",
-                    "Releasing the pending T-Box Wi-Fi request for ${profile.ssid}: nothing " +
-                        "connected within ${REJOIN_GIVE_UP_MS / 1_000L}s."
-                )
-                clearCurrentNetworkRequestLocked()
-            }
+            releasePendingRequest(profile.ssid, wokenByAlarm = false)
+        }
+        // The coroutine above is only as awake as the process. A rider who leaves the pairing
+        // screen has the app cached within seconds, Android freezes it, and this budget stops
+        // counting: the 2026-07-31 QJ log shows the 180s give-up landing at 528s, the exact
+        // moment the rider reopened the app, with the exclusive request holding the radio for
+        // the whole interval - and Sentry has reports of 727s. An alarm is the one timer the
+        // freezer honours, because delivering it thaws the process.
+        TBoxRequestGiveUpAlarm.arm(appContext, profile.ssid, REJOIN_GIVE_UP_MS) {
+            releasePendingRequest(profile.ssid, wokenByAlarm = true)
+        }
+    }
+
+    /**
+     * Drops a request nothing ever answered. Idempotent, because the in-process timer and the
+     * alarm both aim at it and either may get there first.
+     */
+    private fun releasePendingRequest(ssid: String, wokenByAlarm: Boolean) {
+        // Decide and act as ONE step under the lock. markConnected() cancels the job, but a job
+        // already past its own check cannot be cancelled out of the clear that follows: a grant
+        // landing in that window had its brand-new network released immediately. Re-reading
+        // activeNetwork inside the lock closes it, because markConnected() runs from the network
+        // callback and its write is visible here.
+        synchronized(requestLock) {
+            if (activeNetwork != null || pendingRequestSsid != ssid) return
+            ProjectionEventLog.warning(
+                "NETWORK",
+                "Releasing the pending T-Box Wi-Fi request for $ssid: nothing connected within " +
+                    "${REJOIN_GIVE_UP_MS / 1_000L}s" +
+                    (if (wokenByAlarm) "; the app's own timer was frozen, so the wake-up alarm did it" else "") +
+                    "."
+            )
+            clearCurrentNetworkRequestLocked()
         }
     }
 
@@ -1134,6 +1236,9 @@ class TBoxNetworkConnector(context: Context) {
          */
         private val liveRequesters = java.util.concurrent.atomic.AtomicInteger(0)
 
+        /** Keeps the duplicate-requester fault to one telemetry report per process. */
+        private val duplicateRequestReported = AtomicBoolean(false)
+
         /**
          * "No reading" from the framework. `WifiInfo.INVALID_RSSI` is -127 but is not public API,
          * so the value is spelled out; anything at or below it is a sentinel, not a measurement.
@@ -1167,10 +1272,46 @@ internal fun securityName(capabilities: String?): String {
     }
 }
 
+/**
+ * How far up the 5GHz band this phone demonstrably reaches, from the highest channel its own scan
+ * came back with.
+ *
+ * This is the fact that separates a silent dash from one on a channel the phone's regulatory
+ * domain forbids. Channels 149-165 (5745MHz and up) are ordinary in the Chinese market and not
+ * available to a phone operating under EU rules, so a dash sitting there is as invisible as a dash
+ * that is switched off - and until now the log said the same words for both.
+ *
+ * Read as evidence about the PHONE, and only alongside the scan size: seeing nothing above
+ * 5320MHz in a car park proves nothing, seeing it in a street full of routers is a strong hint.
+ */
+internal fun regulatoryReach(topFiveGhzMhz: Int?): String = when {
+    topFiveGhzMhz == null -> "no 5GHz seen"
+    topFiveGhzMhz >= 5745 -> "up to UNII-3"
+    topFiveGhzMhz >= 5500 -> "up to UNII-2C"
+    else -> "up to UNII-1/2A"
+}
+
+/** Coarse RSSI buckets: a tag carrying an exact dBm reading is a new tag value per rider. */
+internal fun rssiBand(levelDbm: Int): String = when {
+    levelDbm >= -60 -> "strong"
+    levelDbm >= -75 -> "ok"
+    else -> "weak"
+}
+
+/** Bucketed scan counts, for the same reason [rssiBand] is bucketed. */
+internal fun scanCountBand(count: Int): String = when {
+    count <= 0 -> "0"
+    count <= 3 -> "1-3"
+    else -> "4+"
+}
+
+/** The one definition of 5GHz in this file, so [bandName] and the scan snapshot cannot disagree. */
+internal val FIVE_GHZ_MHZ = 4900..5900
+
 /** Names the band a scan frequency sits in; "?" rather than a guess when it is out of range. */
 internal fun bandName(frequencyMhz: Int): String = when (frequencyMhz) {
     in 2400..2500 -> "2.4GHz"
-    in 4900..5900 -> "5GHz"
+    in FIVE_GHZ_MHZ -> "5GHz"
     in 5925..7125 -> "6GHz"
     else -> "an unknown band"
 }
