@@ -53,6 +53,82 @@ internal fun classifyExternalMessage(message: String): LogLevel {
 private val ZERO_COUNT_PATTERN =
     Regex("(?:dropped|failed|failures|errors|timeouts|rejections|rejected)\\s*[:=]\\s*0\\b|\\b0\\s+(?:dropped|failures|errors|timeouts)\\b")
 
+/** The one entry that stands in for a finished run of identical lines. */
+internal data class RepeatSummary(val source: String, val message: String, val level: LogLevel)
+
+internal sealed interface RepeatDecision {
+    /** The line repeats the open run; nothing is written and nothing is reported. */
+    data object Folded : RepeatDecision
+
+    /** Write the line, preceded by [closed] when a previous run ended on it. */
+    data class Append(val closed: RepeatSummary?) : RepeatDecision
+}
+
+/**
+ * Folds consecutive identical log lines into one entry plus a count.
+ *
+ * The log is a fixed ring, so a single talkative call site can erase everything else in it. A
+ * rider chasing a Ride Dashboard that kept disconnecting sent two logs on 2026-07-31 in which
+ * 1307 of 1600 entries were the one line "Prepended cached SPS/PPS to AVC keyframe" - written
+ * once per frame at 30fps, which overwrites all 800 entries every 42 seconds. Neither log could
+ * contain the failure he was reporting. That particular line is fixed at its source, but the
+ * shape of the accident is not specific to it: the next per-frame line anyone adds does the same.
+ *
+ * Only CONSECUTIVE repeats fold, which is the honest limit of this. Two lines alternating
+ * (A B A B) defeat it entirely and would need a per-message budget instead. This handles the
+ * flood that actually happens - one hot call site inside a tight loop - for a string comparison.
+ *
+ * Free of Android types and of the ring itself, so the rule can be unit tested: this decides
+ * what a rider's only diagnostic tool records, and a mistake here is invisible until it is the
+ * thing preventing a diagnosis.
+ */
+internal class RepeatCollapser {
+    private var source: String? = null
+    private var message: String? = null
+    private var level: LogLevel? = null
+    private var folded = 0
+
+    fun onLine(source: String, message: String, level: LogLevel): RepeatDecision {
+        if (source == this.source && message == this.message && level == this.level) {
+            folded++
+            return RepeatDecision.Folded
+        }
+        val closed = close()
+        this.source = source
+        this.message = message
+        this.level = level
+        return RepeatDecision.Append(closed)
+    }
+
+    /**
+     * Ends the open run, returning the entry that reports how many lines it swallowed.
+     *
+     * Emitted when the run ends rather than kept as a live counter on the last entry: the log
+     * file is append-only, so a count that grew in place would have to rewrite something already
+     * persisted. The cost is that a run still in progress shows only its first line until
+     * something else is logged, which is why an export closes the run before reading.
+     */
+    fun close(): RepeatSummary? {
+        val count = folded
+        val runSource = source
+        val runLevel = level
+        reset()
+        if (count <= 0 || runSource == null || runLevel == null) return null
+        return RepeatSummary(
+            runSource,
+            "The line above repeated $count more time${if (count == 1) "" else "s"}.",
+            runLevel
+        )
+    }
+
+    fun reset() {
+        source = null
+        message = null
+        level = null
+        folded = 0
+    }
+}
+
 data class ProjectionEvent(
     val timestampMillis: Long,
     val source: String,
@@ -90,10 +166,14 @@ data class ProjectionEvent(
  */
 object ProjectionEventLog {
     // Oldest events drop automatically once this is exceeded (a ring buffer, not a manual
-    // clear) - lowered from 2_500 after a very long/verbose session made the log screen
-    // heavy enough to hang while scrolling. 800 is still generous for troubleshooting a
-    // single connect/stream session.
-    private const val MAX_EVENTS = 800
+    // clear) - lowered from 2_500 after a very long/verbose session made the log screen heavy
+    // enough to hang while scrolling.
+    //
+    // Raised from 800 to 1_500 once [RepeatCollapser] landed: the reason 800 felt short was a
+    // per-frame line that spent the whole ring in 42 seconds, and that is now two entries
+    // rather than seven hundred. Deliberately still well under the 2_500 that broke the log
+    // screen - headroom is worth having, a hung screen is not.
+    private const val MAX_EVENTS = 1500
     private const val FILE_NAME = "moto-hub-diagnostics.log"
     private val lock = Any()
 
@@ -111,6 +191,9 @@ object ProjectionEventLog {
 
     /** Encoded lines waiting for the writer thread; guarded by [lock], swapped at flush. */
     private var pendingLines = StringBuilder()
+
+    /** Folds a run of identical lines into one entry plus a count; guarded by [lock]. */
+    private val collapser = RepeatCollapser()
     private val flushScheduled = java.util.concurrent.atomic.AtomicBoolean(false)
     private val writer = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { runnable ->
         Thread(runnable, "MotoHubLogWriter").apply { isDaemon = true }
@@ -179,6 +262,10 @@ object ProjectionEventLog {
                 append(Log.getStackTraceString(throwable))
             }
         })
+        // Cheap by design: ring append + trim and an encoded pending line. The list copy for
+        // the UI and the file write both happen on the writer thread at flush time - never on
+        // the caller's thread, which can be the T-Box callback delivering a touch.
+        if (!synchronized(lock) { appendOrCollapseLocked(source, detail, level) }) return
         if (level == LogLevel.ERROR && reportToTelemetry) {
             SentryIntegration.captureDiagnosticError(source, detail)
         }
@@ -188,16 +275,39 @@ object ProjectionEventLog {
             LogLevel.WARNING -> Log.w(LOG_TAG, "$source: $detail")
             LogLevel.ERROR -> Log.e(LOG_TAG, "$source: $detail")
         }
-        val event = ProjectionEvent(System.currentTimeMillis(), source, detail, level, sequenceCounter.incrementAndGet())
-        synchronized(lock) {
-            // Cheap by design: ring append + trim and an encoded pending line. The list copy
-            // for the UI and the file write both happen on the writer thread at flush time -
-            // never on the caller's thread, which can be the T-Box callback delivering a touch.
-            ring.addLast(event)
-            if (ring.size > MAX_EVENTS) ring.removeFirst()
-            pendingLines.append(encodeLine(event)).append('\n')
-        }
         scheduleFlush()
+    }
+
+    /**
+     * Appends [detail], or swallows it when it merely repeats the line already at the tail.
+     *
+     * @return true when a new entry was appended, so the caller logs and reports it. False
+     *   means it was collapsed: deliberately, a run of identical ERRORs also reports to
+     *   telemetry once rather than fifty times.
+     */
+    private fun appendOrCollapseLocked(source: String, detail: String, level: LogLevel): Boolean {
+        val decision = collapser.onLine(source, detail, level)
+        if (decision !is RepeatDecision.Append) return false
+        decision.closed?.let { appendLocked(it.source, it.message, it.level) }
+        appendLocked(source, detail, level)
+        return true
+    }
+
+    private fun closeRepeatRunLocked() {
+        collapser.close()?.let { appendLocked(it.source, it.message, it.level) }
+    }
+
+    private fun appendLocked(source: String, detail: String, level: LogLevel) {
+        val event = ProjectionEvent(
+            System.currentTimeMillis(),
+            source,
+            detail,
+            level,
+            sequenceCounter.incrementAndGet()
+        )
+        ring.addLast(event)
+        if (ring.size > MAX_EVENTS) ring.removeFirst()
+        pendingLines.append(encodeLine(event)).append('\n')
     }
 
     /** Batches file writes and snapshot publication; one task per [FLUSH_DELAY_MS] window. */
@@ -236,6 +346,9 @@ object ProjectionEventLog {
         synchronized(lock) {
             ring.clear()
             pendingLines = StringBuilder()
+            // Forget the open run too: its summary would otherwise land in an empty log and
+            // count lines the rider just asked to be rid of.
+            collapser.reset()
             mutableEvents.value = emptyList()
         }
         // On the writer thread so it cannot interleave with a flush already in progress.
@@ -289,8 +402,13 @@ object ProjectionEventLog {
 
     fun exportText(): String {
         // From the ring, not the throttled StateFlow snapshot: an export (share sheet, the
-        // companion's IPC log mirror) must contain everything recorded up to this instant.
-        val snapshot = synchronized(lock) { ring.toList() }
+        // companion's IPC log mirror) must contain everything recorded up to this instant -
+        // including the tail of a run of repeats that has not ended yet, which is why the run
+        // is closed here first.
+        val snapshot = synchronized(lock) {
+            closeRepeatRunLocked()
+            ring.toList()
+        }
         return buildString {
             appendLine("MOTO-HUB diagnostics")
             appendLine("App: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")

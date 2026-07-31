@@ -40,6 +40,9 @@ class AvcEncoder(
      *  [drainLoop] releases the codec itself instead of racing a concurrent release. */
     @Volatile private var selfReleaseOnExit = false
     private val rejectedAccessUnits = AtomicLong(0L)
+
+    /** Keyframes that carried a prepended SPS/PPS; reported once at [stop], never per frame. */
+    private val prependedKeyframes = AtomicLong(0L)
     @Volatile private var frameCap = profile.frameRate
     @Volatile private var frameCapListener: ((Int) -> Unit)? = null
     private var nextFrameDeadlineNanos = 0L
@@ -119,7 +122,11 @@ class AvcEncoder(
 
     fun stop() {
         if (!running.compareAndSet(true, false)) return
-        ProjectionEventLog.record("ENCODER", "Stopping AVC encoder.")
+        ProjectionEventLog.record(
+            "ENCODER",
+            "Stopping AVC encoder. prependedKeyframes=${prependedKeyframes.get()}, " +
+                "rejectedAccessUnits=${rejectedAccessUnits.get()}."
+        )
         val activeDrainThread = drainThread
         drainThread = null
         if (activeDrainThread != null && activeDrainThread !== Thread.currentThread()) {
@@ -218,10 +225,23 @@ class AvcEncoder(
                                     }
                                     if (accessUnit != null && shouldForwardFrame(isKeyFrame)) {
                                         if (accessUnitAssembler.prependedCodecConfig) {
-                                            ProjectionEventLog.record(
-                                                "ENCODER",
-                                                "Prepended cached SPS/PPS to AVC keyframe."
-                                            )
+                                            // Once per session, then counted. On an all-intra
+                                            // stream every frame is a keyframe, so this fired
+                                            // 30 times a second and wiped the 800-entry
+                                            // diagnostic ring every 42s: a rider chasing
+                                            // Ride Dashboard dropouts sent two logs on
+                                            // 2026-07-31 where 1307 of 1600 entries were this
+                                            // one line, and neither could contain the failure
+                                            // he was reporting. That it happens at all is
+                                            // worth one line; that it happened 667 times is
+                                            // worth a number at the end.
+                                            if (prependedKeyframes.getAndIncrement() == 0L) {
+                                                ProjectionEventLog.record(
+                                                    "ENCODER",
+                                                    "Prepending the cached SPS/PPS to AVC keyframes; " +
+                                                        "the total is reported when the encoder stops."
+                                                )
+                                            }
                                         }
                                         if (!onAccessUnit(accessUnit)) {
                                             rejectedAccessUnits.incrementAndGet()
