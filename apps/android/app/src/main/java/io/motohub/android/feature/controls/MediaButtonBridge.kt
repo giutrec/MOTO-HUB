@@ -62,6 +62,15 @@ class MediaButtonBridge(
     private var previousVolume = -1
     private var pendingCapture = false
     @Volatile private var ignoreVolumeChanges = false
+    /** Set at audio-focus loss, cleared once the reclaim has re-pinned the volume. The
+     *  assistant's ducking moves the media stream in exactly that window (field log
+     *  2026-07-31: 119 -> 100, a delta of -19 that no 10-step rocker press can produce), and
+     *  reading that through [consumeVolumeChange] injected a phantom rotary scroll into
+     *  Android Auto while the rider was mid-sentence. [ignoreVolumeChanges] cannot cover
+     *  this: it only wraps each setStreamVolume call for the BT absolute-volume echo, while
+     *  the focus-loss window is ~1s wide. A real press dropped in that second is the cheaper
+     *  mistake — the rider is talking to the assistant, not scrolling. */
+    @Volatile private var focusLossVolumeGuard = false
     private val volumePoll = object : Runnable {
         override fun run() {
             if (!captureActive) return
@@ -213,6 +222,7 @@ class MediaButtonBridge(
             return
         }
         captureActive = true
+        focusLossVolumeGuard = false
         // Pinning the media volume is how a volume-key press becomes readable as a gesture -
         // the app holds the level and treats any drift as the rider pressing up or down. On a
         // dashboard that never sends those presses to the phone (a CFDL16 keeps its rocker's
@@ -313,6 +323,7 @@ class MediaButtonBridge(
         if (!captureActive) return
         when (change) {
             AudioManager.AUDIOFOCUS_GAIN -> {
+                focusLossVolumeGuard = false
                 startSilentTrack()
                 refreshPlayingAppearance(reason = "focus-gain")
             }
@@ -321,7 +332,13 @@ class MediaButtonBridge(
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK ->
                 refreshPlayingAppearance(reason = "ducked")
             AudioManager.AUDIOFOCUS_LOSS,
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> scheduleReclaim(name)
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                // Whoever took our focus (typically the assistant) is about to duck the media
+                // stream; nothing the volume does between here and the reclaim's re-pin is a
+                // rider gesture.
+                focusLossVolumeGuard = true
+                scheduleReclaim(name)
+            }
         }
     }
 
@@ -360,6 +377,9 @@ class MediaButtonBridge(
                 runCatching {
                     refreshPlayingAppearance(reason = "reclaim")
                     if (usesVolumeGestures) pinVolume()
+                    // The pin above just reasserted the reference level (under its own ignore
+                    // window), so volume moves are readable as gestures again.
+                    focusLossVolumeGuard = false
                     startKeepAlive()
                     log("[BTN] handlebar reclaimed")
                 }.onFailure { log("[BTN] reclaim failed: ${it.message}") }
@@ -380,6 +400,7 @@ class MediaButtonBridge(
     private fun disableCapture() {
         if (!captureActive && focusRequest == null) return
         captureActive = false
+        focusLossVolumeGuard = false
         selectDownAt = 0L
         repeatLatched.clear()
         trackDownAt.clear()
@@ -479,12 +500,17 @@ class MediaButtonBridge(
         if (observed != lastObservedVolume) {
             log(
                 "[BTN] media volume observed $lastObservedVolume -> $observed " +
-                    "(pinned=$pinnedVolume, ignoring=$ignoreVolumeChanges, gestures=$usesVolumeGestures)"
+                    "(pinned=$pinnedVolume, ignoring=$ignoreVolumeChanges, " +
+                    "focusLossGuard=$focusLossVolumeGuard, gestures=$usesVolumeGestures)"
             )
             lastObservedVolume = observed
         }
         if (!usesVolumeGestures || pinnedVolume < 0) return
         if (ignoreVolumeChanges) return
+        // Focus just went to another player (assistant, nav prompt): every volume move until
+        // the reclaim re-pins is the system ducking, not a rocker press. Do not snap the
+        // volume back either — fighting the duck would make the assistant blast over itself.
+        if (focusLossVolumeGuard) return
         val current = observed
         if (current == pinnedVolume) return
         val delta = current - pinnedVolume
