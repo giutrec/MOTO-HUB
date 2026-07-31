@@ -46,6 +46,25 @@ object ProjectionEventLog {
     private const val FILE_NAME = "moto-hub-diagnostics.log"
     private val lock = Any()
 
+    /**
+     * The authoritative event store, guarded by [lock]. An ArrayDeque ring instead of the
+     * immutable list it used to be: `mutableEvents.value + event` copied all 800 elements on
+     * EVERY log call, and the callers include the hottest paths in the app - the T-Box event
+     * callback logs one debug line per MEDIA_CONTROL event, touch moves included, so a drag on
+     * the TFT paid a full list copy plus a synchronous file write per sample, on the transport's
+     * own callback thread. [mutableEvents] is now a throttled SNAPSHOT of this ring, published
+     * by the writer thread at [FLUSH_DELAY_MS] cadence; [exportText] reads the ring directly, so
+     * exports and the IPC snapshot stay complete and current regardless of the throttle.
+     */
+    private val ring = ArrayDeque<ProjectionEvent>(MAX_EVENTS)
+
+    /** Encoded lines waiting for the writer thread; guarded by [lock], swapped at flush. */
+    private var pendingLines = StringBuilder()
+    private val flushScheduled = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val writer = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { runnable ->
+        Thread(runnable, "MotoHubLogWriter").apply { isDaemon = true }
+    }
+
     private val mutableEvents = MutableStateFlow<List<ProjectionEvent>>(emptyList())
     val events: StateFlow<List<ProjectionEvent>> = mutableEvents.asStateFlow()
     private var logFile: File? = null
@@ -65,6 +84,8 @@ object ProjectionEventLog {
                     .orEmpty()
             }.getOrElse { emptyList() }
                 .map { it.copy(sequence = sequenceCounter.incrementAndGet()) }
+            ring.clear()
+            ring.addAll(restored)
             mutableEvents.value = restored
         }
         record(
@@ -106,24 +127,56 @@ object ProjectionEventLog {
         }
         val event = ProjectionEvent(System.currentTimeMillis(), source, detail, level, sequenceCounter.incrementAndGet())
         synchronized(lock) {
-            val updated = (mutableEvents.value + event).takeLast(MAX_EVENTS)
-            mutableEvents.value = updated
-            val file = logFile ?: return@synchronized
-            runCatching {
-                if (updated.size == MAX_EVENTS && file.length() > MAX_FILE_BYTES) {
-                    rewrite(file, updated)
-                } else {
-                    file.appendText(encodeLine(event) + "\n", Charsets.UTF_8)
-                }
-            }.onFailure { Log.e(LOG_TAG, "Unable to persist diagnostic log", it) }
+            // Cheap by design: ring append + trim and an encoded pending line. The list copy
+            // for the UI and the file write both happen on the writer thread at flush time -
+            // never on the caller's thread, which can be the T-Box callback delivering a touch.
+            ring.addLast(event)
+            if (ring.size > MAX_EVENTS) ring.removeFirst()
+            pendingLines.append(encodeLine(event)).append('\n')
         }
+        scheduleFlush()
+    }
+
+    /** Batches file writes and snapshot publication; one task per [FLUSH_DELAY_MS] window. */
+    private fun scheduleFlush() {
+        if (!flushScheduled.compareAndSet(false, true)) return
+        runCatching {
+            writer.schedule(::flush, FLUSH_DELAY_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+        }.onFailure { flushScheduled.set(false) }
+    }
+
+    private fun flush() {
+        // Reopen the gate BEFORE swapping: an event recorded after the swap below must be able
+        // to schedule the next window even while this one is still writing.
+        flushScheduled.set(false)
+        val lines: String
+        val snapshot: List<ProjectionEvent>
+        val file: File?
+        synchronized(lock) {
+            lines = pendingLines.toString()
+            if (pendingLines.isNotEmpty()) pendingLines = StringBuilder()
+            snapshot = ring.toList()
+            file = logFile
+        }
+        mutableEvents.value = snapshot
+        if (file == null || lines.isEmpty()) return
+        runCatching {
+            if (snapshot.size == MAX_EVENTS && file.length() > MAX_FILE_BYTES) {
+                rewrite(file, snapshot)
+            } else {
+                file.appendText(lines, Charsets.UTF_8)
+            }
+        }.onFailure { Log.e(LOG_TAG, "Unable to persist diagnostic log", it) }
     }
 
     fun clear() {
         synchronized(lock) {
+            ring.clear()
+            pendingLines = StringBuilder()
             mutableEvents.value = emptyList()
-            logFile?.runCatching { writeText("", Charsets.UTF_8) }
         }
+        // On the writer thread so it cannot interleave with a flush already in progress.
+        runCatching { writer.execute { logFile?.runCatching { writeText("", Charsets.UTF_8) } } }
         record("LOG", "Diagnostic log cleared by the user.")
     }
 
@@ -136,7 +189,9 @@ object ProjectionEventLog {
         record(source, message, LogLevel.ERROR, throwable)
 
     fun exportText(): String {
-        val snapshot = mutableEvents.value
+        // From the ring, not the throttled StateFlow snapshot: an export (share sheet, the
+        // companion's IPC log mirror) must contain everything recorded up to this instant.
+        val snapshot = synchronized(lock) { ring.toList() }
         return buildString {
             appendLine("MOTO-HUB diagnostics")
             appendLine("App: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
@@ -187,6 +242,8 @@ object ProjectionEventLog {
 
     internal fun redact(value: String): String = value
         .replace(SECRET_PATTERN, "$1=<redacted>")
+        .replace(BEARER_TOKEN_PATTERN, "Bearer <redacted>")
+        .replace(API_KEY_LITERAL_PATTERN, "<redacted-key>")
         .replace(MAC_ADDRESS_PATTERN, "<redacted-mac>")
         .replace(IPV4_ADDRESS_PATTERN, "<redacted-ip>")
         .take(MAX_MESSAGE_CHARS)
@@ -195,6 +252,13 @@ object ProjectionEventLog {
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(Date(timestampMillis))
 
     private const val LOG_TAG = "MotoHubProjection"
+    /**
+     * Batching window for the writer thread: one file write and one UI snapshot per window
+     * instead of one per event. Short enough that the log screen still reads as live and a
+     * crash loses at most a quarter-second of tail; the logcat mirror in [record] is
+     * synchronous anyway, so nothing is lost for adb-attached debugging.
+     */
+    private const val FLUSH_DELAY_MS = 250L
     private const val MAX_FILE_BYTES = 2L * 1024L * 1024L
     // A single event could reach this size (e.g. a raw CLIENT_INFO JSON dump under verbose
     // T-Box logging) - 16_000 let one entry's Text composable choke the log screen's layout
@@ -208,9 +272,21 @@ object ProjectionEventLog {
     // huid/uuid joined when verbose T-Box logging became the default: the raw CLIENT_INFO dump
     // carries both, they identify the dashboard hardware forever, and logs get pasted into
     // public Discord threads. Redacting them here is what made the default flip safe.
+    // api_key/authorization/token joined the list when the AI assistant landed in the companion
+    // edition: the rider enters a provider key that, unlike the T-Box credentials, is worth real
+    // money if it leaks through a shared diagnostic log. Kept identical in both editions on
+    // purpose - this file is shared, and a redaction rule that exists in only one of them is a
+    // trap the next person to move code between them will fall into.
     private val SECRET_PATTERN = Regex(
-        "(?i)\"?(password|pwd|passphrase|psk|btpin|bt_pin|huid|uuid)\"?\\s*[:=]\\s*\"?[^\\s,;\"]+\"?"
+        "(?i)\"?(password|pwd|passphrase|psk|btpin|bt_pin|api_?key|api-key|authorization|" +
+            "access_?token|refresh_?token|token|secret|huid|uuid)\"?\\s*[:=]\\s*\"?[^\\s,;\"]+\"?"
     )
+    // SECRET_PATTERN stops the value at the first space, so "Authorization: Bearer sk-..." would
+    // otherwise redact only the word "Bearer" and leave the token itself in the clear.
+    private val BEARER_TOKEN_PATTERN = Regex("(?i)bearer\\s+[A-Za-z0-9._~+/=-]{8,}")
+    // Last resort for a key pasted somewhere with no surrounding label at all. Covers the
+    // sk-/sk-proj-/sk-or- prefixes shared by OpenAI and the compatible providers.
+    private val API_KEY_LITERAL_PATTERN = Regex("\\bsk-[A-Za-z0-9_-]{12,}\\b")
     // Catches MAC addresses and literal IPv4 addresses wherever they surface in a message
     // or exception text (e.g. "failed to connect to /192.168.49.1"), not just at known
     // call sites - ARCHITECTURE.md commits to replacing IP/MAC values with placeholders

@@ -30,6 +30,43 @@ class RideDaemonTransportTest {
     }
 
     @Test
+    fun `describes the capture request of the Zontes field log`() {
+        // Verbatim opening bytes of the 204-byte REQ_RV_CONFIG_CAPTURE body logged by the Zontes
+        // dash (package tayo.com.ZontesIntelligence, modelId 21334) on 2026-07-30 - the session
+        // that negotiated cleanly, took 4531 frames and never lit the TFT.
+        val payload = ByteArray(204)
+        byteArrayOf(
+            0x00, 0x04, 0xa9.toByte(), 0x01, 0x00, 0x00, 0x00, 0x00,
+            0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80.toByte(), 0x00,
+            0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00
+        ).copyInto(payload)
+
+        val described = describeTBoxCaptureRequest(payload)
+
+        assertEquals(
+            "size=204B, device=1024x425, fps=0, encoder=2, supportCodec=2, bitrate=8388608, " +
+                "capScreenMode=0, touchMode=0, orientation=1, videoType=0, supportExtendProtocol=0",
+            described
+        )
+    }
+
+    @Test
+    fun `describes a short capture request without inventing fields`() {
+        val described = describeTBoxCaptureRequest(
+            ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN)
+                .putShort(0, 800).putShort(2, 480).array()
+        )
+
+        assertEquals(
+            "size=4B, device=800x480, fps=?, encoder=?, supportCodec=?, bitrate=?, " +
+                "capScreenMode=?, touchMode=?, orientation=?, videoType=?, supportExtendProtocol=?",
+            described
+        )
+        assertNull(describeTBoxCaptureRequest(byteArrayOf(1, 2, 3)))
+    }
+
+    @Test
     fun `accepts simulator compatibility preset advertisements`() {
         assertTrue(isMotoHubSimulatorAdvertisement("MOTO-HUB T-Box Simulator 55262", "MOTO-HUB-SIMULATOR"))
         assertTrue(isMotoHubSimulatorAdvertisement("CFDL16-6GUV", "37416"))

@@ -69,17 +69,22 @@ object HandlebarCalibration {
         PhysicalPress.SELECT_HOLD to HandlebarGesture.ENTER_LONG
     )
 
+    /** What the CURRENT motorcycle stores for [press]: gesture id, [MISSING], or null.
+     *  All reads and writes go through [MotorcycleScope] — each bike keeps its own handlebar. */
+    private fun stored(context: Context, press: PhysicalPress): String? =
+        MotorcycleScope.getString(preferences(context), context, press.id, null)
+
     /** The gesture bound to [press], learned or assumed; null when nothing is known yet. */
     fun gestureFor(context: Context, press: PhysicalPress): HandlebarGesture? {
-        val stored = preferences(context).getString(press.id, null)
+        val stored = stored(context, press)
         if (stored != null) return HandlebarGesture.entries.firstOrNull { it.id == stored }
-        // A learned binding elsewhere overrides an assumption here: if the rider taught us
-        // that VOLUME_UP is something else, this press no longer owns it.
-        val assumed = ASSUMED[press] ?: return null
-        val takenByAnother = PhysicalPress.entries.any { other ->
-            other != press && preferences(context).getString(other.id, null) == assumed.id
-        }
-        return assumed.takeIf { !takenByAnother }
+        // Assumptions cover the OUT-OF-BOX experience only. Once the rider has taught any
+        // press, the taught set IS this handlebar: an assumption surviving next to taught
+        // bindings kept a phantom volume rocker alive on a dash that never delivers one
+        // (CFDL16, field report 2026-07-30) — and that phantom kept the volume pin on,
+        // which turned the PHONE's own volume keys into fake handlebar presses.
+        if (isCalibrated(context)) return null
+        return ASSUMED[press]
     }
 
     /** The press bound to [gesture], for naming a gesture wherever one is shown. */
@@ -92,20 +97,22 @@ object HandlebarCalibration {
      * leave two cells pointing at the same button.
      */
     fun record(context: Context, press: PhysicalPress, gesture: HandlebarGesture) {
-        val editor = preferences(context).edit()
+        val p = preferences(context)
         PhysicalPress.entries
-            .filter { it != press && preferences(context).getString(it.id, null) == gesture.id }
-            .forEach { editor.remove(it.id) }
-        editor.putString(press.id, gesture.id).apply()
+            .filter { it != press && stored(context, it) == gesture.id }
+            // Written as UNBOUND, not removed: the conflicting binding may live in the global
+            // fallback (pre-garage calibration), which a scoped remove cannot shadow.
+            .forEach { MotorcycleScope.putString(p, context, it.id, UNBOUND) }
+        MotorcycleScope.putString(p, context, press.id, gesture.id)
     }
 
     /** Marks a press as absent on this handlebar, so its row can be hidden. */
     fun recordMissing(context: Context, press: PhysicalPress) {
-        preferences(context).edit().putString(press.id, MISSING).apply()
+        MotorcycleScope.putString(preferences(context), context, press.id, MISSING)
     }
 
     fun isMissing(context: Context, press: PhysicalPress): Boolean =
-        preferences(context).getString(press.id, null) == MISSING
+        stored(context, press) == MISSING
 
     /** Buttons worth showing: those with at least one press that exists on this handlebar. */
     fun presentButtons(context: Context): List<HandlebarButton> =
@@ -114,14 +121,50 @@ object HandlebarCalibration {
         }
 
     fun isCalibrated(context: Context): Boolean =
-        preferences(context).all.keys.any { key -> PhysicalPress.entries.any { it.id == key } }
+        PhysicalPress.entries.any { MotorcycleScope.contains(preferences(context), context, it.id) }
 
-    fun clear(context: Context) {
-        preferences(context).edit().clear().apply()
+    /**
+     * Serializes the CURRENT motorcycle's taught bindings as "pressId=value" pairs joined by
+     * ',' for the companion→Core session sync. Values are gesture ids, [MISSING], or
+     * [UNBOUND]; presses with nothing stored are omitted.
+     */
+    fun export(context: Context): String =
+        PhysicalPress.entries.mapNotNull { press ->
+            stored(context, press)?.let { value -> "${press.id}=$value" }
+        }.joinToString(",")
+
+    /** Applies a companion's [export]ed calibration to the CURRENT motorcycle. */
+    fun import(context: Context, encoded: String) {
+        if (encoded.isBlank()) return
+        val p = preferences(context)
+        encoded.split(',').forEach { entry ->
+            parseCalibrationEntry(entry)?.let { (press, value) ->
+                MotorcycleScope.putString(p, context, press.id, value)
+            }
+        }
     }
 
-    private const val MISSING = "__missing__"
+    internal const val MISSING = "__missing__"
+
+    /** A binding explicitly released during re-teaching: no gesture, but not "button absent".
+     *  [gestureFor] resolves it to null without falling back to [ASSUMED] or the global key. */
+    internal const val UNBOUND = ""
 
     private fun preferences(context: Context) =
         context.applicationContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+}
+
+/**
+ * One "pressId=value" pair from a serialized calibration ([HandlebarCalibration.export]).
+ * Null for an unknown press or a value that is neither a gesture id nor one of the markers —
+ * a defensive parse, since the string crosses the app boundary over IPC.
+ */
+internal fun parseCalibrationEntry(entry: String): Pair<PhysicalPress, String>? {
+    val pressId = entry.substringBefore('=', "")
+    val value = entry.substringAfter('=', "")
+    val press = PhysicalPress.entries.firstOrNull { it.id == pressId } ?: return null
+    val valid = value == HandlebarCalibration.MISSING ||
+        value == HandlebarCalibration.UNBOUND ||
+        HandlebarGesture.entries.any { it.id == value }
+    return if (valid) press to value else null
 }

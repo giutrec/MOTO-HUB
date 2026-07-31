@@ -139,6 +139,12 @@ class TBoxNetworkConnector(context: Context) {
      * two onLost callbacks 6ms apart both passed it and started their own ladder.
      */
     private val rejoinActive = AtomicBoolean(false)
+
+    /**
+     * Identifies the ladder that currently owns [rejoinJob] and [rejoinActive], so a cancelled
+     * ladder's `finally` cannot clear state that already belongs to its successor.
+     */
+    private val ladderToken = java.util.concurrent.atomic.AtomicReference<Any?>(null)
     @Volatile
     private var simulatorMonitorJob: Job? = null
 
@@ -258,6 +264,9 @@ class TBoxNetworkConnector(context: Context) {
     }
 
     fun disconnect() {
+        // Invalidate the token first: the cancelled ladder's finally then finds the gate no
+        // longer its own and leaves whatever comes next untouched.
+        ladderToken.set(null)
         rejoinJob?.cancel()
         rejoinJob = null
         rejoinActive.set(false)
@@ -570,16 +579,7 @@ class TBoxNetworkConnector(context: Context) {
      * scan — that background hunt is exactly what a screen-off recovery needs.
      */
     private fun submitSpecifierRequest(profile: MotorcycleProfile) {
-        pendingFailure = null
-        networkGranted = false
-        // Per join, not per connector: a stale "last measurement before the loss" carried over
-        // from the previous session would be read as this one's, which is worse than none.
-        lastLinkSampleAtMs = 0L
-        lastSampleTakenAtMs = 0L
-        lastSampledRssi = UNSAMPLED_RSSI
-        lastSampleDescription = null
         logVisibleApSnapshot(profile)
-        specifierSubmittedAt = SystemClock.elapsedRealtime()
         lateinit var networkCallback: ConnectivityManager.NetworkCallback
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
@@ -732,10 +732,24 @@ class TBoxNetworkConnector(context: Context) {
             "Submitting WifiNetworkSpecifier request for ${profile.ssid} without INTERNET capability."
         )
 
-        // Drop the previous registration, take ownership and register, with no window in
-        // between for a concurrent caller to slip its own pair through.
+        // Drop the previous registration, reset this attempt's shared state, take ownership and
+        // register - with no window in between for a concurrent caller to slip its own pair
+        // through. The resets belong in here too: run outside the lock (as they were), the
+        // rejoin ladder and a foreground connect() could interleave badly enough for one
+        // attempt's verdict to be wiped by the other's reset, leaving awaitRequestedNetwork()
+        // waiting out its whole timeout on an answer that had already arrived.
         val requestFailure = synchronized(requestLock) {
             clearCurrentNetworkRequestLocked()
+            pendingFailure = null
+            networkGranted = false
+            // Per join, not per connector: a stale "last measurement before the loss" carried
+            // over from the previous session would be read as this one's, which is worse than
+            // none.
+            lastLinkSampleAtMs = 0L
+            lastSampleTakenAtMs = 0L
+            lastSampledRssi = UNSAMPLED_RSSI
+            lastSampleDescription = null
+            specifierSubmittedAt = SystemClock.elapsedRealtime()
             callback = networkCallback
             registeredCallbacks += networkCallback
             syncLiveRequesterCount()
@@ -845,13 +859,19 @@ class TBoxNetworkConnector(context: Context) {
         pendingGiveUpJob?.cancel()
         pendingGiveUpJob = reconnectScope.launch {
             delay(REJOIN_GIVE_UP_MS)
-            if (activeNetwork == null && pendingRequestSsid == profile.ssid) {
+            // Decide and act as ONE step under the lock. markConnected() cancels this job, but a
+            // job already past its own check cannot be cancelled out of the clear that follows:
+            // a grant landing in that window had its brand-new network released immediately.
+            // Re-reading activeNetwork inside the lock closes it, because markConnected() runs
+            // from the network callback and its write is visible here.
+            synchronized(requestLock) {
+                if (activeNetwork != null || pendingRequestSsid != profile.ssid) return@synchronized
                 ProjectionEventLog.warning(
                     "NETWORK",
                     "Releasing the pending T-Box Wi-Fi request for ${profile.ssid}: nothing " +
                         "connected within ${REJOIN_GIVE_UP_MS / 1_000L}s."
                 )
-                clearCurrentNetworkRequest()
+                clearCurrentNetworkRequestLocked()
             }
         }
     }
@@ -861,6 +881,8 @@ class TBoxNetworkConnector(context: Context) {
         if (!connectedOnce) return
         // Exactly one ladder, whatever raced its way in here.
         if (!rejoinActive.compareAndSet(false, true)) return
+        val token = Any()
+        ladderToken.set(token)
         rejoinJob = reconnectScope.launch {
             var attempt = 0
             val startedAt = SystemClock.elapsedRealtime()
@@ -910,11 +932,17 @@ class TBoxNetworkConnector(context: Context) {
                     )
                 }
             } finally {
-                // Order matters: clear the handle before reopening the gate, so a ladder started
-                // by the next onLost cannot have its own job reference nulled out from under it -
-                // which would leave it running and uncancellable, the very shape of the bug.
-                rejoinJob = null
-                rejoinActive.set(false)
+                // Only the ladder that still OWNS the gate may clear it. disconnect() cancels a
+                // ladder and reopens the gate itself, but this block runs asynchronously
+                // afterwards - so a NEW ladder could already have been started by then, and the
+                // old one's finally would null out its job handle and reopen the gate under it,
+                // leaving a running, uncancellable ladder. The token makes that clear a no-op:
+                // whoever holds the current token owns the state, everyone else keeps its hands
+                // off (same rule as bridges.remove(key, this) elsewhere).
+                if (ladderToken.compareAndSet(token, null)) {
+                    rejoinJob = null
+                    rejoinActive.set(false)
+                }
             }
         }
     }

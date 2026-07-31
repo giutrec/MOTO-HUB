@@ -550,6 +550,20 @@ class IpcBridgeService : Service() {
                     io.motohub.android.feature.controls.SelectHoldDelay.entries
                         .firstOrNull { it.millis == settings.handlebarSelectHoldMillis }
                         ?.let { io.motohub.android.feature.controls.HandlebarTimingPrefs.setSelectHold(ctx, it) }
+                    io.motohub.android.feature.controls.HandlebarTimingPrefs.setEagerSingles(
+                        ctx, settings.handlebarEagerSingles
+                    )
+                    io.motohub.android.feature.controls.HandlebarTimingPrefs.setHoldsEnabled(
+                        ctx, settings.handlebarHoldsEnabled
+                    )
+                    // The taught calibration travels too: Core's bridge and mapping UI read
+                    // Core's own store, and the stores are scoped to the session's motorcycle,
+                    // so the companion's per-bike teaching lands per-bike here as well. A live
+                    // bridge then re-decides the volume pin against the fresh calibration.
+                    io.motohub.android.feature.controls.HandlebarCalibration.import(
+                        ctx, settings.handlebarCalibration
+                    )
+                    io.motohub.android.feature.controls.MediaButtonBridge.refreshVolumeGestureUse()
                     // Apply live when an AA session is already capturing (settings re-pushed by
                     // the companion at every session start, including embedded dashboard AA).
                     io.motohub.android.feature.controls.MediaButtonBridge.setTargetCaptureActive(

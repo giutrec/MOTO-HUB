@@ -54,10 +54,17 @@ object HandlebarControlStore {
     private const val DEFAULTS_VER = 2
     private const val KEY_DEFAULTS_VER = "defaults_ver"
 
-    fun isEnabled(context: Context): Boolean = preferences(context).getBoolean(ENABLED, false)
+    /**
+     * ON by default (changed from OFF, 2026-07-30): capture is the feature's whole point, and
+     * with OFF the rider had to discover a buried switch before the buttons did anything.
+     * A rider who explicitly turned it off has a stored false, which this default never
+     * overrides. Scoped per motorcycle, like the mapping it gates.
+     */
+    fun isEnabled(context: Context): Boolean =
+        MotorcycleScope.getBoolean(preferences(context), context, ENABLED, true)
 
     fun setEnabled(context: Context, enabled: Boolean) {
-        preferences(context).edit().putBoolean(ENABLED, enabled).apply()
+        MotorcycleScope.putBoolean(preferences(context), context, ENABLED, enabled)
     }
 
     /**
@@ -80,28 +87,32 @@ object HandlebarControlStore {
      * stay dormant rather than guessing. The first release seen switches them on for good:
      * the motorcycle proves the capability instead of the app assuming it.
      */
+    /** Scoped per motorcycle: it is a learned property of the DASH, not of the phone. */
     fun dashboardReportsHolds(context: Context): Boolean =
-        preferences(context).getBoolean(DASHBOARD_REPORTS_HOLDS, false)
+        MotorcycleScope.getBoolean(preferences(context), context, DASHBOARD_REPORTS_HOLDS, false)
 
     fun setDashboardReportsHolds(context: Context, reports: Boolean) {
-        preferences(context).edit().putBoolean(DASHBOARD_REPORTS_HOLDS, reports).apply()
+        MotorcycleScope.putBoolean(preferences(context), context, DASHBOARD_REPORTS_HOLDS, reports)
     }
 
     fun action(context: Context, gesture: HandlebarGesture): HandlebarAction {
         ensureDefaultsMigrated(context)
-        val stored = preferences(context).getString(gesture.id, null)
+        val stored = MotorcycleScope.getString(preferences(context), context, gesture.id, null)
         return HandlebarAction.entries.firstOrNull { it.id == stored } ?: gesture.defaultAction
     }
 
     fun setAction(context: Context, gesture: HandlebarGesture, action: HandlebarAction) {
-        preferences(context).edit().putString(gesture.id, action.id).apply()
+        MotorcycleScope.putString(preferences(context), context, gesture.id, action.id)
     }
 
-    /** Restores every gesture to its default action. The enabled flag is a separate choice and survives. */
+    /**
+     * Restores every gesture to its default action for the CURRENT motorcycle (other bikes keep
+     * theirs). Written as EXPLICIT defaults, not key removals: a removal only uncovers whatever
+     * global value a pre-garage install left underneath, which made "reset to defaults" restore
+     * the rider's old custom map instead. The enabled flag is a separate choice and survives.
+     */
     fun reset(context: Context) {
-        val editor = preferences(context).edit()
-        HandlebarGesture.entries.forEach { editor.remove(it.id) }
-        editor.apply()
+        HandlebarGesture.entries.forEach { setAction(context, it, it.defaultAction) }
     }
 
     private fun ensureDefaultsMigrated(context: Context) {

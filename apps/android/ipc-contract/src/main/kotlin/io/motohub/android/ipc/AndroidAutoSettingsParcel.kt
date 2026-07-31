@@ -31,5 +31,15 @@ data class AndroidAutoSettingsParcel(
     /** "gestureId=actionId" pairs joined by ',' (HandlebarGesture/HandlebarAction ids). */
     val handlebarMapping: String = "",
     val handlebarDoubleTapMillis: Long = 0L,
-    val handlebarSelectHoldMillis: Long = 0L
+    val handlebarSelectHoldMillis: Long = 0L,
+    /**
+     * Appended after the first handlebar block (same trailing-field compatibility rules).
+     * Gated by [handlebarSyncProvided] like the rest; an old caller's parcel deserializes
+     * these as true/true/"" — the shipped defaults — so Core behaves as if unconfigured.
+     */
+    val handlebarEagerSingles: Boolean = true,
+    val handlebarHoldsEnabled: Boolean = true,
+    /** "pressId=storedValue" pairs joined by ',' (PhysicalPress ids; the value is a
+     *  HandlebarGesture id, the `__missing__` marker, or "" for an unbound press). */
+    val handlebarCalibration: String = ""
 ) : Parcelable

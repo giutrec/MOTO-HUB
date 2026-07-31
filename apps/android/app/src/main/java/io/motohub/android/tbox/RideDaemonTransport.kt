@@ -149,6 +149,10 @@ class RideDaemonTransport(
             ).apply {
                 setSupportFunction(profile.advertisedSupportFunction.toLong())
                 setProactivePxcHeartbeatEnabled(profile.requiresProactivePxcHeartbeat)
+                // Only a dashboard that no profile claims is allowed to renegotiate the
+                // video frame format from its own supportExtendProtocol byte. Every
+                // recognised unit keeps the indexed framing it already displays.
+                setPlainVideoFramingAllowed(profile == TBoxModelProfile.GENERIC)
             }
             val generation = nextSessionGeneration.incrementAndGet()
             val createdSession = Api.newMobileSession(
@@ -168,7 +172,8 @@ class RideDaemonTransport(
                 "RideDaemon live-only session configured for ${host.ipAddress}:${host.port}; " +
                     "package=${host.packageName}; profile=${profile.key}; " +
                     "supportFunction=${profile.advertisedSupportFunction}; " +
-                    "proactivePxcHeartbeat=${profile.requiresProactivePxcHeartbeat}."
+                    "proactivePxcHeartbeat=${profile.requiresProactivePxcHeartbeat}; " +
+                    "plainVideoFramingAllowed=${profile == TBoxModelProfile.GENERIC}."
             )
             host
         }.onFailure { failure ->
@@ -769,7 +774,26 @@ class RideDaemonTransport(
                 )
                 val callback = object : NsdManager.ServiceInfoCallback {
                     override fun onServiceUpdated(resolved: NsdServiceInfo) {
-                        if (!link.matchesResolvedNetwork(resolved.network)) return
+                        if (!link.matchesResolvedNetwork(resolved.network)) {
+                            // Only ONE candidate can hold the resolution slot (see onServiceFound).
+                            // A candidate pinned to the WRONG network will never migrate to the
+                            // T-Box link, so keeping the slot occupied silently blocked every
+                            // later (correct) candidate until the discovery window expired. A
+                            // null network is different: with network-scoped discovery it can be
+                            // a transient of the resolution in progress, so that candidate keeps
+                            // the slot and the next update decides.
+                            if (resolved.network != null) {
+                                ProjectionEventLog.warning(
+                                    "DISCOVERY",
+                                    "Candidate ${resolved.serviceName} resolved on the wrong " +
+                                        "network (${resolved.network}); releasing the resolution " +
+                                        "slot for the next candidate."
+                                )
+                                serviceCallback = null
+                                runCatching { nsdManager.unregisterServiceInfoCallback(this) }
+                            }
+                            return
+                        }
                         val attributes = resolved.attributes
                         val simulatorProfileRequested =
                             TBoxModelProfile.fromModelId(expectedModelId) == TBoxModelProfile.MOTO_HUB_SIMULATOR
@@ -1085,6 +1109,9 @@ class RideDaemonTransport(
                 return
             }
             if (command == MEDIA_CAPTURE_CONFIG_COMMAND) {
+                describeTBoxCaptureRequest(eventPayload)?.let { fields ->
+                    ProjectionEventLog.record("TBOX", "TFT capture request: $fields.")
+                }
                 decodeTBoxVideoArea(eventPayload)?.let { area ->
                     ProjectionEventLog.record(
                         "TBOX",
@@ -1286,6 +1313,33 @@ internal fun decodeTBoxVideoArea(payload: ByteArray): TBoxEvent.VideoArea? {
     val width = body.getShort(0).toInt() and 0xFFFF
     val height = body.getShort(2).toInt() and 0xFFFF
     return if (width > 0 && height > 0) TBoxEvent.VideoArea(width, height) else null
+}
+
+/**
+ * Render the dash's REQ_RV_CONFIG_CAPTURE body for the log. Layout (little endian), from the
+ * EasyConn reverse-engineering notes:
+ *
+ * ```
+ * deviceWidth s16@0   deviceHeight s16@2   fps i32@4      wantEncoder i32@8
+ * supportCodec i32@12 minQuality s16@16    maxQuality s16@18
+ * bitRate i32@20      capScreenMode b@24   touchMode b@25 orientation b@26
+ * displayId b@27      videoType b@28       supportExtendProtocol b@29
+ * ```
+ *
+ * Only [decodeTBoxVideoArea] drives behaviour. Everything else is logged because the fields the
+ * transport ignores are exactly the ones that differ on non-CFMOTO firmware, and a dash that
+ * negotiates fine yet shows nothing can only be told apart from a working one here.
+ */
+internal fun describeTBoxCaptureRequest(payload: ByteArray): String? {
+    if (payload.size < 4) return null
+    val body = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
+    fun u16(at: Int): Any = if (payload.size >= at + 2) body.getShort(at).toInt() and 0xFFFF else "?"
+    fun i32(at: Int): Any = if (payload.size >= at + 4) body.getInt(at) else "?"
+    fun u8(at: Int): Any = if (payload.size > at) payload[at].toInt() and 0xFF else "?"
+    return "size=${payload.size}B, device=${u16(0)}x${u16(2)}, fps=${i32(4)}, " +
+        "encoder=${i32(8)}, supportCodec=${i32(12)}, bitrate=${i32(20)}, " +
+        "capScreenMode=${u8(24)}, touchMode=${u8(25)}, orientation=${u8(26)}, " +
+        "videoType=${u8(28)}, supportExtendProtocol=${u8(29)}"
 }
 
 internal fun decodeTBoxTouch(payload: ByteArray): TBoxEvent.Touch? {

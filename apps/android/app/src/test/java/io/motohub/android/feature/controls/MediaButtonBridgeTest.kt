@@ -128,4 +128,80 @@ class MediaButtonBridgeTest {
         assertFalse((singlePress as VolumeDeltaRead.Tap).forceDouble)
         assertTrue((doublePress as VolumeDeltaRead.Tap).forceDouble)
     }
+
+    // ── tap dispatch (eager singles) ─────────────────────────────────────────────────────────
+
+    @Test
+    fun `an eager single fires immediately and a second press still fires the double`() {
+        assertEquals(
+            TapDispatch.SINGLE_NOW,
+            resolveTapDispatch(forceDouble = false, eagerSingle = true, hasPending = false, gapMillis = 5_000)
+        )
+        // The marker from the first press is still alive: the second press is a double.
+        assertEquals(
+            TapDispatch.DOUBLE,
+            resolveTapDispatch(forceDouble = false, eagerSingle = true, hasPending = true, gapMillis = 200)
+        )
+    }
+
+    @Test
+    fun `a deferred single waits and pairs with a pending press as a double`() {
+        assertEquals(
+            TapDispatch.SINGLE_DEFERRED,
+            resolveTapDispatch(forceDouble = false, eagerSingle = false, hasPending = false, gapMillis = 5_000)
+        )
+        assertEquals(
+            TapDispatch.DOUBLE,
+            resolveTapDispatch(forceDouble = false, eagerSingle = false, hasPending = true, gapMillis = 200)
+        )
+    }
+
+    @Test
+    fun `a same-press echo inside the refractory window is suppressed`() {
+        assertEquals(
+            TapDispatch.SUPPRESS_ECHO,
+            resolveTapDispatch(forceDouble = false, eagerSingle = true, hasPending = true, gapMillis = 40)
+        )
+        // A dash-coalesced double is never mistaken for an echo.
+        assertEquals(
+            TapDispatch.DOUBLE,
+            resolveTapDispatch(forceDouble = true, eagerSingle = true, hasPending = false, gapMillis = 40)
+        )
+    }
+
+    // ── calibration sync encoding ────────────────────────────────────────────────────────────
+
+    @Test
+    fun `calibration entries round-trip through the IPC encoding`() {
+        assertEquals(
+            PhysicalPress.UP_HOLD to HandlebarGesture.TRACK_FORWARD.id,
+            parseCalibrationEntry("${PhysicalPress.UP_HOLD.id}=${HandlebarGesture.TRACK_FORWARD.id}")
+        )
+        assertEquals(
+            PhysicalPress.LEFT_PRESS to HandlebarCalibration.MISSING,
+            parseCalibrationEntry("${PhysicalPress.LEFT_PRESS.id}=${HandlebarCalibration.MISSING}")
+        )
+        // An unbound (released) press keeps its empty value.
+        assertEquals(
+            PhysicalPress.SELECT_DOUBLE to HandlebarCalibration.UNBOUND,
+            parseCalibrationEntry("${PhysicalPress.SELECT_DOUBLE.id}=")
+        )
+    }
+
+    @Test
+    fun `calibration parsing rejects unknown presses and values`() {
+        assertNull(parseCalibrationEntry("not_a_press=${HandlebarGesture.ENTER.id}"))
+        assertNull(parseCalibrationEntry("${PhysicalPress.UP_PRESS.id}=not_a_gesture"))
+        assertNull(parseCalibrationEntry("garbage"))
+    }
+
+    @Test
+    fun `every physical press round-trips every legal stored value`() {
+        PhysicalPress.entries.forEach { press ->
+            HandlebarGesture.entries.forEach { gesture ->
+                assertEquals(press to gesture.id, parseCalibrationEntry("${press.id}=${gesture.id}"))
+            }
+            assertEquals(press to HandlebarCalibration.MISSING, parseCalibrationEntry("${press.id}=${HandlebarCalibration.MISSING}"))
+        }
+    }
 }

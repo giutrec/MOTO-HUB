@@ -38,9 +38,20 @@ class MediaButtonBridge(
 ) {
     private val handler = Handler(Looper.getMainLooper())
     private val audioManager by lazy { context.getSystemService(AudioManager::class.java) }
+    /** AVRCP "now playing" appearance only — the motorcycle must see a normal media player. */
     private val audioAttributes = AudioAttributes.Builder()
         .setUsage(AudioAttributes.USAGE_MEDIA)
         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+        .build()
+    /**
+     * What the FOCUS request and the silent track actually use. Navigation-guidance usage ducks
+     * other players instead of competing media-vs-media: a media-usage MAY_DUCK request is the
+     * weakest possible claim and loses to any real player, which is how the buttons used to die
+     * the moment Spotify started. Ported from open-cfmoto's navAttrs.
+     */
+    private val navAttributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
         .build()
 
     private var session: MediaSession? = null
@@ -109,13 +120,17 @@ class MediaButtonBridge(
             // Soft re-announce: toggle the session's active state to give the AVRCP peer a
             // play-state transition to notice, without abandoning and re-requesting audio
             // focus in between (see requestMediaFocus() for why that combination could stick).
+            // Keep-alive is paused for the flip: its refresh forces isActive=true, and a tick
+            // landing inside the gap would collapse the transition the dash needs to notice.
+            stopKeepAlive()
             session?.isActive = false
             handler.postDelayed({
                 if (!captureActive || session == null) return@postDelayed
                 session?.isActive = true
                 publishMetadata()
                 postMediaNotification()
-                pinVolume()
+                if (usesVolumeGestures) pinVolume()
+                startKeepAlive()
                 log("[BTN] $targetName media focus re-asserted; handlebar input ready")
             }, REASSERT_GAP_MILLIS)
         }, REASSERT_SETTLE_MILLIS)
@@ -125,6 +140,8 @@ class MediaButtonBridge(
         handler.post {
             pendingCapture = false
             selectDownAt = 0L
+            repeatLatched.clear()
+            trackDownAt.clear()
             cancelPendingTaps()
             disableCapture()
             unregisterVolumeObserver()
@@ -138,6 +155,41 @@ class MediaButtonBridge(
 
     /** Whether this phone should hold the media volume in order to read volume-key presses. */
     private var usesVolumeGestures = true
+
+    /**
+     * Re-evaluates [usesVolumeGestures] against the current calibration, live. Computed only at
+     * [enableCapture], the answer went stale the moment the rider taught the handlebar with a
+     * session running — on a dash whose volume presses never arrive (CFDL16) the pin then kept
+     * hijacking the phone's own volume keys as fake handlebar presses until the NEXT session.
+     * Called when the calibration wizard closes and after a companion sync imports calibration.
+     */
+    fun refreshVolumeGestureUse() {
+        handler.post {
+            if (!captureActive) return@post
+            val use = volumeGesturesInUse()
+            if (use == usesVolumeGestures) return@post
+            usesVolumeGestures = use
+            if (use) {
+                if (previousVolume < 0) {
+                    previousVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                }
+                pinVolume()
+                log("[BTN] calibration says volume keys arrive; media volume pinned")
+            } else {
+                pinnedVolume = -1
+                if (previousVolume >= 0) {
+                    ignoreVolumeChanges = true
+                    try {
+                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, previousVolume, 0)
+                    } catch (_: Throwable) {
+                    } finally {
+                        handler.postDelayed({ ignoreVolumeChanges = false }, REPIN_IGNORE_MILLIS)
+                    }
+                }
+                log("[BTN] calibration says volume keys never arrive; pin released, phone volume keys are yours again")
+            }
+        }
+    }
 
     /** Last media volume seen by the observer, for the diagnostic trace only. */
     private var lastObservedVolume = -1
@@ -181,6 +233,7 @@ class MediaButtonBridge(
         session?.isActive = true
         publishMetadata()
         postMediaNotification()
+        startKeepAlive()
         // Polling continues either way: with gestures off it only feeds the diagnostic trace,
         // which is what proves whether the dashboard moves this phone's volume at all.
         startVolumePolling()
@@ -195,22 +248,144 @@ class MediaButtonBridge(
      * abandon/reacquire cycle previously in [reassertCaptureAfterTransportReady] could leave
      * some OEM Bluetooth stacks (observed on Samsung) with the audio route stuck after a
      * transport-recovery reassert; TRANSIENT_MAY_DUCK plus a focus-preserving reassert avoids
-     * dropping and re-taking focus altogether.
+     * dropping and re-taking focus altogether. The request rides [navAttributes], accepts a
+     * delayed grant, and never pauses when ducked — losing it entirely is handled by
+     * [onAudioFocusChange], which schedules a reclaim instead of silently giving the buttons up.
      */
     private fun requestMediaFocus(): Boolean {
+        try { focusRequest?.let(audioManager::abandonAudioFocusRequest) } catch (_: Throwable) {}
         val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
-            .setAudioAttributes(audioAttributes)
-            .setOnAudioFocusChangeListener { }
+            .setAudioAttributes(navAttributes)
+            .setOnAudioFocusChangeListener(::onAudioFocusChange)
+            .setAcceptsDelayedFocusGain(true)
+            .setWillPauseWhenDucked(false)
             .build()
         focusRequest = request
         return audioManager.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    }
+
+    // ── keeping ownership of the motorcycle's buttons ────────────────────────────────────────────
+    //
+    // The dash routes AVRCP keys to whichever player looks most alive. Any app that takes audio
+    // focus or posts a fresher MediaSession silently steals the handlebar: without an active
+    // defense the buttons die at the first Spotify play / nav prompt / notification sound and
+    // never come back until the session restarts. Ported from open-cfmoto (field-proven there).
+
+    /** Last time a bike media key was handled — skip focus re-requests while the rider is tapping:
+     *  re-requesting focus mid-tap makes the BT stack re-deliver the same press. */
+    @Volatile private var lastKeyAt = 0L
+    private var keepAliveTicks = 0
+    private var reclaimPending = false
+    private var lastReclaimAt = 0L
+    private val reclaimRunnable = Runnable {
+        reclaimPending = false
+        if (captureActive) reclaimCapture("focus-loss")
+    }
+    private val keepAliveRunnable = object : Runnable {
+        override fun run() {
+            if (!captureActive || session == null) return
+            keepAliveTicks++
+            refreshPlayingAppearance(reason = "keep-alive")
+            val idle = SystemClock.elapsedRealtime() - lastKeyAt > KEY_IDLE_BEFORE_FOCUS_MILLIS
+            if (idle && keepAliveTicks % 3 == 0) requestMediaFocus()
+            handler.postDelayed(this, KEEP_ALIVE_MILLIS)
+        }
+    }
+
+    private fun startKeepAlive() {
+        handler.removeCallbacks(keepAliveRunnable)
+        if (captureActive) handler.postDelayed(keepAliveRunnable, KEEP_ALIVE_MILLIS)
+    }
+
+    private fun stopKeepAlive() {
+        handler.removeCallbacks(keepAliveRunnable)
+    }
+
+    private fun onAudioFocusChange(change: Int) {
+        val name = when (change) {
+            AudioManager.AUDIOFOCUS_GAIN -> "GAIN"
+            AudioManager.AUDIOFOCUS_LOSS -> "LOSS"
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> "LOSS_TRANSIENT"
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> "LOSS_TRANSIENT_CAN_DUCK"
+            else -> "focus=$change"
+        }
+        log("[BTN] audio focus -> $name")
+        if (!captureActive) return
+        when (change) {
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                startSilentTrack()
+                refreshPlayingAppearance(reason = "focus-gain")
+            }
+            // Another app is playing over us — expected with MAY_DUCK. Keep the session hot but
+            // do not fight for focus: stealing it back exclusively would pause the rider's music.
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK ->
+                refreshPlayingAppearance(reason = "ducked")
+            AudioManager.AUDIOFOCUS_LOSS,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> scheduleReclaim(name)
+        }
+    }
+
+    private fun scheduleReclaim(reason: String) {
+        if (!captureActive) return
+        val now = SystemClock.elapsedRealtime()
+        if (reclaimPending) return
+        reclaimPending = true
+        val delay = if (now - lastReclaimAt < RECLAIM_MIN_GAP_MILLIS) {
+            RECLAIM_MIN_GAP_MILLIS
+        } else {
+            RECLAIM_DELAY_MILLIS
+        }
+        log("[BTN] media focus lost ($reason); reclaiming the handlebar in ${delay}ms")
+        handler.postDelayed(reclaimRunnable, delay)
+    }
+
+    private fun cancelReclaim() {
+        reclaimPending = false
+        handler.removeCallbacks(reclaimRunnable)
+    }
+
+    /** Pull AVRCP ownership back with duckable nav focus + a session flip — never pauses music.
+     *  Keep-alive is paused for the flip (see [reassertCaptureAfterTransportReady]). */
+    private fun reclaimCapture(reason: String) {
+        if (!captureActive) return
+        lastReclaimAt = SystemClock.elapsedRealtime()
+        log("[BTN] reclaiming the handlebar ($reason)")
+        runCatching {
+            stopKeepAlive()
+            requestMediaFocus()
+            startSilentTrack()
+            session?.isActive = false
+            handler.postDelayed({
+                if (!captureActive) return@postDelayed
+                runCatching {
+                    refreshPlayingAppearance(reason = "reclaim")
+                    if (usesVolumeGestures) pinVolume()
+                    startKeepAlive()
+                    log("[BTN] handlebar reclaimed")
+                }.onFailure { log("[BTN] reclaim failed: ${it.message}") }
+            }, REASSERT_GAP_MILLIS)
+        }.onFailure { log("[BTN] reclaim failed: ${it.message}") }
+    }
+
+    /** Keep metadata / PLAYING state / MediaStyle notification fresh so we stay the button target. */
+    private fun refreshPlayingAppearance(reason: String) {
+        runCatching {
+            publishMetadata()
+            session?.isActive = true
+            postMediaNotification()
+            if (reason != "keep-alive") log("[BTN] playing appearance refreshed ($reason)")
+        }.onFailure { log("[BTN] refreshPlayingAppearance failed: ${it.message}") }
     }
 
     private fun disableCapture() {
         if (!captureActive && focusRequest == null) return
         captureActive = false
         selectDownAt = 0L
+        repeatLatched.clear()
+        trackDownAt.clear()
         cancelPendingTaps()
+        stopKeepAlive()
+        cancelReclaim()
         cancelMediaNotification()
         stopSilentTrack()
         handler.removeCallbacks(volumePoll)
@@ -343,7 +518,12 @@ class MediaButtonBridge(
     private class TapState(var pending: Runnable? = null, var lastAt: Long = 0L)
     private val taps = HashMap<HandlebarGesture, TapState>()
 
-    /** Delays singles long enough to distinguish them from a second press on the same channel. */
+    /**
+     * Single vs double on one channel. In EAGER mode ([shouldDispatchSingleEagerly]) the single
+     * fires immediately and `pending` is only a "fired recently" marker — a second press inside
+     * the window still fires the double on top. In deferred mode the single waits out the
+     * window, which is what tells the two apart at the cost of latency on every press.
+     */
     private fun detectDoubleTap(
         single: HandlebarGesture,
         double: HandlebarGesture,
@@ -351,24 +531,52 @@ class MediaButtonBridge(
     ) {
         val state = taps.getOrPut(single) { TapState() }
         val now = SystemClock.uptimeMillis()
-        if (!forceDouble && now - state.lastAt < ECHO_REFRACTORY_MILLIS) {
-            state.lastAt = now
-            return
-        }
+        val decision = resolveTapDispatch(
+            forceDouble = forceDouble,
+            eagerSingle = shouldDispatchSingleEagerly(double),
+            hasPending = state.pending != null,
+            gapMillis = now - state.lastAt,
+            echoRefractoryMillis = ECHO_REFRACTORY_MILLIS
+        )
         state.lastAt = now
-        val wasPending = state.pending != null
-        state.pending?.let(handler::removeCallbacks)
-        state.pending = null
-        if (forceDouble || wasPending) {
-            dispatch(double)
-            return
+        when (decision) {
+            TapDispatch.SUPPRESS_ECHO -> Unit
+            TapDispatch.DOUBLE -> {
+                state.pending?.let(handler::removeCallbacks)
+                state.pending = null
+                dispatch(double)
+            }
+            TapDispatch.SINGLE_NOW -> {
+                dispatch(single)
+                val marker = Runnable { state.pending = null }
+                state.pending = marker
+                handler.postDelayed(marker, HandlebarTimingPrefs.doubleTapMillis(context))
+            }
+            TapDispatch.SINGLE_DEFERRED -> {
+                val pending = Runnable {
+                    state.pending = null
+                    dispatch(single)
+                }
+                state.pending = pending
+                handler.postDelayed(pending, HandlebarTimingPrefs.doubleTapMillis(context))
+            }
         }
-        val pending = Runnable {
-            state.pending = null
-            dispatch(single)
-        }
-        state.pending = pending
-        handler.postDelayed(pending, HandlebarTimingPrefs.doubleTapMillis(context))
+    }
+
+    /**
+     * Eager when the rider asked for snappy singles (default), or when the double gesture maps
+     * to nothing — then there is nothing to disambiguate and waiting is pure lag.
+     *
+     * NEVER eager while the calibration wizard is listening: eager mode publishes the single
+     * before the double on a double press, and the wizard records the first gesture it sees —
+     * at the "double press" step that would record the single AND release it from the press
+     * taught moments earlier (one command, one press). Deferred dispatch publishes exactly the
+     * disambiguated gesture; latency does not matter while teaching.
+     */
+    private fun shouldDispatchSingleEagerly(double: HandlebarGesture): Boolean {
+        if (HandlebarGestureFeed.isCaptureOnly()) return false
+        return HandlebarTimingPrefs.eagerSingles(context) ||
+            HandlebarControlStore.action(context, double) == HandlebarAction.NONE
     }
 
     private fun cancelPendingTaps() {
@@ -451,7 +659,7 @@ class MediaButtonBridge(
                 event.keyCode == KeyEvent.KEYCODE_MEDIA_REWIND
             if (!handled) return false
             when (event.action) {
-                KeyEvent.ACTION_DOWN -> onKeyDown(event.keyCode)
+                KeyEvent.ACTION_DOWN -> onKeyDown(event.keyCode, event.repeatCount)
                 KeyEvent.ACTION_UP -> onKeyUp(event.keyCode)
             }
             return handled
@@ -470,12 +678,19 @@ class MediaButtonBridge(
     private var lastSelectDispatchAt = 0L
     /** Press instants of non-select media keys, kept only to time their release in the log. */
     private val trackDownAt = mutableMapOf<Int, Long>()
+    /** Keys whose current press already fired a hold via key-repeat — their release is spent. */
+    private val repeatLatched = mutableSetOf<Int>()
 
     private fun isSelectKey(keyCode: Int) = keyCode == KeyEvent.KEYCODE_MEDIA_PLAY ||
         keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE ||
         keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
 
-    private fun onKeyDown(keyCode: Int) {
+    private fun onKeyDown(keyCode: Int, repeatCount: Int = 0) {
+        lastKeyAt = SystemClock.elapsedRealtime()
+        if (repeatCount > 0) {
+            onKeyRepeat(keyCode)
+            return
+        }
         log("[BTN] media key ${KeyEvent.keyCodeToString(keyCode)} down ($keyCode)")
         when {
             isSelectKey(keyCode) -> if (selectDownAt == 0L) {
@@ -490,6 +705,52 @@ class MediaButtonBridge(
                 if (!HandlebarControlStore.dashboardReportsHolds(context)) dispatchTrackTap(keyCode)
             }
         }
+    }
+
+    /**
+     * A key-repeat is proof the button is still down — a hold source independent of a timed
+     * release, which some dashes never send. Fires the long gesture once per press (latched)
+     * and marks the eventual release as spent. Skipped when the press was already dispatched
+     * as a tap on its key-down (track keys before [HandlebarControlStore.dashboardReportsHolds]
+     * is learned): firing a hold on top of that tap would run two actions for one press.
+     */
+    private fun onKeyRepeat(keyCode: Int) {
+        if (!HandlebarTimingPrefs.holdsEnabled(context)) return
+        if (keyCode in repeatLatched) return
+        val longGesture: HandlebarGesture
+        val singleGesture: HandlebarGesture
+        val downAt: Long
+        when {
+            isSelectKey(keyCode) -> {
+                longGesture = HandlebarGesture.ENTER_LONG
+                singleGesture = HandlebarGesture.ENTER
+                downAt = selectDownAt
+            }
+            isTrackKey(keyCode) -> {
+                if (!HandlebarControlStore.dashboardReportsHolds(context)) return // tap already sent on down
+                if (isForwardKey(keyCode)) {
+                    longGesture = HandlebarGesture.TRACK_FORWARD_LONG
+                    singleGesture = HandlebarGesture.TRACK_FORWARD
+                } else {
+                    longGesture = HandlebarGesture.TRACK_BACK_LONG
+                    singleGesture = HandlebarGesture.TRACK_BACK
+                }
+                downAt = trackDownAt[keyCode] ?: 0L
+            }
+            else -> return
+        }
+        if (HandlebarControlStore.action(context, longGesture) == HandlebarAction.NONE) return
+        // A repeat proves the button is down, but the HOLD fires at the rider's configured
+        // hold time, not at whatever repeat delay this BT stack happens to use (some start
+        // repeating at ~300ms — well inside what the rider still means as a tap). Repeats
+        // keep arriving, so a later one crosses the threshold and latches then.
+        if (downAt == 0L) return // repeat without a recorded press we own
+        if (SystemClock.elapsedRealtime() - downAt < HandlebarTimingPrefs.selectHoldMillis(context)) return
+        repeatLatched.add(keyCode)
+        taps[singleGesture]?.pending?.let(handler::removeCallbacks)
+        taps[singleGesture]?.pending = null
+        log("[BTN] media key ${KeyEvent.keyCodeToString(keyCode)} key-repeat -> hold")
+        dispatch(longGesture)
     }
 
     private fun isTrackKey(keyCode: Int) = keyCode == KeyEvent.KEYCODE_MEDIA_NEXT ||
@@ -517,6 +778,13 @@ class MediaButtonBridge(
     }
 
     private fun onKeyUp(keyCode: Int) {
+        lastKeyAt = SystemClock.elapsedRealtime()
+        if (repeatLatched.remove(keyCode)) {
+            // This press already fired its hold from key-repeat; its release is spent.
+            if (isSelectKey(keyCode)) selectDownAt = 0L else trackDownAt.remove(keyCode)
+            return
+        }
+        val holdsEnabled = HandlebarTimingPrefs.holdsEnabled(context)
         if (!isSelectKey(keyCode)) {
             if (!isTrackKey(keyCode)) return
             val downAt = trackDownAt.remove(keyCode)
@@ -535,7 +803,7 @@ class MediaButtonBridge(
                 log("[BTN] dashboard reports key releases; hold on previous/next is now available")
                 return
             }
-            if (heldMillis >= HandlebarTimingPrefs.selectHoldMillis(context)) {
+            if (holdsEnabled && heldMillis >= HandlebarTimingPrefs.selectHoldMillis(context)) {
                 dispatch(
                     if (isForwardKey(keyCode)) HandlebarGesture.TRACK_FORWARD_LONG
                     else HandlebarGesture.TRACK_BACK_LONG
@@ -552,7 +820,7 @@ class MediaButtonBridge(
             return
         }
         val heldMillis = SystemClock.elapsedRealtime() - startedAt
-        val isLong = heldMillis >= HandlebarTimingPrefs.selectHoldMillis(context)
+        val isLong = holdsEnabled && heldMillis >= HandlebarTimingPrefs.selectHoldMillis(context)
         log("[BTN] select released after ${heldMillis}ms: ${if (isLong) "hold" else "tap"}")
         if (isLong) {
             taps[HandlebarGesture.ENTER]?.pending?.let(handler::removeCallbacks)
@@ -589,7 +857,7 @@ class MediaButtonBridge(
             val sampleRate = 8_000
             val frames = sampleRate
             val track = AudioTrack.Builder()
-                .setAudioAttributes(audioAttributes)
+                .setAudioAttributes(navAttributes)
                 .setAudioFormat(
                     AudioFormat.Builder()
                         .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
@@ -602,7 +870,10 @@ class MediaButtonBridge(
                 .build()
             track.write(ShortArray(frames), 0, frames)
             track.setLoopPoints(0, frames, -1)
-            track.setVolume(0f)
+            // Near-silent, not exactly zero: some OEM audio HALs optimize an all-zero track out
+            // of the mix entirely, and with it the "genuinely playing" status that wins AVRCP
+            // button routing. 0.01 on the nav stream is inaudible and must not duck music.
+            track.setVolume(0.01f)
             track.play()
             silentTrack = track
         }.onFailure { log("[BTN] silent AVRCP track failed: ${it.message}") }
@@ -672,6 +943,12 @@ class MediaButtonBridge(
         private const val VOLUME_POLL_INTERVAL_MILLIS = 250L
         private const val REASSERT_SETTLE_MILLIS = 3_000L
         private const val REASSERT_GAP_MILLIS = 500L
+        /** Session-refresh cadence; a soft focus re-request every 3rd tick when idle. */
+        private const val KEEP_ALIVE_MILLIS = 4_000L
+        /** Don't re-request audio focus while the rider is actively pressing buttons. */
+        private const val KEY_IDLE_BEFORE_FOCUS_MILLIS = 2_500L
+        private const val RECLAIM_DELAY_MILLIS = 500L
+        private const val RECLAIM_MIN_GAP_MILLIS = 2_000L
         private const val ECHO_REFRACTORY_MILLIS = 80L
         private const val SELECT_DEDUP_MILLIS = 100L
         private const val REPIN_IGNORE_MILLIS = 80L
@@ -687,6 +964,11 @@ class MediaButtonBridge(
             val bridge = bridges[targetName] ?: return false
             bridge.injectSimulatorGesture(gesture)
             return true
+        }
+
+        /** Calibration changed — every live bridge re-decides whether to hold the volume pin. */
+        fun refreshVolumeGestureUse() {
+            bridges.values.forEach { it.refreshVolumeGestureUse() }
         }
 
         /** Music volume from the live bridge or plain AudioManager (for the Controls slider). */
@@ -713,6 +995,28 @@ class MediaButtonBridge(
             } catch (_: Exception) {}
         }
     }
+}
+
+internal enum class TapDispatch { SUPPRESS_ECHO, DOUBLE, SINGLE_NOW, SINGLE_DEFERRED }
+
+/**
+ * Pure decision for one press on a tap channel. `hasPending` means either a deferred single
+ * waiting to fire or an eager "fired recently" marker — in both cases a second press inside
+ * the double-tap window, so it resolves to DOUBLE. The refractory guard runs first: two
+ * events within [echoRefractoryMillis] are one physical press echoed by the peer, except when
+ * the caller already knows better ([forceDouble], a dash-coalesced volume jump).
+ */
+internal fun resolveTapDispatch(
+    forceDouble: Boolean,
+    eagerSingle: Boolean,
+    hasPending: Boolean,
+    gapMillis: Long,
+    echoRefractoryMillis: Long = 80L
+): TapDispatch = when {
+    !forceDouble && gapMillis in 0 until echoRefractoryMillis -> TapDispatch.SUPPRESS_ECHO
+    forceDouble || hasPending -> TapDispatch.DOUBLE
+    eagerSingle -> TapDispatch.SINGLE_NOW
+    else -> TapDispatch.SINGLE_DEFERRED
 }
 
 internal sealed interface VolumeDeltaRead {

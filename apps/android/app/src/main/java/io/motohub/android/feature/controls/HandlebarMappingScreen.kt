@@ -1,0 +1,759 @@
+package io.motohub.android.feature.controls
+
+import android.Manifest
+import android.os.Build
+import android.os.SystemClock
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import io.motohub.android.i18n.motoHubText
+import io.motohub.android.session.ProjectionEventLog
+import io.motohub.android.ui.components.MonoLabel
+import io.motohub.android.ui.components.MotoHubDetailScreen
+import io.motohub.android.ui.components.ToggleRow
+import io.motohub.android.ui.theme.MotoHubFavorite
+import io.motohub.android.ui.theme.MotoHubLive
+import io.motohub.android.ui.theme.MotoHubManual
+import io.motohub.android.ui.theme.MotoHubMirror
+import kotlinx.coroutines.delay
+
+/**
+ * Handlebar mapping, organised the way a rider thinks about it: one card per BUTTON, with a
+ * row for press, double press and hold.
+ *
+ * It used to list Bluetooth gesture names instead - and those do not line up with the buttons.
+ * A held up rocker on a CFMOTO 700MT arrives as the "next track" command, which on a handlebar
+ * with a real left button is that button instead. Guessing produced labels that were wrong on
+ * one bike or the other, so nothing is guessed here: the volume steps and play/pause are the
+ * only bindings assumed, everything else is learned from the rider.
+ */
+@Composable
+fun HandlebarMappingScreen(
+    onBack: () -> Unit,
+    backLabel: String = motoHubText("‹ Controls")
+) {
+    val context = LocalContext.current
+    var revision by remember { mutableStateOf(0) }
+    var editing by remember { mutableStateOf<PhysicalPress?>(null) }
+    var calibrating by remember { mutableStateOf(false) }
+    val lastGesture by HandlebarGestureFeed.lastGesture.collectAsState()
+    var litGesture by remember { mutableStateOf<HandlebarGesture?>(null) }
+    LaunchedEffect(lastGesture?.atElapsedRealtimeMillis) {
+        val gesture = lastGesture?.gesture ?: return@LaunchedEffect
+        litGesture = gesture
+        delay(HIGHLIGHT_MILLIS)
+        litGesture = null
+    }
+
+    // Every level closes exactly one step; without these, back fell through to the caller.
+    BackHandler(enabled = calibrating) { calibrating = false }
+    BackHandler(enabled = editing != null) { editing = null }
+
+    if (calibrating) {
+        HandlebarCalibrationScreen(
+            onDone = {
+                revision++
+                calibrating = false
+                // The taught set may have just changed whether volume presses exist on this
+                // handlebar — a live capture must re-decide the volume pin NOW, not at the
+                // next session (stale pin = phone volume keys acting as handlebar presses).
+                MediaButtonBridge.refreshVolumeGestureUse()
+            }
+        )
+        return
+    }
+
+    val pressBeingEdited = editing
+    if (pressBeingEdited != null) {
+        val gesture = HandlebarCalibration.gestureFor(context, pressBeingEdited)
+        if (gesture != null) {
+            HandlebarActionPicker(
+                title = pressBeingEdited.label,
+                current = HandlebarControlStore.action(context, gesture),
+                onPicked = { action ->
+                    HandlebarControlStore.setAction(context, gesture, action)
+                    ProjectionEventLog.record(
+                        "CONTROLS",
+                        "Handlebar ${pressBeingEdited.id} (${gesture.id}) -> ${action.id}"
+                    )
+                    revision++
+                    editing = null
+                },
+                onBack = { editing = null }
+            )
+            return
+        }
+        editing = null
+    }
+
+    MotoHubDetailScreen(
+        title = motoHubText("Handlebar"),
+        backLabel = backLabel,
+        onBack = onBack
+    ) {
+        // Read so that every recorded change re-reads the stores below.
+        val currentRevision = revision
+        Text(
+            motoHubText(
+                "One card per button, with what a press, a double press and a hold each do. " +
+                    "Teach the handlebar so the app knows which buttons yours actually has."
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        BluetoothStatusCard()
+
+        LiveCaptureBanner(litGesture)
+
+        Button(
+            onClick = { calibrating = true },
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text(
+                motoHubText(
+                    if (HandlebarCalibration.isCalibrated(context)) "Teach again" else "Teach my handlebar"
+                ),
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        HandlebarCalibration.presentButtons(context).forEach { button ->
+            ButtonCard(
+                button = button,
+                revision = currentRevision,
+                litGesture = litGesture,
+                onEdit = { editing = it }
+            )
+        }
+
+        HandlebarTimingSection()
+
+        OutlinedButton(
+            onClick = {
+                HandlebarControlStore.reset(context)
+                revision++
+                ProjectionEventLog.record("CONTROLS", "Handlebar mapping reset to defaults.")
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(motoHubText("Reset actions to defaults")) }
+    }
+}
+
+/**
+ * The buttons ride Bluetooth AVRCP, not the T-Box link: a phone that never paired to the
+ * motorcycle receives nothing, and no amount of mapping can fix that. This card shows what is
+ * connected RIGHT NOW (queried from the live audio profiles, never the bond list) so the rider
+ * knows whether to blame the pairing before blaming the mapping. It re-queries on every resume,
+ * so coming back from the system Bluetooth settings shows the fresh state.
+ */
+@Composable
+private fun BluetoothStatusCard() {
+    val context = LocalContext.current
+    var refresh by remember { mutableStateOf(0) }
+    var status by remember { mutableStateOf<BluetoothStatus.Status?>(null) }
+    LaunchedEffect(refresh) {
+        BluetoothStatus.query(context) { fresh -> status = fresh }
+    }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) refresh++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { refresh++ }
+    val current = status
+    val connected = current?.connected == true
+    val needsPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        current?.permitted == false
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = if (connected) {
+            MotoHubLive.copy(alpha = 0.12f)
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    Modifier.size(10.dp).background(
+                        if (connected) MotoHubLive
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                        CircleShape
+                    )
+                )
+                Text(
+                    motoHubText("Motorcycle Bluetooth"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                current?.describe() ?: motoHubText("Checking Bluetooth…"),
+                style = MaterialTheme.typography.bodyMedium
+            )
+            if (current != null && current.supported) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                    if (needsPermission) {
+                        Button(
+                            onClick = { permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT) },
+                            modifier = Modifier.weight(1f)
+                        ) { Text(motoHubText("Allow Bluetooth")) }
+                    }
+                    OutlinedButton(
+                        onClick = { BluetoothStatus.openBluetoothSettings(context) },
+                        modifier = Modifier.weight(1f)
+                    ) { Text(motoHubText("Bluetooth settings")) }
+                }
+            }
+        }
+    }
+}
+
+/** One physical button, with its three ways of being pressed. */
+@Composable
+private fun ButtonCard(
+    button: HandlebarButton,
+    revision: Int,
+    litGesture: HandlebarGesture?,
+    onEdit: (PhysicalPress) -> Unit
+) {
+    val context = LocalContext.current
+    val accent = button.accent()
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = MaterialTheme.shapes.extraLarge,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier.size(42.dp).background(accent.copy(alpha = 0.16f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(button.glyph, style = MaterialTheme.typography.titleLarge, color = accent)
+                }
+                Text(
+                    motoHubText(button.label),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            PressKind.entries.forEach { kind ->
+                val press = PhysicalPress.entries.first { it.button == button && it.kind == kind }
+                if (HandlebarCalibration.isMissing(context, press)) return@forEach
+                val gesture = remember(press, revision) { HandlebarCalibration.gestureFor(context, press) }
+                PressRow(
+                    kind = kind,
+                    action = gesture?.let { HandlebarControlStore.action(context, it) },
+                    lit = gesture != null && gesture == litGesture,
+                    onClick = { if (gesture != null) onEdit(press) }
+                )
+            }
+        }
+    }
+}
+
+/** A press / double / hold row: what it is, and what it does. */
+@Composable
+private fun PressRow(
+    kind: PressKind,
+    action: HandlebarAction?,
+    lit: Boolean,
+    onClick: () -> Unit
+) {
+    val highlight by animateFloatAsState(if (lit) 1f else 0f, label = "pressHighlight")
+    val family = action?.family()
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = (highlight * 2).dp,
+                color = MotoHubLive.copy(alpha = highlight),
+                shape = RoundedCornerShape(12.dp)
+            )
+            .clickable(enabled = action != null, onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                motoHubText(kind.label),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (action == null) {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+            )
+            if (action == null || family == null) {
+                // Honest about the gap: no motorcycle command is known for this press yet,
+                // so the app cannot pretend to map it.
+                Text(
+                    motoHubText("not detected yet"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            } else {
+                Surface(shape = RoundedCornerShape(9.dp), color = family.color.copy(alpha = 0.16f)) {
+                    Text(
+                        motoHubText(action.shortLabel()),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = family.color
+                    )
+                }
+                Text("›", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+/**
+ * Asks for each press in turn and records which command the motorcycle answered with.
+ * "I don't have it" hides that row for good, so the screen ends up describing this
+ * handlebar and no other.
+ */
+@Composable
+private fun HandlebarCalibrationScreen(onDone: () -> Unit) {
+    val context = LocalContext.current
+    var step by remember { mutableStateOf(0) }
+    var learned by remember { mutableStateOf(0) }
+    val lastGesture by HandlebarGestureFeed.lastGesture.collectAsState()
+    val press = PhysicalPress.entries.getOrNull(step)
+    // The instant this step began. A gesture older than it belongs to a previous step - or to
+    // before the screen even opened, which is how a stale feed value once got recorded as
+    // "up_press = trackBack" with the rider's hand nowhere near the handlebar.
+    var stepStartedAt by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
+    LaunchedEffect(step) { stepStartedAt = SystemClock.elapsedRealtime() }
+
+    // Gestures are observed, not obeyed, for as long as this screen is up.
+    DisposableEffect(Unit) {
+        HandlebarGestureFeed.setCaptureOnly(true)
+        onDispose { HandlebarGestureFeed.setCaptureOnly(false) }
+    }
+
+    LaunchedEffect(lastGesture?.atElapsedRealtimeMillis, step) {
+        val event = lastGesture ?: return@LaunchedEffect
+        val current = press ?: return@LaunchedEffect
+        if (event.atElapsedRealtimeMillis <= stepStartedAt) return@LaunchedEffect
+        HandlebarCalibration.record(context, current, event.gesture)
+        ProjectionEventLog.record("CONTROLS", "Calibrated ${current.id} = ${event.gesture.id}")
+        learned++
+        delay(CALIBRATION_CONFIRM_MILLIS)
+        step++
+    }
+
+    MotoHubDetailScreen(
+        title = motoHubText("Teach my handlebar"),
+        backLabel = motoHubText("‹ Handlebar"),
+        onBack = onDone
+    ) {
+        if (press == null) {
+            Text(
+                motoHubText("Done - %1\$d presses learned.", learned),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                motoHubText("Every card now describes your handlebar. Buttons you marked as absent are gone."),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Button(
+                onClick = onDone,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) { Text(motoHubText("Finish"), fontWeight = FontWeight.Bold) }
+            return@MotoHubDetailScreen
+        }
+
+        MonoLabel(motoHubText("STEP %1\$d OF %2\$d", step + 1, PhysicalPress.entries.size))
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MotoHubLive.copy(alpha = 0.14f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    motoHubText("On the motorcycle, do this"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    motoHubText(press.label),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+        Text(
+            motoHubText(
+                "Nothing happens? Some dashboards keep a button for themselves and send the " +
+                    "phone nothing at all - on a CFMOTO CFDL16 that is exactly what a SHORT " +
+                    "rocker press does. Mark it as absent and it stops taking up space."
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = {
+                    HandlebarCalibration.recordMissing(context, press)
+                    step++
+                },
+                modifier = Modifier.weight(1f)
+            ) { Text(motoHubText("Not on my bike")) }
+            OutlinedButton(onClick = { step++ }, modifier = Modifier.weight(1f)) {
+                Text(motoHubText("Skip"))
+            }
+        }
+        OutlinedButton(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
+            Text(motoHubText("Stop here"))
+        }
+    }
+}
+
+/** Timing, where the gestures it governs live - not on a separate screen from them. */
+@Composable
+private fun HandlebarTimingSection() {
+    val context = LocalContext.current
+    var doubleTap by remember { mutableStateOf(HandlebarTimingPrefs.doubleTap(context)) }
+    var hold by remember { mutableStateOf(HandlebarTimingPrefs.selectHold(context)) }
+    var eager by remember { mutableStateOf(HandlebarTimingPrefs.eagerSingles(context)) }
+    var holdsOn by remember { mutableStateOf(HandlebarTimingPrefs.holdsEnabled(context)) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        MonoLabel(motoHubText("TIMING"))
+        Text(
+            motoHubText("How long the app waits before deciding a press was double, or held."),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        ToggleRow(
+            title = motoHubText("Snappy singles"),
+            description = motoHubText(
+                "A single press acts immediately instead of waiting out the double-press " +
+                    "window. A double still works - it just runs the single first."
+            ),
+            checked = eager,
+            onCheckedChange = { value ->
+                eager = value
+                HandlebarTimingPrefs.setEagerSingles(context, value)
+                ProjectionEventLog.record("CONTROLS", "Handlebar snappy singles set to $value.")
+            }
+        )
+        ToggleRow(
+            title = motoHubText("Hold gestures"),
+            description = motoHubText(
+                "Turn off if your handlebar needs a long physical press for every click - " +
+                    "otherwise those presses are eaten as holds."
+            ),
+            checked = holdsOn,
+            onCheckedChange = { value ->
+                holdsOn = value
+                HandlebarTimingPrefs.setHoldsEnabled(context, value)
+                ProjectionEventLog.record("CONTROLS", "Handlebar hold gestures set to $value.")
+            }
+        )
+        SegmentedChoice(
+            title = motoHubText("Double press window"),
+            options = DoubleTapDelay.entries.map { motoHubText(it.label) },
+            selectedIndex = DoubleTapDelay.entries.indexOf(doubleTap),
+            accent = MotoHubMirror,
+            onSelected = { index ->
+                doubleTap = DoubleTapDelay.entries[index]
+                HandlebarTimingPrefs.setDoubleTap(context, doubleTap)
+            }
+        )
+        SegmentedChoice(
+            title = motoHubText("Hold time"),
+            options = SelectHoldDelay.entries.map { motoHubText(it.label) },
+            selectedIndex = SelectHoldDelay.entries.indexOf(hold),
+            accent = MotoHubFavorite,
+            onSelected = { index ->
+                hold = SelectHoldDelay.entries[index]
+                HandlebarTimingPrefs.setSelectHold(context, hold)
+            }
+        )
+    }
+}
+
+/** A row of equal segments - every choice visible at once, unlike a dropdown. */
+@Composable
+private fun SegmentedChoice(
+    title: String,
+    options: List<String>,
+    selectedIndex: Int,
+    accent: Color,
+    onSelected: (Int) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, style = MaterialTheme.typography.labelLarge)
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(modifier = Modifier.padding(3.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                options.forEachIndexed { index, option ->
+                    val selected = index == selectedIndex
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(9.dp),
+                        color = if (selected) accent.copy(alpha = 0.9f) else Color.Transparent,
+                        onClick = { onSelected(index) }
+                    ) {
+                        Box(Modifier.padding(vertical = 10.dp), contentAlignment = Alignment.Center) {
+                            Text(
+                                option,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selected) Color(0xFF10151A) else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Shows the most recent press the motorcycle sent, named as the rider taught it. */
+@Composable
+private fun LiveCaptureBanner(litGesture: HandlebarGesture?) {
+    val context = LocalContext.current
+    val active = litGesture != null
+    val background by animateColorAsState(
+        if (active) MotoHubLive.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        label = "captureBackground"
+    )
+    Surface(shape = RoundedCornerShape(16.dp), color = background, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            val dotColor by animateColorAsState(
+                if (active) MotoHubLive else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                label = "captureDot"
+            )
+            Box(Modifier.size(10.dp).background(dotColor, CircleShape))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    motoHubText(if (active) "Received" else "Listening"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    litGesture?.let { gesture ->
+                        HandlebarCalibration.pressFor(context, gesture)?.label
+                            ?: motoHubText("A button the app has not been taught yet")
+                    } ?: motoHubText("Press a handlebar button"),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+/** Full-width action chooser: every option visible and grouped, instead of a cramped dropdown. */
+@Composable
+private fun HandlebarActionPicker(
+    title: String,
+    current: HandlebarAction,
+    onPicked: (HandlebarAction) -> Unit,
+    onBack: () -> Unit
+) {
+    MotoHubDetailScreen(
+        title = motoHubText(title),
+        backLabel = motoHubText("‹ Handlebar"),
+        onBack = onBack
+    ) {
+        Text(
+            motoHubText("Choose what this press does."),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        ActionFamily.entries.forEach { family ->
+            val actions = HandlebarAction.entries.filter { it.family() == family }
+            if (actions.isEmpty()) return@forEach
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                MonoLabel(motoHubText(family.title))
+                actions.forEach { candidate ->
+                    ActionOptionRow(
+                        action = candidate,
+                        family = family,
+                        selected = candidate == current,
+                        onClick = { onPicked(candidate) }
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+    }
+}
+
+@Composable
+private fun ActionOptionRow(
+    action: HandlebarAction,
+    family: ActionFamily,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        color = if (selected) family.color.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surface
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Box(
+                modifier = Modifier.size(34.dp).background(family.color.copy(alpha = 0.16f), RoundedCornerShape(11.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(action.glyph(), style = MaterialTheme.typography.titleSmall, color = family.color)
+            }
+            Text(
+                motoHubText(action.label),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+            )
+            if (selected) {
+                Text("✓", style = MaterialTheme.typography.titleMedium, color = family.color)
+            }
+        }
+    }
+}
+
+private fun HandlebarButton.accent(): Color = when (this) {
+    HandlebarButton.UP, HandlebarButton.DOWN -> MotoHubMirror
+    HandlebarButton.LEFT, HandlebarButton.RIGHT -> MotoHubManual
+    HandlebarButton.SELECT -> MotoHubLive
+}
+
+/** Action families, each with its own colour so a glance at the list groups itself. */
+private enum class ActionFamily(val title: String, val color: Color) {
+    CURSOR("MOVE THE CURSOR", MotoHubMirror),
+    SYSTEM("SYSTEM", MotoHubLive),
+    NAVIGATION("NAVIGATE TO", MotoHubManual),
+    OFF("OFF", Color(0xFF8C93A0))
+}
+
+private fun HandlebarAction.family(): ActionFamily = when (this) {
+    HandlebarAction.NONE -> ActionFamily.OFF
+    HandlebarAction.SCROLL_FORWARD, HandlebarAction.SCROLL_BACK,
+    HandlebarAction.DPAD_UP, HandlebarAction.DPAD_DOWN,
+    HandlebarAction.DPAD_LEFT, HandlebarAction.DPAD_RIGHT,
+    HandlebarAction.SELECT -> ActionFamily.CURSOR
+    HandlebarAction.BACK, HandlebarAction.HOME, HandlebarAction.ASSISTANT -> ActionFamily.SYSTEM
+    HandlebarAction.NAV_1, HandlebarAction.NAV_2, HandlebarAction.NAV_3 -> ActionFamily.NAVIGATION
+}
+
+private fun HandlebarAction.glyph(): String = when (this) {
+    HandlebarAction.NONE -> "–"
+    HandlebarAction.SCROLL_FORWARD -> "↻"
+    HandlebarAction.SCROLL_BACK -> "↺"
+    HandlebarAction.DPAD_UP -> "▲"
+    HandlebarAction.DPAD_DOWN -> "▼"
+    HandlebarAction.DPAD_LEFT -> "◀"
+    HandlebarAction.DPAD_RIGHT -> "▶"
+    HandlebarAction.SELECT -> "◉"
+    HandlebarAction.BACK -> "↩"
+    HandlebarAction.HOME -> "⌂"
+    HandlebarAction.ASSISTANT -> "🎙"
+    HandlebarAction.NAV_1 -> "①"
+    HandlebarAction.NAV_2 -> "②"
+    HandlebarAction.NAV_3 -> "③"
+}
+
+private fun HandlebarAction.shortLabel(): String = when (this) {
+    HandlebarAction.NONE -> "Off"
+    HandlebarAction.SCROLL_FORWARD -> "Scroll +"
+    HandlebarAction.SCROLL_BACK -> "Scroll −"
+    HandlebarAction.DPAD_UP -> "Up"
+    HandlebarAction.DPAD_DOWN -> "Down"
+    HandlebarAction.DPAD_LEFT -> "Left"
+    HandlebarAction.DPAD_RIGHT -> "Right"
+    HandlebarAction.SELECT -> "OK"
+    HandlebarAction.BACK -> "Back"
+    HandlebarAction.HOME -> "Home"
+    HandlebarAction.ASSISTANT -> "Voice"
+    HandlebarAction.NAV_1 -> "Place 1"
+    HandlebarAction.NAV_2 -> "Place 2"
+    HandlebarAction.NAV_3 -> "Place 3"
+}
+
+private const val HIGHLIGHT_MILLIS = 1_400L
+private const val CALIBRATION_CONFIRM_MILLIS = 700L

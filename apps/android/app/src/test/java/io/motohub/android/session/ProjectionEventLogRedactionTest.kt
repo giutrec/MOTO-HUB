@@ -57,4 +57,34 @@ class ProjectionEventLogRedactionTest {
         // The brand flavor is the diagnostic payload - it has to survive the scrub.
         assertTrue(redacted.contains("65536"))
     }
+
+    /**
+     * The AI-provider key rules used to exist only in the companion edition's copy of this
+     * shared file. A key is worth real money if it leaks, and "which edition am I in?" is not
+     * a question a redaction rule should have an answer to - both editions carry them now.
+     */
+    @Test
+    fun redactsAiProviderKeysWhateverShapeTheyArriveIn() {
+        assertFalse(ProjectionEventLog.redact("api_key=sk-abcdefghijklmnop").contains("abcdefghijklmnop"))
+        assertFalse(ProjectionEventLog.redact("""{"apiKey": "xyz123456789"}""").contains("xyz123456789"))
+        assertFalse(ProjectionEventLog.redact("access_token: ya29.A0AfH6SMB").contains("ya29"))
+    }
+
+    @Test
+    fun redactsABearerTokenPastTheFirstSpace() {
+        // SECRET_PATTERN stops at the first space, so without the Bearer rule this used to
+        // redact the word "Bearer" and leave the token itself in the clear.
+        val redacted = ProjectionEventLog.redact(
+            "HTTP 401 for Authorization: Bearer sk-proj-AbCdEf0123456789xyz"
+        )
+        assertFalse(redacted.contains("sk-proj-AbCdEf0123456789xyz"))
+        assertFalse(redacted.contains("AbCdEf0123456789"))
+    }
+
+    @Test
+    fun redactsABareKeyLiteralWithNoLabelAtAll() {
+        val redacted = ProjectionEventLog.redact("request failed using sk-or-v1-0123456789abcdef")
+        assertFalse(redacted.contains("sk-or-v1-0123456789abcdef"))
+        assertTrue(redacted.contains("<redacted-key>"))
+    }
 }

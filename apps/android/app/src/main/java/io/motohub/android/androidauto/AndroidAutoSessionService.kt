@@ -89,9 +89,12 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
     private var capabilityProfile = AndroidAutoCapabilityProfiles.fallback()
     @Volatile private var tBoxTouchTransform: TBoxTouchTransform? = null
     private var touchFilter: TBoxTouchFilter? = null
-    private var hasReachedStreaming = false
-    private var lastWatchdogFrameCount = 0L
-    private var lastWatchdogProgressAt = 0L
+    // Written and read from different coroutines on the IO dispatcher (watchdog tick, transport
+    // event collector, network event collector), so the reads need the visibility guarantee
+    // rather than relying on the dispatcher happening to establish happens-before.
+    @Volatile private var hasReachedStreaming = false
+    @Volatile private var lastWatchdogFrameCount = 0L
+    @Volatile private var lastWatchdogProgressAt = 0L
     private var screenMarginsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
 
     @Volatile
@@ -283,7 +286,17 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                     if (bikeStartRequested.compareAndSet(false, true)) {
                         videoReadyTimeoutJob?.cancel()
                         bikeStreamJob?.cancel()
-                        bikeStreamJob = serviceScope.launch { startBikeStream(handle) }
+                        bikeStreamJob = serviceScope.launch {
+                            // Initial start: a failure here IS session-fatal. Recovery calls
+                            // startBikeStream directly and lets its retry budget absorb throws.
+                            try {
+                                startBikeStream(handle)
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (failure: Throwable) {
+                                fail(failure.message ?: "Android Auto bike stream failed to start.")
+                            }
+                        }
                     }
                 },
                 onSessionEnded = { clean, userExit ->
@@ -339,6 +352,15 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         }
     }
 
+    /**
+     * Brings the negotiated T-Box video pipeline up for [handle].
+     *
+     * Never terminates the session itself: failures are reported by THROWING, and the caller
+     * decides what a failure means. The initial start maps it to [fail]; the recovery path's
+     * retry loop treats it as one failed attempt inside its budget. This used to call [fail]
+     * directly, which tore the whole session down on the FIRST transient handshake error of a
+     * recovery whose own doc promised a 120s retry budget.
+     */
     private suspend fun startBikeStream(handle: TBoxSessionHandle) {
         @Suppress("NAME_SHADOWING")
         var handle = handle
@@ -348,7 +370,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                 TBOX_NETWORK_REBIND_TIMEOUT_MS
             )
             rebound.exceptionOrNull()?.let {
-                return fail("T-Box network restore failed: ${it.message}")
+                throw IllegalStateException("T-Box network restore failed: ${it.message}", it)
             }
         } else {
             ProjectionEventLog.record(
@@ -400,7 +422,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
             }
         }
         configurationResult.exceptionOrNull()?.let {
-            return fail("T-Box handshake for Android Auto failed: ${it.message}")
+            throw IllegalStateException("T-Box handshake for Android Auto failed: ${it.message}", it)
         }
         if (stopping) return
 
@@ -578,8 +600,10 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                 mediaButtonBridge?.reassertCaptureAfterTransportReady()
             }
             ProjectionEventLog.record("ANDROID AUTO", "Android Auto streaming active on the TFT.")
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (failure: Throwable) {
-            fail("Android Auto pipeline did not start: ${failure.message}")
+            throw IllegalStateException("Android Auto pipeline did not start: ${failure.message}", failure)
         }
     }
 

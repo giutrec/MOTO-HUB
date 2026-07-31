@@ -19,6 +19,34 @@ object HandlebarTimingPrefs {
     private const val PREFS = "handlebar_timing"
     private const val DOUBLE_TAP_MILLIS = "double_tap_millis"
     private const val SELECT_HOLD_MILLIS = "select_hold_millis"
+    private const val EAGER_SINGLES = "eager_singles"
+    private const val HOLDS_ENABLED = "holds_enabled"
+
+    /**
+     * When true (default), a single press fires immediately instead of waiting out the
+     * double-tap window; a second press inside the window still fires the double action.
+     * The cost is that a double also runs the single first — harmless for cursor movement,
+     * and the reason open-cfmoto's field testing settled on eager: waiting made every OK
+     * and every knob step land ~300ms late, which reads as "dead buttons" at speed.
+     */
+    fun eagerSingles(context: Context): Boolean =
+        preferences(context).getBoolean(EAGER_SINGLES, true)
+
+    fun setEagerSingles(context: Context, enabled: Boolean) {
+        preferences(context).edit().putBoolean(EAGER_SINGLES, enabled).apply()
+    }
+
+    /**
+     * When false, no press is ever classified as a hold — every release is a tap or double.
+     * The escape hatch for pods that need a long physical press per click, where hold
+     * detection would eat every press.
+     */
+    fun holdsEnabled(context: Context): Boolean =
+        preferences(context).getBoolean(HOLDS_ENABLED, true)
+
+    fun setHoldsEnabled(context: Context, enabled: Boolean) {
+        preferences(context).edit().putBoolean(HOLDS_ENABLED, enabled).apply()
+    }
 
     fun doubleTap(context: Context): DoubleTapDelay {
         val stored = preferences(context).getLong(DOUBLE_TAP_MILLIS, DoubleTapDelay.NORMAL.millis)
