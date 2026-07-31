@@ -26,19 +26,80 @@ enum class AndroidAutoCapabilitySource {
     USER_OVERRIDE
 }
 
+/**
+ * Coded-frame pixels given up so Android Auto lays its UI out at the PANEL's aspect ratio.
+ *
+ * Distinct from [TBoxScreenMargins], which describes physical furniture the motorcycle owns and
+ * is capped at a couple of hundred pixels for that reason. These are a projection decision and
+ * are routinely enormous: matching a 800x951 panel from a 720x1280 coded source gives up 424
+ * rows. Both end up in the same AAP `marginWidth`/`marginHeight` fields, so they add.
+ *
+ * Without them, no coded size fits a portrait-ish dash and Android Auto is letterboxed into a
+ * band: a rider's 800x951 panel (modelId 37426, 2026-07-31) got a 418x744 viewport inside a
+ * 800x944 canvas - 291 black pixels down each side, more than half the screen wasted.
+ */
+data class AaAspectMargins(val width: Int, val height: Int) {
+    init {
+        require(width >= 0 && height >= 0) { "Aspect margins cannot be negative" }
+    }
+
+    companion object {
+        val NONE = AaAspectMargins(0, 0)
+
+        /**
+         * Margins that shrink [coded] until what is left has [panel]'s aspect ratio.
+         *
+         * Only the axis that is too long is trimmed, so the other keeps every coded pixel and as
+         * much detail as possible survives the scale to the panel. A [minUsable] floor stops a
+         * wildly misreported panel from collapsing the picture to nothing - a margin that leaves
+         * eight usable rows is not a better answer than no margin at all.
+         */
+        fun forPanel(
+            coded: DisplayGeometry,
+            panel: DisplayGeometry,
+            minUsable: Int = MIN_USABLE
+        ): AaAspectMargins {
+            // No zero guard: DisplayGeometry refuses to hold one, so both are already positive.
+            val codedAspect = coded.width.toDouble() / coded.height
+            val panelAspect = panel.width.toDouble() / panel.height
+            return if (codedAspect < panelAspect) {
+                // The coded frame is too tall for this panel: give up rows.
+                val usable = Math.round(coded.width * panel.height.toDouble() / panel.width)
+                    .toInt().coerceIn(minUsable, coded.height)
+                AaAspectMargins(0, coded.height - usable)
+            } else {
+                // Too wide: give up columns.
+                val usable = Math.round(coded.height * panel.width.toDouble() / panel.height)
+                    .toInt().coerceIn(minUsable, coded.width)
+                AaAspectMargins(coded.width - usable, 0)
+            }
+        }
+
+        /** Below this many usable pixels on an axis the match is refused rather than applied. */
+        const val MIN_USABLE = 160
+    }
+}
+
 data class AndroidAutoCapabilityProfile(
     val videoPreset: AndroidAutoVideoPreset,
     val source: AndroidAutoCapabilitySource,
     val target: DisplayGeometry?,
     val reason: String,
     val screenMargins: TBoxScreenMargins = TBoxScreenMargins.NONE,
-    val touchEnabled: Boolean = true
+    val touchEnabled: Boolean = true,
+    /** See [AaAspectMargins]; added on top of [screenMargins] in the AAP margin fields. */
+    val aspectMargins: AaAspectMargins = AaAspectMargins.NONE
 ) {
     val video: DisplayGeometry get() = videoPreset.source
     val densityDpi: Int get() = videoPreset.densityDpi
     /** Android Auto's touch/UI surface after applying explicit AA content insets only. */
     val touchSurface: DisplayGeometry
-        get() = screenMargins.inset(video)
+        get() = screenMargins.inset(video).let { framed ->
+            DisplayGeometry(
+                width = (framed.width - aspectMargins.width).coerceAtLeast(1),
+                height = (framed.height - aspectMargins.height).coerceAtLeast(1)
+            )
+        }
     val displayProfile: AndroidAutoDisplayProfile
         get() = target?.let { calculateAndroidAutoDisplayProfile(it, video) }
             ?: calculateAndroidAutoDisplayProfile(video, video)

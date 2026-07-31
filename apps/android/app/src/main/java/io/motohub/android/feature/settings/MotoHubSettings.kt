@@ -88,7 +88,8 @@ enum class AndroidAutoAspectMatchingMode(
 ) {
     AUTO(
         "Auto",
-        "Use the full Android Auto source; the T-Box projection area adds no AA margins.",
+        "Match Android Auto's layout to the dashboard's real shape, so the map fills the panel " +
+            "instead of sitting between black bars.",
         R.string.android_auto_insets_auto,
         R.string.android_auto_insets_auto_description
     ),

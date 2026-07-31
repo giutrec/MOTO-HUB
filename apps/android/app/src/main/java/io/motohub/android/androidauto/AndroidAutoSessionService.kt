@@ -208,7 +208,21 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
             screenMargins = advertisedMargins,
             touchEnabled = touchEnabled,
             fallbackPreset = fallbackPreset
-        )
+        ).let { selected ->
+            // AUTO used to mean "advertise no margins", which is the same thing as accepting the
+            // letterbox: Android Auto only offers a handful of coded sizes and none of them is
+            // the shape of a motorcycle panel. Now it means what a rider expects it to mean -
+            // work the aspect out from the panel we measured. Computed AFTER selection because
+            // the margins depend on which coded source was chosen, and left at NONE when nothing
+            // has been learned yet, since guessing an aspect from the fallback preset would
+            // crop the picture to fit a number nobody measured.
+            val panel = usableLearnedGeometry
+            if (aspectMatchingMode != AndroidAutoAspectMatchingMode.AUTO || panel == null) {
+                selected
+            } else {
+                selected.copy(aspectMargins = AaAspectMargins.forPanel(selected.video, panel))
+            }
+        }
         val learnedCanvas = usableLearnedGeometry?.let(::alignedCanvasGeometry)
         val displayProfile = learnedCanvas?.let { target ->
             ActiveAndroidAutoDisplayProfile.configure(target, capabilityProfile.video)
