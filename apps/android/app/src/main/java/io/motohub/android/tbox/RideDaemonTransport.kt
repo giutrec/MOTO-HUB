@@ -946,6 +946,25 @@ class RideDaemonTransport(
             if (Log.isLoggable(TAG, Log.DEBUG)) {
                 Log.d(TAG, "T-Box event type=$type command=$command bytes=${payload?.size ?: 0}")
             }
+            if (type == TRANSPORT_EVENT_SOURCE) {
+                // The daemon's own decisions, not dash traffic. Logged at INFO because a field
+                // log must be able to say which video frame format was on the wire - a framing
+                // experiment whose outcome only exists in the daemon's stdout cannot be read.
+                if (command == TRANSPORT_VIDEO_FRAMING_COMMAND) {
+                    val extendByte = payload?.getOrNull(0)?.toInt() ?: -1
+                    val plainApplied = payload?.getOrNull(1)?.toInt() == 1
+                    ProjectionEventLog.record(
+                        "TBOX",
+                        "Video framing negotiated: dash supportExtendProtocol=$extendByte; " +
+                            if (plainApplied) {
+                                "frame index DROPPED (plain framing) for this session."
+                            } else {
+                                "frame index kept (indexed framing, the format every CFMOTO uses)."
+                            }
+                    )
+                }
+                return
+            }
             val verbose = MotoHubSettings.verboseTBoxLogging(appContext)
             val now = SystemClock.elapsedRealtime()
             val sequence = when (type) {
@@ -1278,6 +1297,11 @@ class RideDaemonTransport(
         // is whichever candidate the dash acknowledged. See EasyConnClientIdentity.
         const val MEDIA_CONTROL_EVENT_SOURCE = 3L
         const val PXC_EVENT_SOURCE = 2L
+
+        // Daemon-originated events (hud/core EventSourceTransport): the transport reporting
+        // its own decisions, currently only the negotiated video frame format.
+        const val TRANSPORT_EVENT_SOURCE = 4L
+        const val TRANSPORT_VIDEO_FRAMING_COMMAND = 1L
         /** Bounds for the always-on first-occurrence dump of unknown protocol commands. */
         const val UNKNOWN_COMMAND_LOG_LIMIT = 32
         const val UNKNOWN_COMMAND_PREVIEW_BYTES = 64
