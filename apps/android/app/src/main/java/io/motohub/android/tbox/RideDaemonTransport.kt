@@ -65,6 +65,21 @@ private const val PXC_WATCHDOG_INTERVAL_MS = 2_000L
  * and it is not telling the rider anything untrue either.
  */
 private const val PXC_STALL_STREAMING_WINDOW_MS = 5_000L
+/**
+ * A PXC event only counts as a "beat" — evidence the dash keeps a control-link cadence — when it
+ * arrives while video is already flowing and stands at least this far from the previous PXC
+ * event. Handshake traffic is a burst milliseconds apart before the first frame; a keepalive
+ * cadence is one event every ~2s during streaming. This gap is what tells them apart.
+ */
+internal const val PXC_STREAMING_BEAT_MIN_GAP_MS = 1_000L
+/**
+ * How many streaming-time beats the dash must have shown before its PXC silence is allowed to
+ * kill the session. A CFDL16 (field log 2026-07-31) sends six PXC events in the first ~3s —
+ * only one of them during streaming — and then nothing, while its TFT keeps displaying video
+ * for another 25 minutes; a dash with a real keepalive cadence reaches three beats within ~6s.
+ * Three is the smallest count that separates the two shapes.
+ */
+internal const val PXC_STREAMING_CADENCE_MIN_BEATS = 3L
 private const val PUSH_FRAME_TIMEOUT_MS = 5_000L
 private const val PUSH_FRAME_SUBMIT_WAIT_MS = 1_000L
 private const val PUSH_FRAME_SUBMIT_RETRY_DELAY_MS = 5L
@@ -116,6 +131,9 @@ class RideDaemonTransport(
     private val lastPxcEventElapsed = AtomicLong(0L)
     private val lastMediaControlEventElapsed = AtomicLong(0L)
     private val lastFrameOfferedElapsed = AtomicLong(0L)
+    /** Streaming-time PXC beats seen so far (see [isStreamingPxcBeat]); the silence watchdog's
+     *  fatal verdict is gated on this reaching [PXC_STREAMING_CADENCE_MIN_BEATS]. */
+    private val pxcStreamingBeats = AtomicLong(0L)
     private val pxcWatchdogExecutor = Executors.newSingleThreadScheduledExecutor { runnable ->
         Thread(runnable, "MotoHubPxcWatchdog").apply { isDaemon = true }
     }
@@ -123,6 +141,9 @@ class RideDaemonTransport(
     private var pxcWatchdogTask: ScheduledFuture<*>? = null
     /** One report per session: the rider needs the failure once, not every tick. */
     private val pxcStallReported = AtomicBoolean(false)
+    /** One log per session for the opposite outcome: silence observed on a dash that never
+     *  showed a cadence, so the watchdog stood down instead of killing the session. */
+    private val pxcQuietDashReported = AtomicBoolean(false)
     /** Distinct (source, command) pairs already dumped this session for opcode identification. */
     private val unknownCommandsLogged =
         java.util.concurrent.ConcurrentHashMap.newKeySet<Pair<Long, Long>>()
@@ -981,6 +1002,9 @@ class RideDaemonTransport(
                                 "T-Box control link went quiet."
                         )
                     }
+                    if (isStreamingPxcBeat(previous, lastFrameOfferedElapsed.get(), now)) {
+                        pxcStreamingBeats.incrementAndGet()
+                    }
                     pxcEvents.incrementAndGet()
                 }
                 MEDIA_CONTROL_EVENT_SOURCE -> {
@@ -1193,6 +1217,12 @@ class RideDaemonTransport(
      * [PXC_STALL_FATAL_MS] of silence ends the session as a failure rather than trying to recover
      * in place: the caller's own retry path re-runs discovery and the handshake, which is the only
      * thing that has ever brought one of these links back.
+     *
+     * The verdict is gated on [pxcStreamingBeats]: a CFDL16 field log (2026-07-31) proved some
+     * dashes go PXC-silent right after the handshake *by design*, with the TFT happily displaying
+     * video for 25 more minutes — the timer must never fire on those. Only a dash that first
+     * demonstrated a streaming-time keepalive cadence ([PXC_STREAMING_CADENCE_MIN_BEATS] beats,
+     * see [isStreamingPxcBeat]) has its later silence treated as death.
      */
     private fun armPxcWatchdog(generation: Long) {
         cancelPxcWatchdog()
@@ -1226,6 +1256,24 @@ class RideDaemonTransport(
         if (lastPxc <= 0L) return
         val silence = now - lastPxc
         if (silence < PXC_STALL_FATAL_MS) return
+        // Silence only means death on a dash that talks. A CFDL16 (field log 2026-07-31) sends
+        // six PXC events in the first three seconds and then nothing, while its TFT keeps
+        // displaying video for another 25 minutes — on that shape this timer used to kill every
+        // healthy Android Auto session at the ~23s mark. Demand a demonstrated streaming-time
+        // cadence before trusting its absence; a dash that never talked still gets caught by
+        // socket errors and frame rejections when it actually dies.
+        if (pxcStreamingBeats.get() < PXC_STREAMING_CADENCE_MIN_BEATS) {
+            if (pxcQuietDashReported.compareAndSet(false, true)) {
+                ProjectionEventLog.record(
+                    "TBOX",
+                    "PXC control link quiet for ${silence}ms while streaming, but this dash " +
+                        "never kept a control-link cadence " +
+                        "(streamingBeats=${pxcStreamingBeats.get()}); not treating silence as " +
+                        "a fault. ${protocolSnapshot()}"
+                )
+            }
+            return
+        }
         if (!pxcStallReported.compareAndSet(false, true)) return
         ProjectionEventLog.error(
             "TBOX",
@@ -1250,7 +1298,9 @@ class RideDaemonTransport(
         lastPxcEventElapsed.set(0L)
         lastMediaControlEventElapsed.set(0L)
         lastFrameOfferedElapsed.set(0L)
+        pxcStreamingBeats.set(0L)
         pxcStallReported.set(false)
+        pxcQuietDashReported.set(false)
         unknownCommandsLogged.clear()
     }
 
@@ -1260,7 +1310,8 @@ class RideDaemonTransport(
             "${(now - it).coerceAtLeast(0L)}ms ago"
         } ?: "never"
         return "protocolStats=" +
-            "pxcRx=${pxcEvents.get()} (last=${age(lastPxcEventElapsed)}), " +
+            "pxcRx=${pxcEvents.get()} (last=${age(lastPxcEventElapsed)}, " +
+            "streamingBeats=${pxcStreamingBeats.get()}), " +
             "mediaCtrlRx=${mediaControlEvents.get()} (last=${age(lastMediaControlEventElapsed)}), " +
             "framesOffered=${framesOffered.get()} (last=${age(lastFrameOfferedElapsed)}), " +
             "frameTimeouts=${framesTimedOut.get()}, frameRejections=${framesRejected.get()}"
@@ -1330,6 +1381,22 @@ class RideDaemonTransport(
         }
     }
 }
+
+/**
+ * Whether a PXC event, arriving now, counts as a streaming-time keepalive beat (see
+ * [PXC_STREAMING_CADENCE_MIN_BEATS]). Three conditions, each excluding a shape that must not
+ * count: no frame offered yet excludes the handshake exchange; no previous event excludes the
+ * very first message; a gap under [PXC_STREAMING_BEAT_MIN_GAP_MS] excludes the members of a
+ * same-burst flurry, which prove one transmission, not a cadence.
+ */
+internal fun isStreamingPxcBeat(
+    previousPxcEventElapsed: Long,
+    lastFrameOfferedElapsed: Long,
+    now: Long
+): Boolean =
+    lastFrameOfferedElapsed > 0L &&
+        previousPxcEventElapsed > 0L &&
+        now - previousPxcEventElapsed >= PXC_STREAMING_BEAT_MIN_GAP_MS
 
 internal fun decodeEasyConnPackage(value: ByteArray?): String? = value
     ?.toString(Charsets.UTF_8)

@@ -86,6 +86,50 @@ class RideDaemonTransportTest {
         assertEquals(25L, RIDE_DAEMON_STARTUP_TIMEOUT_SEC)
     }
 
+    @Test
+    fun `handshake traffic before the first frame is not a streaming beat`() {
+        // No frame offered yet: whatever the dash says during the handshake proves nothing
+        // about a keepalive cadence.
+        assertFalse(isStreamingPxcBeat(previousPxcEventElapsed = 1_000L, lastFrameOfferedElapsed = 0L, now = 4_000L))
+        // First-ever PXC event: no previous beat to measure a gap from.
+        assertFalse(isStreamingPxcBeat(previousPxcEventElapsed = 0L, lastFrameOfferedElapsed = 2_000L, now = 4_000L))
+        // Same-burst flurry during streaming: one transmission, not a cadence.
+        assertFalse(isStreamingPxcBeat(previousPxcEventElapsed = 3_990L, lastFrameOfferedElapsed = 2_000L, now = 4_000L))
+    }
+
+    @Test
+    fun `a CFDL16 that goes quiet after the handshake never reaches the fatal cadence`() {
+        // Field log 2026-07-31, session 07:16: PXC at 34.700, 34.760, 34.761, 34.769, 34.831,
+        // 34.847 and 37.860 (s.ms, relative order preserved); first frame offered at 35.096.
+        // Only the 37.860 heartbeat arrives during streaming with a real gap -> one beat, and
+        // the TFT kept displaying video, so one beat must stay below the fatal threshold.
+        val events = longArrayOf(34_700, 34_760, 34_761, 34_769, 34_831, 34_847, 37_860)
+        val firstFrameAt = 35_096L
+        var beats = 0L
+        for (index in 1 until events.size) {
+            val lastFrame = if (events[index] > firstFrameAt) firstFrameAt else 0L
+            if (isStreamingPxcBeat(events[index - 1], lastFrame, events[index])) beats++
+        }
+        assertEquals(1L, beats)
+        assertTrue(beats < PXC_STREAMING_CADENCE_MIN_BEATS)
+    }
+
+    @Test
+    fun `a dash with a 2s keepalive cadence arms the silence watchdog`() {
+        // The simulator (and per open-cfmoto a CFDL26) heartbeats about every 2s during
+        // streaming; that shape must still earn the fatal verdict when it later goes silent.
+        val firstFrameAt = 5_000L
+        var previous = 4_000L
+        var beats = 0L
+        var now = 6_000L
+        repeat(4) {
+            if (isStreamingPxcBeat(previous, firstFrameAt, now)) beats++
+            previous = now
+            now += 2_000L
+        }
+        assertTrue(beats >= PXC_STREAMING_CADENCE_MIN_BEATS)
+    }
+
     private fun captureRequest(width: Int, height: Int): ByteArray = ByteBuffer
         .allocate(204)
         .order(ByteOrder.LITTLE_ENDIAN)
