@@ -14,6 +14,7 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.media.MediaMetadata
+import android.media.VolumeProvider
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Handler
@@ -55,6 +56,7 @@ class MediaButtonBridge(
         .build()
 
     private var session: MediaSession? = null
+    private var volumeProvider: VolumeProvider? = null
     private var volumeObserver: ContentObserver? = null
     private var focusRequest: AudioFocusRequest? = null
     private var silentTrack: AudioTrack? = null
@@ -238,6 +240,7 @@ class MediaButtonBridge(
         } else {
             log("[BTN] volume keys are not delivered by this dashboard; leaving the media volume alone")
         }
+        installRemoteVolume()
         val granted = requestMediaFocus()
         startSilentTrack()
         session?.isActive = true
@@ -410,6 +413,10 @@ class MediaButtonBridge(
         cancelMediaNotification()
         stopSilentTrack()
         handler.removeCallbacks(volumePoll)
+        if (volumeProvider != null) {
+            try { session?.setPlaybackToLocal(audioAttributes) } catch (_: Throwable) {}
+            volumeProvider = null
+        }
         try { focusRequest?.let(audioManager::abandonAudioFocusRequest) } catch (_: Throwable) {}
         focusRequest = null
         if (previousVolume >= 0) {
@@ -431,6 +438,74 @@ class MediaButtonBridge(
         ignoreVolumeChanges = true
         try { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, pinnedVolume, 0) } catch (_: Throwable) {}
         handler.postDelayed({ ignoreVolumeChanges = false }, 150)
+        volumeProvider?.currentVolume = pinnedVolume
+    }
+
+    /**
+     * Routes the PHONE's own volume keys away from the pinned stream while capture holds it.
+     *
+     * With a local-playback session the phone's hardware volume keys write straight into
+     * STREAM_MUSIC — the exact stream the pin watches — so every press was read back as a
+     * handlebar gesture (field report 2026-07-31: the rider's volume keys drove the Ride
+     * Dashboard, showing up as whatever press the calibration had bound to the volume
+     * gestures). A remote-volume session makes the system hand those key presses to this
+     * [VolumeProvider] instead, where they do what volume keys must do: move the rider's real
+     * listening volume, with the pin following so gesture detection never sees them.
+     *
+     * The motorcycle is unaffected: dashes change the stream through the Bluetooth stack
+     * (AVRCP absolute-volume lands in AudioService directly, never in a session's
+     * VolumeProvider), so their presses still drift the pinned stream and stay readable as
+     * gestures by [consumeVolumeChange]. The one stack-dependent assumption is that this
+     * session stays the system's volume-key target — the same always-playing appearance the
+     * keep-alive already defends for AVRCP routing.
+     */
+    private fun installRemoteVolume() {
+        val max = runCatching { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
+            .getOrDefault(15).coerceAtLeast(1)
+        val current = runCatching { audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) }
+            .getOrDefault(max / 2).coerceIn(0, max)
+        val provider = object : VolumeProvider(VOLUME_CONTROL_ABSOLUTE, max, current) {
+            override fun onAdjustVolume(direction: Int) {
+                if (direction == 0) return
+                handler.post { onPhoneVolumeKey(direction) }
+            }
+
+            override fun onSetVolumeTo(volume: Int) {
+                handler.post { onPhoneVolumeSet(volume) }
+            }
+        }
+        try {
+            session?.setPlaybackToRemote(provider)
+            volumeProvider = provider
+            log("[BTN] phone volume keys rerouted: they move the listening volume, never the handlebar")
+        } catch (failure: Throwable) {
+            log("[BTN] remote volume install failed (${failure.message}); phone volume keys may still register as presses")
+        }
+    }
+
+    /** One phone volume-key press: step the real listening volume, same stride the OS would use. */
+    private fun onPhoneVolumeKey(direction: Int) {
+        if (!captureActive) return
+        val max = runCatching { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
+            .getOrDefault(15).coerceAtLeast(1)
+        // One hardware-key press moves about a fifteenth of the range whatever the scale
+        // (1 step of 15, ten of 160 on a OnePlus CPH2653) — same rule as interpretVolumeDelta.
+        val step = maxOf(max / 15, 1)
+        val base = if (captureActive && pinnedVolume >= 0) {
+            pinnedVolume
+        } else {
+            runCatching { audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) }.getOrDefault(max / 2)
+        }
+        val target = (base + direction * step).coerceIn(0, max)
+        setListeningVolume(target)
+        log("[BTN] phone volume key ${if (direction > 0) "up" else "down"} -> listening volume $target/$max (not a handlebar press)")
+    }
+
+    /** The phone's volume dialog slider aimed at this session: a real listening-volume change. */
+    private fun onPhoneVolumeSet(volume: Int) {
+        if (!captureActive) return
+        setListeningVolume(volume)
+        log("[BTN] phone volume slider -> listening volume $volume (not a handlebar press)")
     }
 
     /**
@@ -459,6 +534,7 @@ class MediaButtonBridge(
             } finally {
                 handler.postDelayed({ ignoreVolumeChanges = false }, 150)
             }
+            volumeProvider?.currentVolume = v
         } catch (e: Exception) {
             log("[BTN] setListeningVolume failed: $e")
         }
