@@ -21,6 +21,38 @@ enum class LogLevel {
     ERROR
 }
 
+/**
+ * Guesses a level for a message written by code that has none (the ported AAP stack).
+ *
+ * Deliberately conservative about ERROR: a word matcher cannot tell a fault from a line that
+ * merely counts faults, so anything reporting a zero count, or an ordinary socket teardown,
+ * stays below ERROR. Callers must not report the result to telemetry either way - see
+ * [ProjectionEventLog.external].
+ */
+internal fun classifyExternalMessage(message: String): LogLevel {
+    val text = message.lowercase()
+    // "dropped: 0", "0 errors", "failures=0" - a counter at rest is the opposite of a fault,
+    // and reading it as one is how a healthy session filled the log with red lines.
+    val countsNothing = ZERO_COUNT_PATTERN.containsMatchIn(text)
+    val teardown = text.contains("socket closed") || text.contains("stream closed") ||
+        text.contains("ended: socket") || text.contains("interrupted")
+    return when {
+        countsNothing -> LogLevel.INFO
+        text.contains("timed out") || text.contains("timeout") -> LogLevel.ERROR
+        // A teardown mentioning "failed"/"closed" during a normal stop is not a fault.
+        teardown -> LogLevel.WARNING
+        text.contains("failed") || text.contains("error") || text.contains("unable to") ->
+            LogLevel.ERROR
+        text.contains("warning") || text.contains("dropped") || text.contains("retry") ||
+            text.contains("retrying") -> LogLevel.WARNING
+        else -> LogLevel.INFO
+    }
+}
+
+/** Matches "<word>: 0", "<word>=0" and "0 <word>" so a zero counter reads as the non-event it is. */
+private val ZERO_COUNT_PATTERN =
+    Regex("(?:dropped|failed|failures|errors|timeouts|rejections|rejected)\\s*[:=]\\s*0\\b|\\b0\\s+(?:dropped|failures|errors|timeouts)\\b")
+
 data class ProjectionEvent(
     val timestampMillis: Long,
     val source: String,
@@ -36,7 +68,26 @@ data class ProjectionEvent(
     val sequence: Long = 0
 )
 
-/** Persistent application-wide diagnostic log exposed directly in the UI. */
+/**
+ * Persistent application-wide diagnostic log exposed directly in the UI.
+ *
+ * **What each level means** - the contract every call site is expected to honour, because
+ * telemetry and the log screen both read it as if it were true:
+ *
+ * - [debug] - per-event detail: protocol frames, touch samples, link measurements. High volume
+ *   by nature; use the `() -> String` overload so nothing is formatted when logging is off.
+ * - [record] (INFO) - state transitions worth reading a year from now: a session started, a
+ *   profile was selected, a geometry was learned.
+ * - [warning] - degraded but alive: something was retried, dropped, or fell back. The session
+ *   continues.
+ * - [error] - **fatal to the session, and reported to telemetry.** Not "an exception was
+ *   caught": a caught exception the app recovered from is a [warning]. If a rider would not
+ *   have noticed it, it is not an error.
+ *
+ * [external] exists for message streams this app does not author (the ported AAP stack), which
+ * arrive as plain strings with no level at all. Those are classified by their wording, which is
+ * a guess - so they are never reported to telemetry, however they end up being displayed.
+ */
 object ProjectionEventLog {
     // Oldest events drop automatically once this is exceeded (a ring buffer, not a manual
     // clear) - lowered from 2_500 after a very long/verbose session made the log screen
@@ -96,19 +147,31 @@ object ProjectionEventLog {
         )
     }
 
+    /**
+     * True when anything at all is being recorded. Public so hot call sites can skip building
+     * a message they would only throw away; cached in [MotoHubSettings], so it is cheap enough
+     * to call per protocol event.
+     */
+    fun isLoggingEnabled(): Boolean =
+        appContext?.let(MotoHubSettings::loggingEnabled) ?: true
+
     fun record(
         source: String,
         message: String,
         level: LogLevel = LogLevel.INFO,
-        throwable: Throwable? = null
+        throwable: Throwable? = null,
+        /**
+         * Whether an ERROR here is worth waking someone up for. False for levels that were
+         * GUESSED from wording rather than chosen by a call site - see [external].
+         */
+        reportToTelemetry: Boolean = true
     ) {
         // Master switch (Settings > Diagnostics > Enable logging): when off, nothing is
         // written anywhere - not Logcat, not memory, not the log file - not just the
         // verbose extras. appContext is only null for the instant before initialize()
         // runs, which never calls record(); defaulting to enabled there is unreachable
         // in practice but keeps this fail-open rather than silently swallowing events.
-        val loggingEnabled = appContext?.let(MotoHubSettings::loggingEnabled) ?: true
-        if (!loggingEnabled) return
+        if (!isLoggingEnabled()) return
         val detail = redact(buildString {
             append(message)
             if (throwable != null) {
@@ -116,7 +179,7 @@ object ProjectionEventLog {
                 append(Log.getStackTraceString(throwable))
             }
         })
-        if (level == LogLevel.ERROR) {
+        if (level == LogLevel.ERROR && reportToTelemetry) {
             SentryIntegration.captureDiagnosticError(source, detail)
         }
         when (level) {
@@ -182,11 +245,33 @@ object ProjectionEventLog {
 
     fun debug(source: String, message: String) = record(source, message, LogLevel.DEBUG)
 
+    /**
+     * Per-event debug whose message is only built when logging is on. The hot callers - the
+     * T-Box protocol callback, touch normalisation - used to format their string first and
+     * discard it inside [record], paying for a log nobody asked for.
+     */
+    inline fun debug(source: String, message: () -> String) {
+        if (!isLoggingEnabled()) return
+        debug(source, message())
+    }
+
     fun warning(source: String, message: String, throwable: Throwable? = null) =
         record(source, message, LogLevel.WARNING, throwable)
 
     fun error(source: String, message: String, throwable: Throwable? = null) =
         record(source, message, LogLevel.ERROR, throwable)
+
+    /**
+     * Records a message from a stream this app does not author - the ported AAP stack hands
+     * out plain strings with no level - by GUESSING a level from its wording.
+     *
+     * Never reported to telemetry, precisely because it is a guess: "Frames dropped: 0" and
+     * "head unit server poll ended: Socket closed" both read as failures to a word matcher,
+     * and every one of them used to raise a Sentry event indistinguishable from a real fault.
+     * The guess is still good enough to colour the log screen, which is all it is for.
+     */
+    fun external(source: String, message: String) =
+        record(source, message, classifyExternalMessage(message), reportToTelemetry = false)
 
     fun exportText(): String {
         // From the ring, not the throttled StateFlow snapshot: an export (share sheet, the

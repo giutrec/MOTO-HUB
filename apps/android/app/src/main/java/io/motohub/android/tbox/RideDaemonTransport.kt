@@ -941,7 +941,11 @@ class RideDaemonTransport(
         }
 
         override fun onEvent(time: Long, type: Long, command: Long, payload: ByteArray?) {
-            Log.d(TAG, "T-Box event type=$type command=$command bytes=${payload?.size ?: 0}")
+            // Both guarded: this runs for EVERY protocol event, touch moves included, and an
+            // unconditional interpolated string here is paid whether or not anything reads it.
+            if (Log.isLoggable(TAG, Log.DEBUG)) {
+                Log.d(TAG, "T-Box event type=$type command=$command bytes=${payload?.size ?: 0}")
+            }
             val verbose = MotoHubSettings.verboseTBoxLogging(appContext)
             val now = SystemClock.elapsedRealtime()
             val sequence = when (type) {
@@ -968,12 +972,14 @@ class RideDaemonTransport(
             }
             if (type == PXC_EVENT_SOURCE || type == MEDIA_CONTROL_EVENT_SOURCE) {
                 val commandName = protocolCommandName(type, command)
-                ProjectionEventLog.debug(
-                    "TBOX",
+                // Lambda form: this is the single highest-volume log line in the app (one per
+                // protocol event, and a drag on the TFT is a stream of them), so the string is
+                // not built at all when logging is off.
+                ProjectionEventLog.debug("TBOX") {
                     "${protocolSourceName(type)} RX #$sequence command=" +
                         "0x${command.toString(16)} ($commandName) " +
                         "bytes=${payload?.size ?: 0}."
-                )
+                }
                 // Unrecognized opcode: the name table only knows a handful of commands (see
                 // protocolCommandName), so most CFDL26/CFDL16 control messages show as
                 // UNKNOWN. Dumping the payload here is how those get identified later - it's
@@ -1006,10 +1012,9 @@ class RideDaemonTransport(
                 }
             }
             if (type == PXC_EVENT_SOURCE) {
-                ProjectionEventLog.debug(
-                    "TBOX",
+                ProjectionEventLog.debug("TBOX") {
                     "PXC event received: command=$command, bytes=${payload?.size ?: 0}."
-                )
+                }
             }
             if (type == PXC_EVENT_SOURCE && command == PXC_HUD_CONFIG_COMMAND) {
                 val capabilities = payload?.let(::decodeTBoxCapabilities)

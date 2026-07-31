@@ -87,4 +87,45 @@ class ProjectionEventLogRedactionTest {
         assertFalse(redacted.contains("sk-or-v1-0123456789abcdef"))
         assertTrue(redacted.contains("<redacted-key>"))
     }
+
+    // ── external (unlevelled) message classification ─────────────────────────────────────────
+
+    @Test
+    fun classifiesRealFaultsAsErrors() {
+        assertEquals(LogLevel.ERROR, classifyExternalMessage("[AA] failed to bind :5288 — EADDRINUSE"))
+        assertEquals(LogLevel.ERROR, classifyExternalMessage("[AA] handshake timed out after 10s"))
+        assertEquals(LogLevel.ERROR, classifyExternalMessage("[BTN] unable to create AVRCP bridge"))
+    }
+
+    /**
+     * The line that made this worth fixing: a counter at rest reads as a fault to a word
+     * matcher, and every one of these used to be displayed red AND raise a Sentry event on a
+     * completely healthy session.
+     */
+    @Test
+    fun aCounterAtZeroIsNotAFault() {
+        assertEquals(LogLevel.INFO, classifyExternalMessage("Frames dropped: 0"))
+        assertEquals(LogLevel.INFO, classifyExternalMessage("frameTimeouts=0, frameRejections=0"))
+        assertEquals(LogLevel.INFO, classifyExternalMessage("0 errors so far"))
+    }
+
+    @Test
+    fun anOrdinaryTeardownIsNotAFault() {
+        // Stopping the receiver closes its sockets; the stack reports that in the vocabulary
+        // of failure, and it is not one.
+        assertEquals(LogLevel.WARNING, classifyExternalMessage("[AA] accept ended: Socket closed"))
+        assertEquals(LogLevel.WARNING, classifyExternalMessage("[AA] read failed: stream closed"))
+    }
+
+    @Test
+    fun degradedButAliveStaysAWarning() {
+        assertEquals(LogLevel.WARNING, classifyExternalMessage("[BTN] key=23 dropped; input not ready"))
+        assertEquals(LogLevel.WARNING, classifyExternalMessage("EasyConn attempt 1/3 — retrying in 500ms"))
+    }
+
+    @Test
+    fun ordinaryProgressStaysInformational() {
+        assertEquals(LogLevel.INFO, classifyExternalMessage("[AA] WirelessServer listening on :5288"))
+        assertEquals(LogLevel.INFO, classifyExternalMessage("[AA] first decoded video frame received"))
+    }
 }

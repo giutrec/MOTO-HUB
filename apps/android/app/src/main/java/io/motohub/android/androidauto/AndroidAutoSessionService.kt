@@ -714,10 +714,9 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
             return
         }
         if (event.action != 2 && mapped != (event.x to event.y)) {
-            ProjectionEventLog.debug(
-                "TOUCH",
+            ProjectionEventLog.debug("TOUCH") {
                 "Normalised raw=(${event.x},${event.y}) to AVC=(${mapped.first},${mapped.second})."
-            )
+            }
         }
         receiver?.sendTouch(event.action, event.pointerId, mapped.first, mapped.second)
     }
@@ -1042,16 +1041,12 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
             .build()
     }
 
-    private fun log(message: String) {
-        val normalized = message.lowercase()
-        when {
-            normalized.contains("failed") || normalized.contains("error") ||
-                normalized.contains("timed out") -> ProjectionEventLog.error("AAP", message)
-            normalized.contains("warning") || normalized.contains(" W: ".lowercase()) ||
-                normalized.contains("dropped") -> ProjectionEventLog.warning("AAP", message)
-            else -> ProjectionEventLog.record("AAP", message)
-        }
-    }
+    /**
+     * Sink for the ported AAP stack and the bridges it drives, which emit plain strings with no
+     * level. Classified by wording and deliberately kept out of telemetry: the guess used to
+     * raise a Sentry event for every line that merely contained the word "dropped".
+     */
+    private fun log(message: String) = ProjectionEventLog.external("AAP", message)
 
     override fun attachPreview(surface: Surface, width: Int, height: Int) {
         compositor?.setPreview(surface, width, height)

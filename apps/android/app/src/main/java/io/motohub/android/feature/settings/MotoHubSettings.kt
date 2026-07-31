@@ -255,7 +255,7 @@ object MotoHubSettings {
     // justified defaulting off (HUID/uuid in the raw CLIENT_INFO) are redacted since the same
     // change. A rider who turns it off stays off - this is a default, not an override.
     fun verboseTBoxLogging(context: Context): Boolean =
-        preferences(context).getBoolean(KEY_VERBOSE_TBOX_LOGGING, true)
+        cachedBoolean(context, KEY_VERBOSE_TBOX_LOGGING, true)
 
     fun setVerboseTBoxLogging(context: Context, enabled: Boolean) {
         preferences(context).edit().putBoolean(KEY_VERBOSE_TBOX_LOGGING, enabled).apply()
@@ -269,7 +269,7 @@ object MotoHubSettings {
      * turn logging off entirely rather than just dial back its verbosity.
      */
     fun loggingEnabled(context: Context): Boolean =
-        preferences(context).getBoolean(KEY_LOGGING_ENABLED, true)
+        cachedBoolean(context, KEY_LOGGING_ENABLED, true)
 
     fun setLoggingEnabled(context: Context, enabled: Boolean) {
         preferences(context).edit().putBoolean(KEY_LOGGING_ENABLED, enabled).apply()
@@ -352,4 +352,44 @@ object MotoHubSettings {
         PREFERENCES,
         Context.MODE_PRIVATE
     )
+
+    // ── cached flags ─────────────────────────────────────────────────────────────────────────
+    //
+    // SharedPreferences serves reads from memory, but every call still takes its internal lock
+    // and hashes the key - and these two flags are read on the hottest paths in the app: the
+    // logging master switch on EVERY ProjectionEventLog.record(), and the verbose flag on every
+    // T-Box protocol event, touch moves included. The values change only when the rider flips a
+    // switch, so they are cached and invalidated by the preference change itself. Anything
+    // read once per session does NOT belong here - the plain accessors stay the default.
+
+    private val flagCache = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
+    /**
+     * Held in a field on purpose: SharedPreferences keeps only a WEAK reference to its listeners,
+     * so a listener that is not referenced anywhere is collected and the cache silently goes
+     * stale - a flag the rider turned off would keep reading as on until the process restarts.
+     */
+    private val cacheInvalidation =
+        android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == null) flagCache.clear() else flagCache.remove(key)
+        }
+
+    @Volatile
+    private var cacheInvalidationRegistered = false
+
+    private fun cachedBoolean(context: Context, key: String, default: Boolean): Boolean {
+        flagCache[key]?.let { return it }
+        val preferences = preferences(context)
+        if (!cacheInvalidationRegistered) {
+            synchronized(flagCache) {
+                if (!cacheInvalidationRegistered) {
+                    preferences.registerOnSharedPreferenceChangeListener(cacheInvalidation)
+                    cacheInvalidationRegistered = true
+                }
+            }
+        }
+        val value = preferences.getBoolean(key, default)
+        flagCache[key] = value
+        return value
+    }
 }
