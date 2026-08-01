@@ -285,7 +285,8 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                 displayMode = displayMode,
                 sourceGeometry = capabilityProfile.video,
                 touchSurface = capabilityProfile.touchSurface,
-                screenMargins = screenMargins
+                screenMargins = screenMargins,
+                contentMargins = capabilityProfile.aspectMargins
             )
             check(activeCompositor.start()) { "Android Auto compositor failed to initialize (EGL/GL)" }
             val decoderSurface = activeCompositor.inputSurface

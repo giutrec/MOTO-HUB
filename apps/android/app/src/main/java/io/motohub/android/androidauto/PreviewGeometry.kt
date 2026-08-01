@@ -46,6 +46,28 @@ internal fun calculatePreviewViewport(
     )
 }
 
+/**
+ * Rewrites a viewport that was laid out against the content area so it SAMPLES that area out of
+ * the coded frame, instead of stretching the whole frame - margins included - over it.
+ *
+ * The offset is half the margin on each axis because Android Auto centres its UI in what it was
+ * given (see [AaAspectMargins]). Returns the viewport untouched when there are no margins, which
+ * is every session that did not need aspect matching.
+ */
+internal fun PreviewViewport.sampleContentOf(
+    coded: DisplayGeometry,
+    margins: AaAspectMargins
+): PreviewViewport {
+    if (!margins.any) return this
+    return copy(
+        source = coded,
+        sourceLeft = (margins.width / 2).coerceIn(0, coded.width - 1),
+        sourceTop = (margins.height / 2).coerceIn(0, coded.height - 1),
+        sourceWidth = (coded.width - margins.width).coerceIn(1, coded.width),
+        sourceHeight = (coded.height - margins.height).coerceIn(1, coded.height)
+    )
+}
+
 internal fun calculateMarginCropViewport(
     canvas: DisplayGeometry,
     source: DisplayGeometry,

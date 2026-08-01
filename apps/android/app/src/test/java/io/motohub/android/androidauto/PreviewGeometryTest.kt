@@ -180,6 +180,50 @@ class PreviewGeometryTest {
         assertEquals(799 to 431, crop.mapToSource(799, 383))
     }
 
+    /**
+     * The black-bands bug: Android Auto was told to keep margins clear, drew its UI centred inside
+     * them, and the compositor then copied the whole coded frame - black rows and all - onto the
+     * dashboard. No resolution or display mode could hide them because every mode sampled the
+     * full frame.
+     */
+    @Test
+    fun `content margins are sampled out of the coded frame, centred`() {
+        val coded = DisplayGeometry(720, 1280)
+        val margins = AaAspectMargins(0, 424) // 720x856 usable, matching an 800x951 panel
+        val canvas = DisplayGeometry(800, 944)
+
+        val viewport = calculatePreviewViewport(canvas, DisplayGeometry(720, 856))
+            .sampleContentOf(coded, margins)
+
+        assertEquals(coded, viewport.source)
+        assertEquals(0, viewport.sourceLeft)
+        assertEquals(212, viewport.sourceTop) // half the margin, not zero and not all of it
+        assertEquals(720, viewport.sourceWidth)
+        assertEquals(856, viewport.sourceHeight)
+    }
+
+    /** Touch has to follow the crop, or every tap lands half a margin off. */
+    @Test
+    fun `the first drawn pixel maps to where Android Auto starts drawing`() {
+        val coded = DisplayGeometry(720, 1280)
+        val margins = AaAspectMargins(0, 424)
+        val viewport = calculatePreviewViewport(DisplayGeometry(800, 944), DisplayGeometry(720, 856))
+            .sampleContentOf(coded, margins)
+
+        val topLeft = viewport.mapToSource(viewport.x, viewport.y)
+
+        assertEquals(0 to 212, topLeft)
+        // ...and subtracting the same half-margin puts it back at Android Auto's own origin.
+        assertEquals(0, topLeft!!.second - margins.height / 2)
+    }
+
+    @Test
+    fun `a viewport without content margins is left exactly as it was`() {
+        val viewport = calculatePreviewViewport(DisplayGeometry(800, 480), DisplayGeometry(800, 480))
+
+        assertEquals(viewport, viewport.sampleContentOf(DisplayGeometry(800, 480), AaAspectMargins.NONE))
+    }
+
     @Test
     fun `fit stretch and crop cover every supported source and projection shape`() {
         val cases = listOf(

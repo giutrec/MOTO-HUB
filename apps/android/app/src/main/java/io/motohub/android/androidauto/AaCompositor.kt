@@ -24,7 +24,23 @@ class AaCompositor(
     private val displayMode: AndroidAutoDisplayMode,
     private val sourceGeometry: DisplayGeometry,
     touchSurface: DisplayGeometry = sourceGeometry,
-    private var screenMargins: TBoxScreenMargins = TBoxScreenMargins.NONE
+    private var screenMargins: TBoxScreenMargins = TBoxScreenMargins.NONE,
+    /**
+     * Coded-frame pixels Android Auto was told not to draw into (see [AaAspectMargins]).
+     *
+     * They have to be cut out here as well, and this is the whole reason black bands survived
+     * every resolution and display mode: advertising the margins only moves Android Auto's UI
+     * into a smaller, CENTRED area of the coded frame, it does not shrink the frame. Sampling all
+     * of it copied the rows Android Auto had left black straight onto the dashboard. Confirmed
+     * against open-cfmoto, which crops the same way in its own shader and documents the split as
+     * even (DHU: marginWidth 280 becomes 140 + 140).
+     *
+     * Independent of [screenMargins], which is motorcycle furniture on the canvas side and, when
+     * it is advertised at all, is asymmetric - never split evenly. In practice only one of the two
+     * is ever non-zero: AUTO aspect matching advertises no screen margins, MANUAL computes no
+     * aspect margins.
+     */
+    private val contentMargins: AaAspectMargins = AaAspectMargins.NONE
 ) {
     private val thread = HandlerThread("aa-compositor").apply { start() }
     private val handler = Handler(thread.looper)
@@ -139,7 +155,14 @@ class AaCompositor(
                 log(
                     "[COMPOSITOR] TFT=${cw}x$ch source=${sw}x$sh mode=$displayMode " +
                         "viewport=${tftViewport?.width}x${tftViewport?.height} " +
-                        "@(${tftViewport?.x},${tftViewport?.y})"
+                        "@(${tftViewport?.x},${tftViewport?.y})" +
+                        if (contentMargins.any) {
+                            " content=${contentSource().width}x${contentSource().height}" +
+                                "@(${contentLeft()},${contentTop()}) " +
+                                "[AA margins ${contentMargins.width}x${contentMargins.height} cropped out]"
+                        } else {
+                            " (no AA content margins)"
+                        }
                 )
                 if (hasContent) drawFrame()
             } catch (failure: Throwable) {
@@ -261,15 +284,42 @@ class AaCompositor(
         // AndroidAutoCapabilityProfile.touchSurface and setTouchSurface's caller), so the true
         // left/top offset is screenMargins.left/top - NOT (srcW - uiW) / 2, which silently assumed
         // the trim was split evenly and was wrong for any asymmetric margin (e.g. left=0, right=100).
-        val uiX = sourceX - screenMargins.left
-        val uiY = sourceY - screenMargins.top
+        //
+        // Content margins are the opposite case and add to that offset: Android Auto does split
+        // them evenly, so its origin sits half a margin into the coded frame. A touch mapped
+        // without this lands half a margin too low on every panel that needed aspect matching -
+        // the very panels this whole path exists for.
+        val uiX = sourceX - screenMargins.left - contentLeft()
+        val uiY = sourceY - screenMargins.top - contentTop()
         if (uiX !in 0 until uiW || uiY !in 0 until uiH) return null
         return uiX to uiY
     }
 
+    /** The coded frame minus the margins Android Auto was told to keep clear. */
+    private fun codedSource() = DisplayGeometry(
+        width = srcW.takeIf { it > 0 } ?: sourceGeometry.width,
+        height = srcH.takeIf { it > 0 } ?: sourceGeometry.height
+    )
+
+    private fun contentSource(): DisplayGeometry {
+        val coded = codedSource()
+        return DisplayGeometry(
+            width = (coded.width - contentMargins.width).coerceIn(1, coded.width),
+            height = (coded.height - contentMargins.height).coerceIn(1, coded.height)
+        )
+    }
+
+    /** Android Auto splits the advertised margin evenly, so its UI starts half a margin in. */
+    private fun contentLeft(): Int = contentMargins.width / 2
+    private fun contentTop(): Int = contentMargins.height / 2
+
+    /** See [sampleContentOf]; bound to this compositor's coded frame and margins. */
+    private fun PreviewViewport.sampleContent(): PreviewViewport =
+        sampleContentOf(codedSource(), contentMargins)
+
     private fun configureTftViewport() {
         val canvas = DisplayGeometry(canvasW, canvasH)
-        val source = DisplayGeometry(srcW, srcH)
+        val source = contentSource()
         val available = DisplayGeometry(
             width = (canvas.width - screenMargins.left - screenMargins.right).coerceAtLeast(1),
             height = (canvas.height - screenMargins.top - screenMargins.bottom).coerceAtLeast(1)
@@ -280,9 +330,11 @@ class AaCompositor(
         tftClipW = available.width
         tftClipH = available.height
         tftViewport = when (displayMode) {
-            // The touch/UI surface describes input coordinates only. It must not trim the video:
-            // on an 800x384 TFT using an 800x480 AA stream, trimming it made FIT and STRETCH
-            // indistinguishable and exposed an inactive strip at the bottom of the display.
+            // The touch/UI surface still describes input coordinates only, and must not trim the
+            // video: on an 800x384 TFT using an 800x480 AA stream, trimming by it made FIT and
+            // STRETCH indistinguishable and exposed an inactive strip at the bottom. What IS
+            // trimmed here is [contentMargins] - pixels Android Auto itself leaves black, which
+            // is a different quantity that only ever shrinks the source it was computed from.
             AndroidAutoDisplayMode.LETTERBOX -> calculatePreviewViewport(available, source).offsetBy(
                 screenMargins.left,
                 screenMargins.top
@@ -301,30 +353,39 @@ class AaCompositor(
                 screenMargins.left,
                 screenMargins.top
             )
-        }
+        }.sampleContent()
+        tftViewport?.let { configureCropMatrix(tftMatrix, it) }
         computePreviewViewport()
     }
 
-    private fun configureCropMatrix(viewport: PreviewViewport) {
-        Matrix.setIdentityM(tftMatrix, 0)
-        tftMatrix[0] = viewport.sourceWidth.toFloat() / viewport.source.width
-        tftMatrix[5] = viewport.sourceHeight.toFloat() / viewport.source.height
-        tftMatrix[12] = viewport.sourceLeft.toFloat() / viewport.source.width
-        tftMatrix[13] = viewport.sourceTop.toFloat() / viewport.source.height
+    /**
+     * Points the texture sampler at [viewport]'s sub-rect of the coded frame.
+     *
+     * A no-op for a viewport that covers the whole frame, which is what every viewport was until
+     * content margins existed - and why this went unnoticed as dead code.
+     */
+    private fun configureCropMatrix(target: FloatArray, viewport: PreviewViewport) {
+        Matrix.setIdentityM(target, 0)
+        target[0] = viewport.sourceWidth.toFloat() / viewport.source.width
+        target[5] = viewport.sourceHeight.toFloat() / viewport.source.height
+        target[12] = viewport.sourceLeft.toFloat() / viewport.source.width
+        target[13] = viewport.sourceTop.toFloat() / viewport.source.height
     }
 
     private fun computePreviewViewport() {
         if (previewCanvasW <= 0 || previewCanvasH <= 0) return
-        val source = previewSourceGeometry()
         val viewport = calculatePreviewViewport(
             canvas = DisplayGeometry(previewCanvasW, previewCanvasH),
-            source = source
+            source = previewSourceGeometry()
         )
         previewVpX = viewport.x
         previewVpY = viewport.y
         previewVpW = viewport.width
         previewVpH = viewport.height
-        Matrix.setIdentityM(previewMatrix, 0)
+        // The phone preview crops exactly as the dashboard does. It is what the rider checks the
+        // framing against before riding, so showing it the margins the TFT will not get would
+        // make it lie in the one direction that matters.
+        configureCropMatrix(previewMatrix, viewport.sampleContent())
     }
 
     private fun currentPreviewViewport() = PreviewViewport(
@@ -335,12 +396,10 @@ class AaCompositor(
         source = previewSourceGeometry(),
         sourceLeft = 0,
         sourceTop = 0
-    )
+    ).sampleContent()
 
-    private fun previewSourceGeometry() = DisplayGeometry(
-        width = srcW.takeIf { it > 0 } ?: sourceGeometry.width,
-        height = srcH.takeIf { it > 0 } ?: sourceGeometry.height
-    )
+    /** What the preview lays out against: the content area, not the coded frame. */
+    private fun previewSourceGeometry() = contentSource()
 
     private fun PreviewViewport.offsetBy(dx: Int, dy: Int): PreviewViewport = copy(
         x = x + dx,

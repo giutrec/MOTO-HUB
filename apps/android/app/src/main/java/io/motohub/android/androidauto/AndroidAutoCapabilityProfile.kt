@@ -43,6 +43,9 @@ data class AaAspectMargins(val width: Int, val height: Int) {
         require(width >= 0 && height >= 0) { "Aspect margins cannot be negative" }
     }
 
+    /** Whether anything is actually given up, and therefore has to be cropped back out. */
+    val any: Boolean get() = width > 0 || height > 0
+
     companion object {
         val NONE = AaAspectMargins(0, 0)
 
