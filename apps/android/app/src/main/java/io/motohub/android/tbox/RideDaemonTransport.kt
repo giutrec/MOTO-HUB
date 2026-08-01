@@ -1023,19 +1023,21 @@ class RideDaemonTransport(
                         "0x${command.toString(16)} ($commandName) " +
                         "bytes=${payload?.size ?: 0}."
                 }
-                // Unrecognized opcode: the name table only knows a handful of commands (see
-                // protocolCommandName), so most CFDL26/CFDL16 control messages show as
-                // UNKNOWN. Dumping the payload here is how those get identified later - it's
-                // exactly how open-cfmoto's own log let us learn what several of these opcodes
-                // are, which this app currently can't name either. With verbose logging every
-                // occurrence is dumped in full; without it, the first occurrence of each
-                // distinct unknown command is still dumped (truncated) so a normal user's
-                // problem report already contains the opcode evidence.
-                if (commandName == "UNKNOWN" && payload != null && payload.isNotEmpty()) {
+                // Any control message that carries a body is worth dumping, named or not.
+                // This used to fire only on UNKNOWN opcodes, which tied the evidence to the
+                // gaps in the name table: naming a command would have silently switched off
+                // the dump of the one payload we can actually read - the media CAPTURE_CONFIG,
+                // whose bytes are how the video framing work was diagnosed. The control plane
+                // is a handful of messages per session, so dumping all of them costs nothing.
+                // With verbose logging every occurrence is dumped in full; without it, the
+                // first occurrence of each distinct command is still dumped (truncated) so a
+                // normal user's problem report already carries the evidence.
+                if (payload != null && payload.isNotEmpty()) {
                     if (verbose) {
                         ProjectionEventLog.debug(
                             "TBOX",
-                            "Unknown command 0x${command.toString(16)} payload (verbose): ${payload.toDiagnosticHex()}."
+                            "$commandName command 0x${command.toString(16)} payload (verbose): " +
+                                payload.toDiagnosticHex() + "."
                         )
                     } else if (
                         unknownCommandsLogged.size < UNKNOWN_COMMAND_LOG_LIMIT &&
@@ -1048,8 +1050,8 @@ class RideDaemonTransport(
                         val truncated = if (payload.size > preview.size) "…(+${payload.size - preview.size}B)" else ""
                         ProjectionEventLog.record(
                             "TBOX",
-                            "Unknown ${protocolSourceName(type)} command 0x${command.toString(16)} " +
-                                "first seen; payload=${preview.toDiagnosticHex()}$truncated."
+                            "${protocolSourceName(type)} command 0x${command.toString(16)} " +
+                                "($commandName) first seen; payload=${preview.toDiagnosticHex()}$truncated."
                         )
                     }
                 }
@@ -1371,14 +1373,42 @@ class RideDaemonTransport(
             else -> "UNKNOWN"
         }
 
-        fun protocolCommandName(type: Long, command: Long): String = when {
-            type == PXC_EVENT_SOURCE && command == PXC_HEARTBEAT_COMMAND -> "HEARTBEAT"
-            type == PXC_EVENT_SOURCE && command == PXC_HEARTBEAT_ACK_COMMAND -> "HEARTBEAT_ACK"
-            type == PXC_EVENT_SOURCE && command == PXC_CLOCK_KEEPALIVE_COMMAND -> "CLOCK_KEEPALIVE"
-            type == MEDIA_CONTROL_EVENT_SOURCE && command == MEDIA_CONTROL_PING_COMMAND -> "PING"
-            type == MEDIA_CONTROL_EVENT_SOURCE && command == MEDIA_STREAM_START_COMMAND -> "STREAM_START"
-            else -> "UNKNOWN"
-        }
+        /**
+         * Opcodes named by the open-cflink/open-cfmoto reverse-engineering work
+         * (refs/open-cflink PxcFrame.kt and PxcHandshake.kt). Naming them here
+         * only changes what the log reads like, but a field log full of
+         * "UNKNOWN" hides which of these a dash did and did not send - which is
+         * exactly the question a T-Box investigation starts from.
+         *
+         * QUERY_SPEED is a trap worth keeping labelled: it carries
+         * {usbSpeed, wifiSpeed}, the link rate, and has nothing to do with how
+         * fast the motorcycle is going.
+         */
+        private val PXC_COMMAND_NAMES = mapOf(
+            PXC_HEARTBEAT_COMMAND to "HEARTBEAT",
+            PXC_HEARTBEAT_ACK_COMMAND to "HEARTBEAT_ACK",
+            PXC_CLOCK_KEEPALIVE_COMMAND to "CLOCK_KEEPALIVE",
+            PXC_HUD_CONFIG_COMMAND to "CLIENT_INFO",
+            0x10011L to "CLIENT_INFO_RLY",
+            0x10020L to "MEDIA_FEATURE_CFG",
+            0x10690L to "QUERY_SPEED",
+            0x103a0L to "OTA_FTP_INFO",
+            0x103e0L to "CHECK_SN",
+            0x10780L to "LOG_REPORT"
+        )
+
+        private val MEDIA_CONTROL_COMMAND_NAMES = mapOf(
+            MEDIA_CONTROL_PING_COMMAND to "PING",
+            MEDIA_STREAM_START_COMMAND to "STREAM_START",
+            MEDIA_CAPTURE_CONFIG_COMMAND to "CAPTURE_CONFIG",
+            MEDIA_TOUCH_COMMAND to "TOUCH"
+        )
+
+        fun protocolCommandName(type: Long, command: Long): String = when (type) {
+            PXC_EVENT_SOURCE -> PXC_COMMAND_NAMES[command]
+            MEDIA_CONTROL_EVENT_SOURCE -> MEDIA_CONTROL_COMMAND_NAMES[command]
+            else -> null
+        } ?: "UNKNOWN"
     }
 }
 
