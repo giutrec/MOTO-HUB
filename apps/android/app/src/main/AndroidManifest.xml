@@ -22,7 +22,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <!-- Handlebar buttons arrive as Bluetooth AVRCP; CONNECT is needed to read which audio
          devices are connected in the handlebar settings (runtime permission, Android 12+;
          minSdk is 34 so no legacy BLUETOOTH permission is needed). -->
