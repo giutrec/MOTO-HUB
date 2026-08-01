@@ -5,6 +5,9 @@
 
 >[**You can also add the FREE ADVANCED complementary app**](https://github.com/vincenzobpt/MOTO-HUB-PRO-releases)
 
+> [!NOTE]
+> **MOTO-HUB for iOS is ready for testing.** Places in the beta are handed out one at a time, so it is not downloadable from this page. [**Join us on Discord**](https://discord.gg/uCUK55nJ5v) and ask for iOS beta access.
+
 > [!WARNING]
 > **MOTO-HUB is an experimental proof-of-concept, not a production-grade product.** Day-to-day development happens on a CFMOTO **700MT-ADV** dashboard with **OnePlus 13 / Galaxy Z Fold4** phones. Behavior may be unstable, require a retry, or differ on other motorcycles, T-Box firmware versions, or phones. Do not depend on it as your only source of critical navigation information. Plan your route before riding, and use the software at your own risk.
 
