@@ -5,6 +5,15 @@ on:
   push:
     branches:
       - main
+    # main became the release line on 2026-08-01 (it used to be a stale public sync), so every
+    # push now reaches this workflow. A README or screenshot edit cannot break a Gradle build,
+    # and paying 30 minutes of Actions time for one is waste. Pull requests are deliberately
+    # left unfiltered: an outside contribution gets built whatever it touches.
+    paths-ignore:
+      - "**.md"
+      - "documentation/**"
+      - "*.png"
+      - "LICENSE"
 
 permissions:
   contents: read
