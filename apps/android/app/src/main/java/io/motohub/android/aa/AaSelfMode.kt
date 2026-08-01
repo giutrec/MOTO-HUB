@@ -49,6 +49,19 @@ object AaSelfMode {
     private const val ATTEMPT_WAIT_MS = 4_000L
     private const val POLL_INTERVAL_MS = 200L
 
+    /** The pairing sheet waits on a person reading a dialog, not on a machine answering. */
+    private const val PAIRING_WAIT_MS = 45_000L
+
+    /** How long the sheet gets to come to the front before its absence means anything. */
+    private const val SHEET_SETTLE_MS = 1_500L
+
+    /**
+     * Android Auto dials the head unit's own address, and here the head unit is this phone. The
+     * loopback address is what self-mode always used, so it is known to be reachable from
+     * Gearhead's projection client.
+     */
+    private const val PROJECTION_HOST = "127.0.0.1"
+
     /**
      * Asks Android Auto to project here, trying every entry point the installed build exposes.
      *
@@ -77,6 +90,21 @@ object AaSelfMode {
             onProgress("Android Auto $version may not support wireless projection…")
         }
         val extras = SelfModeExtras(context, port)
+
+        // The QR-pairing family first: on 17.4 it is the only one still exported and enabled, and
+        // for a bike already paired it needs nothing from the rider at all. See AaWirelessPairing.
+        val car = resolveCar(context, port, log)
+        if (car != null && AaPairingStore.isPaired(context, car.ssid)) {
+            onProgress("Asking Android Auto to project…")
+            if (AaWirelessPairing.requestProjection(context, car.bluetoothAddress, log = log)) {
+                if (awaitConnection(isConnected)) {
+                    log("[AA] Android Auto connected after the stored-car projection request.")
+                    onProgress("Android Auto is starting up…")
+                    return
+                }
+                log("[AA] stored-car request produced no connection; falling back to the older entry points.")
+            }
+        }
 
         val discovered = discoverStartupComponents(context)
         if (discovered.isEmpty()) {
@@ -141,6 +169,63 @@ object AaSelfMode {
         }
 
         if (isConnected()) return
+
+        // A pairing that was offered but never recorded is not proof it failed: the rider may have
+        // tapped Continue after PAIRING_WAIT_MS ran out, in which case Android Auto has the bike
+        // stored and only needs asking. Retried here rather than up front so a phone whose older
+        // entry points still work never pays for it.
+        if (car != null && !AaPairingStore.isPaired(context, car.ssid) &&
+            AaPairingStore.wasPairingOffered(context, car.ssid)
+        ) {
+            onProgress("Asking Android Auto to project…")
+            if (AaWirelessPairing.requestProjection(context, car.bluetoothAddress, log = log) &&
+                awaitConnection(isConnected)
+            ) {
+                AaPairingStore.remember(context, car.ssid, car.bluetoothAddress)
+                log("[AA] a previous pairing had gone through after all; this bike is stored now.")
+                onProgress("Android Auto is starting up…")
+                return
+            }
+        }
+
+        // Last, and the only thing left on 17.4: Android Auto's own pairing sheet. It costs the
+        // rider one "Continue", once per bike, and it is offered after the silent paths because a
+        // phone where those still work should never see a dialog at all.
+        // Once per bike per Android Auto release, never on a loop: the sheet is Google's, and when
+        // its DEEP_LINK_ENABLED flag is off for this device it opens on "Can't connect with Wi-Fi"
+        // instead. Measured on 17.2.662634, 2026-07-31: flag off, sheet showed the error. A rider
+        // whose phone answers that way must not be shown it again on every single start.
+        //
+        // Foreground only, and that is not a nicety: a background Activity launch is dropped by
+        // the system silently, with no exception to catch, so from a service this would spend
+        // PAIRING_WAIT_MS waiting for a sheet nobody was ever shown - delaying the message that
+        // actually helps. MainActivity passes itself; the service-driven paths pass a Context that
+        // cannot start an Activity, and skip straight to the diagnosis.
+        if (car != null &&
+            context is android.app.Activity &&
+            AaWirelessPairing.isPairingAvailable(context) &&
+            AaPairingStore.shouldOfferPairing(context, car.ssid, version)
+        ) {
+            onProgress("Confirm the bike in Android Auto…")
+            AaPairingStore.rememberOffered(context, car.ssid, version)
+            // Deliberately NOT counted as an entry point accepting the request: `accepted` decides
+            // which remedy the rider is finally shown, and Google's sheet accepts the intent even
+            // when it goes on to refuse the pairing outright. Letting it set the flag would send a
+            // rider whose entry points were all refused to the "Add new cars" advice, which cannot
+            // help them - the head unit server is their only remaining path.
+            if (AaWirelessPairing.launchPairing(context, car, log)) {
+                // Let the sheet actually take focus before treating focus as "the sheet closed".
+                delay(SHEET_SETTLE_MS)
+                if (awaitConnection(isConnected, PAIRING_WAIT_MS, abort = { sheetClosed(context) })) {
+                    AaPairingStore.remember(context, car.ssid, car.bluetoothAddress)
+                    log("[AA] Android Auto connected after pairing; this bike is stored now.")
+                    onProgress("Android Auto is starting up…")
+                    return
+                }
+                log("[AA] pairing sheet produced no connection within ${PAIRING_WAIT_MS}ms.")
+            }
+        }
+
         anyEntryPointAccepted = accepted
         val diagnosis = if (accepted) {
             "Android Auto ${version ?: "(version unknown)"} ACCEPTED at least one of them and then " +
@@ -177,13 +262,31 @@ object AaSelfMode {
         private set
 
     /** Polls the receiver rather than trusting the dispatch result. See [trigger]. */
-    private suspend fun awaitConnection(isConnected: () -> Boolean): Boolean {
-        val deadline = SystemClock.elapsedRealtime() + ATTEMPT_WAIT_MS
+    private suspend fun awaitConnection(
+        isConnected: () -> Boolean,
+        waitMs: Long = ATTEMPT_WAIT_MS,
+        abort: () -> Boolean = { false }
+    ): Boolean {
+        val deadline = SystemClock.elapsedRealtime() + waitMs
         while (SystemClock.elapsedRealtime() < deadline) {
             if (isConnected()) return true
+            if (abort()) return isConnected()
             delay(POLL_INTERVAL_MS)
         }
         return isConnected()
+    }
+
+    /**
+     * Whether Android Auto's sheet has gone away again - dismissed, or closed on its own error.
+     *
+     * Without this a rider who taps Exit waits out the full [PAIRING_WAIT_MS] staring at "Confirm
+     * the bike in Android Auto", with the sheet no longer on screen. Focus coming back to MOTO-HUB
+     * is the one signal available from here; a brief settling delay keeps the check from firing
+     * before the sheet has taken focus in the first place.
+     */
+    private fun sheetClosed(context: Context): Boolean {
+        val activity = context as? android.app.Activity ?: return false
+        return runCatching { activity.hasWindowFocus() }.getOrDefault(false)
     }
 
     private fun startActivityComponent(
@@ -252,6 +355,93 @@ object AaSelfMode {
     } catch (failure: Exception) {
         log("[AA] service ${className.substringAfterLast('.')} refused: ${failure.message}")
         false
+    }
+
+    /**
+     * Describes this phone as the wireless head unit of the bike it is currently connected to.
+     *
+     * Needs a live T-Box session, because the pairing payload has to carry the dashboard's own
+     * access point: that is the network Android Auto associates the stored car with. Without a
+     * session there is nothing truthful to put in it, so the QR path is skipped rather than fed
+     * a guess.
+     */
+    private fun resolveCar(context: Context, port: Int, log: (String) -> Unit): AaWirelessPairing.Car? {
+        val motorcycle = io.motohub.android.tbox.TBoxSessionRegistry.current()?.motorcycle
+        if (motorcycle == null || motorcycle.ssid.isBlank() || motorcycle.password.isBlank()) {
+            log("[AA] no dashboard credentials available, skipping Android Auto's pairing path.")
+            return null
+        }
+        return AaWirelessPairing.Car(
+            ssid = motorcycle.ssid,
+            bssid = dashboardBssid(context, motorcycle.ssid)
+                ?: AaWirelessPairing.syntheticBssid(motorcycle.ssid),
+            passkey = motorcycle.password,
+            hostAddress = PROJECTION_HOST,
+            port = port,
+            bluetoothAddress = AaWirelessPairing.syntheticBluetoothAddress(motorcycle.ssid)
+        )
+    }
+
+    /**
+     * The dashboard access point's hardware address, and only ever that one.
+     *
+     * Android reports the BSSID of the *primary* Wi-Fi connection, which on this phone is usually
+     * some other network entirely - MOTO-HUB holds the dashboard through a NetworkSpecifier, off
+     * to the side. Writing a home router's BSSID next to the dashboard's SSID would describe a
+     * network that does not exist, so the SSID has to match before the value is believed. It is
+     * also redacted to 02:00:00:00:00:00 without location permission. Either way [resolveCar]
+     * falls back to a synthetic address: Android Auto only checks the shape of this field.
+     */
+    private fun dashboardBssid(context: Context, dashboardSsid: String): String? = runCatching {
+        val manager = context.applicationContext
+            .getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+        @Suppress("DEPRECATION")
+        val info = manager.connectionInfo
+        @Suppress("DEPRECATION")
+        val connectedSsid = info.ssid.orEmpty().trim('"')
+        if (connectedSsid != dashboardSsid) return@runCatching null
+        @Suppress("DEPRECATION")
+        info.bssid?.takeIf { it.matches(BSSID_SHAPE) && it != REDACTED_BSSID }
+    }.getOrNull()
+
+    private val BSSID_SHAPE = Regex("([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}")
+    private const val REDACTED_BSSID = "02:00:00:00:00:00"
+
+    /**
+     * Which bikes Android Auto has already been told to trust, keyed by dashboard SSID.
+     *
+     * Only a record of a completed pairing - the credentials themselves stay where they already
+     * live. It exists so the rider is asked once per bike and never again: on every later ride
+     * the stored-car request goes out silently.
+     */
+    private object AaPairingStore {
+        private const val PREFS = "aa_wireless_pairing"
+        private const val OFFERED_PREFIX = "offered:"
+
+        fun isPaired(context: Context, ssid: String): Boolean =
+            prefs(context).contains(ssid)
+
+        fun remember(context: Context, ssid: String, bluetoothAddress: String) {
+            prefs(context).edit().putString(ssid, bluetoothAddress).apply()
+        }
+
+        /**
+         * Keyed by Android Auto's version as well as the bike: an update is the one event that can
+         * turn the flag on, and it is the only thing worth re-asking a rider for.
+         */
+        fun shouldOfferPairing(context: Context, ssid: String, version: String?): Boolean =
+            prefs(context).getString(OFFERED_PREFIX + ssid, null) != version.orEmpty()
+
+        /** Whether this bike has ever been put in front of the rider, on any release. */
+        fun wasPairingOffered(context: Context, ssid: String): Boolean =
+            prefs(context).contains(OFFERED_PREFIX + ssid)
+
+        fun rememberOffered(context: Context, ssid: String, version: String?) {
+            prefs(context).edit().putString(OFFERED_PREFIX + ssid, version.orEmpty()).apply()
+        }
+
+        private fun prefs(context: Context) =
+            context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     }
 
     private enum class ComponentKind { ACTIVITY, RECEIVER, SERVICE }
