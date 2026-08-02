@@ -1,9 +1,12 @@
 # Generated dependency record. Update this file whenever hudlib.aar is rebuilt.
 source_repository=https://github.com/vincenzobpt/ridedaemon-lib
-source_commit=64a04621a1b3454a3baf7fcea5bd71d755002b4b
+source_commit=e15e3768e20335714a08665132fafa11d7edf62f
 source_dirty=false
 source_checkout=refs/ridedaemon-lib-motohub
 gomobile_android_api=34
 artifact=apps/android/app/libs/hudlib.aar
-sha256=620a03eb3a23d6d8282af9e80871ad6683a03ce726ed9d8dd6e5bfeda5a95c84
+sha256=fb343f104adadf9843dad211b89dbb7cc1218c6af24365d60870a2f1fa2d8953
 license=GPL-3.0-only
+# Rebuilt 2026-08-02 for the HU_TIME_SYNC ack. Verify the artifact by grepping
+# libgojni.so for "Answering PXC HU_TIME_SYNC" rather than trusting source_commit.
+source_note=hu-time-sync-ack
