@@ -112,11 +112,29 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
 
         ProjectionEventLog.record("ANDROID AUTO", "Preparing local AAP receiver.")
         createNotificationChannel()
-        startForeground(
-            NOTIFICATION_ID,
-            createNotification(),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-        )
+        // Going foreground can be refused outright - ForegroundServiceStartNotAllowedException
+        // when the start came from the background (the PRO->CORE AIDL path can, since CORE need
+        // not be foreground), or a SecurityException for a missing permission. Uncaught, that
+        // kills the service, START_STICKY restarts it, and it fails the same way forever. Give up
+        // once and say so instead: a session that cannot hold a foreground service cannot stream
+        // anyway, and the loop only drains the battery while hiding the real cause.
+        val foreground = runCatching {
+            startForeground(
+                NOTIFICATION_ID,
+                createNotification(),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+            )
+        }
+        foreground.exceptionOrNull()?.let { failure ->
+            ProjectionEventLog.error(
+                "ANDROID AUTO",
+                "Android Auto could not start as a foreground service " +
+                    "(${failure.javaClass.simpleName}: ${failure.message}); stopping instead of " +
+                    "retrying, which would only loop. Start it from the app with the screen on."
+            )
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (mediaButtonBridge == null) {
             mediaButtonBridge = MediaButtonBridge(
                 context = applicationContext,

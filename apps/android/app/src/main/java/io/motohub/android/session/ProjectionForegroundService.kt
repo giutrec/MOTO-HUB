@@ -33,18 +33,44 @@ class ProjectionForegroundService : Service() {
             PowerManager.PARTIAL_WAKE_LOCK,
             "MOTO-HUB:ProjectionService"
         )
-        ServiceCompat.startForeground(
-            this,
-            NOTIFICATION_ID,
-            createNotification(),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-        )
+        // In onCreate an uncaught failure here is the worst shape of this bug: the service dies
+        // before it has done anything, START_STICKY brings it straight back, and it fails
+        // identically - a loop that holds no projection and only shows up as battery drain.
+        // Android refuses the promotion for reasons that will not change on a retry: a start from
+        // the background (ForegroundServiceStartNotAllowedException, API 31+) or a missing
+        // permission. Record it and stand down.
+        val promoted = runCatching {
+            ServiceCompat.startForeground(
+                this,
+                NOTIFICATION_ID,
+                createNotification(),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+            )
+        }
+        val failure = promoted.exceptionOrNull()
+        if (failure != null) {
+            foregroundRefused = true
+            ProjectionEventLog.error(
+                "SERVICE",
+                "Projection foreground service was refused " +
+                    "(${failure.javaClass.simpleName}: ${failure.message}); stopping rather than " +
+                    "restarting into the same refusal. The projection keeps running only while " +
+                    "the app is in the foreground."
+            )
+            stopSelf()
+            return
+        }
         wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MILLIS)
         ProjectionEventLog.record("SERVICE", "Projection foreground service created, wake lock acquired")
     }
 
+    /** Set when Android refused the foreground promotion, so the restart is not re-armed. */
+    private var foregroundRefused = false
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return START_STICKY
+        // START_STICKY is what makes the refusal loop: it is only worth asking for when the
+        // service actually got its foreground slot.
+        return if (foregroundRefused) START_NOT_STICKY else START_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
