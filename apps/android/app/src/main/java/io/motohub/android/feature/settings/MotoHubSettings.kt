@@ -101,6 +101,33 @@ enum class AndroidAutoAspectMatchingMode(
     )
 }
 
+/**
+ * The screen MOTO-HUB puts on the TFT by itself once the motorcycle link comes up, when
+ * autostart is enabled.
+ *
+ * [RIDE_DASHBOARD] exists only in Advanced - Core ships Mirror and Android Auto - so Core's
+ * settings never offers it and Core's autostart refuses it if the stored value somehow names it.
+ */
+enum class AutostartService(
+    val label: String,
+    val description: String,
+    val advancedOnly: Boolean = false
+) {
+    MIRRORING(
+        "Mirroring",
+        "Share the phone screen. Android still asks for screen-capture permission each time.",
+    ),
+    ANDROID_AUTO(
+        "Android Auto",
+        "Launch Android Auto on the dashboard."
+    ),
+    RIDE_DASHBOARD(
+        "Ride Dashboard",
+        "Render the native dashboard, in the mode selected below.",
+        advancedOnly = true
+    )
+}
+
 enum class DistanceUnits(val label: String, val description: String, val labelRes: Int, val descriptionRes: Int) {
     KILOMETERS("Kilometers", "Distances and speeds in km and km/h.", R.string.distance_units_kilometers, R.string.distance_units_kilometers_description),
     MILES("Miles", "Distances and speeds in mi and mph.", R.string.distance_units_miles, R.string.distance_units_miles_description)
@@ -120,6 +147,8 @@ object MotoHubSettings {
     private const val KEY_ANDROID_AUTO_RESOLUTION = "android_auto_resolution"
     private const val KEY_ANDROID_AUTO_ASPECT_MATCHING = "android_auto_aspect_matching"
     private const val KEY_AUTO_CONNECT = "auto_connect"
+    private const val KEY_AUTOSTART_ENABLED = "autostart_enabled"
+    private const val KEY_AUTOSTART_SERVICE = "autostart_service"
     private const val KEY_AUTO_RECOVERY = "auto_recovery"
     private const val KEY_AUTO_RECORD_TRIPS = "auto_record_trips"
     private const val KEY_SHOW_RECORDED_TRACK = "show_recorded_track_on_dashboard"
@@ -234,6 +263,28 @@ object MotoHubSettings {
 
     fun setAutoConnect(context: Context, enabled: Boolean) {
         preferences(context).edit().putBoolean(KEY_AUTO_CONNECT, enabled).apply()
+    }
+
+    /**
+     * Put the configured service on the TFT as soon as the motorcycle link is up, instead of
+     * leaving the rider on the mode picker. Off by default: which screen a rider wants is a
+     * personal choice, and starting one uninvited would take over their dashboard.
+     */
+    fun autostartEnabled(context: Context): Boolean =
+        preferences(context).getBoolean(KEY_AUTOSTART_ENABLED, false)
+
+    fun setAutostartEnabled(context: Context, enabled: Boolean) {
+        preferences(context).edit().putBoolean(KEY_AUTOSTART_ENABLED, enabled).apply()
+    }
+
+    fun autostartService(context: Context): AutostartService = enumPreference(
+        context = context,
+        key = KEY_AUTOSTART_SERVICE,
+        default = AutostartService.MIRRORING
+    )
+
+    fun setAutostartService(context: Context, service: AutostartService) {
+        preferences(context).edit().putString(KEY_AUTOSTART_SERVICE, service.name).apply()
     }
 
     /** Recovery is enabled by default so a transient T-Box transport failure does not end a ride. */

@@ -54,7 +54,8 @@ import io.motohub.android.ui.components.MotoHubRadioRow
 import io.motohub.android.ui.components.ToggleRow
 
 private enum class SettingsDetail {
-    GENERAL, LANGUAGE, VIDEO, ANDROID_AUTO, HANDLEBAR, HANDLEBAR_MAPPING, AUTOMATION, DIAGNOSTICS
+    GENERAL, LANGUAGE, AUTOSTART, VIDEO, ANDROID_AUTO, HANDLEBAR, HANDLEBAR_MAPPING, AUTOMATION,
+    DIAGNOSTICS
 }
 
 @Composable
@@ -68,11 +69,14 @@ fun SettingsTabContent(
 ) {
     var detail by rememberSaveable { mutableStateOf<SettingsDetail?>(null) }
 
-    // The enum is flat but the screens are not: Language is reachable only from General, and
-    // its own "‹ General" link says so. Sending back to the root from there would skip a level
-    // and contradict the link right above it.
+    // The enum is flat but the screens are not: Language and Autostart are reachable only from
+    // General, and their own "‹ General" link says so. Sending back to the root from there would
+    // skip a level and contradict the link right above it.
     BackHandler(enabled = detail != null) {
-        detail = if (detail == SettingsDetail.LANGUAGE) SettingsDetail.GENERAL else null
+        detail = when (detail) {
+            SettingsDetail.LANGUAGE, SettingsDetail.AUTOSTART -> SettingsDetail.GENERAL
+            else -> null
+        }
     }
 
     AnimatedContent(
@@ -99,10 +103,12 @@ fun SettingsTabContent(
             SettingsDetail.GENERAL -> GeneralDetail(
                 onBack = { detail = null },
                 onOpenLanguage = { detail = SettingsDetail.LANGUAGE },
+                onOpenAutostart = { detail = SettingsDetail.AUTOSTART },
                 seamlessResumeEnabled = seamlessResumeEnabled,
                 onSeamlessResumeChanged = onSeamlessResumeChanged
             )
             SettingsDetail.LANGUAGE -> LanguageDetail(onBack = { detail = SettingsDetail.GENERAL })
+            SettingsDetail.AUTOSTART -> AutostartDetail(onBack = { detail = SettingsDetail.GENERAL })
             SettingsDetail.VIDEO -> VideoQualityDetail(onBack = { detail = null })
             SettingsDetail.ANDROID_AUTO -> AndroidAutoDetail(onBack = { detail = null })
             SettingsDetail.HANDLEBAR -> HandlebarControlsDetail(
@@ -258,11 +264,14 @@ private fun VideoQualityDetail(onBack: () -> Unit) {
 private fun GeneralDetail(
     onBack: () -> Unit,
     onOpenLanguage: () -> Unit,
+    onOpenAutostart: () -> Unit,
     seamlessResumeEnabled: Boolean,
     onSeamlessResumeChanged: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
     var autoUpdateChecks by remember { mutableStateOf(MotoHubSettings.autoUpdateChecks(context)) }
+    val autostartEnabled = MotoHubSettings.autostartEnabled(context)
+    val autostartService = MotoHubSettings.autostartService(context)
     MotoHubDetailScreen(
         title = context.getString(R.string.settings_general_title),
         backLabel = "‹ ${context.getString(R.string.settings_title)}",
@@ -273,6 +282,12 @@ private fun GeneralDetail(
             description = context.getString(R.string.language_description),
             value = context.getString(AppLanguageManager.current(context).labelRes),
             onClick = onOpenLanguage
+        )
+        MotoHubActionRow(
+            title = motoHubText("Start automatically"),
+            description = motoHubText("Put a screen on the TFT as soon as the motorcycle connects"),
+            value = if (autostartEnabled) motoHubText(autostartService.label) else motoHubText("Off"),
+            onClick = onOpenAutostart
         )
         ToggleRow(
             title = context.getString(R.string.settings_check_updates_on_launch),
@@ -294,6 +309,55 @@ private fun GeneralDetail(
             checked = seamlessResumeEnabled,
             onCheckedChange = onSeamlessResumeChanged
         )
+    }
+}
+
+@Composable
+private fun AutostartDetail(onBack: () -> Unit) {
+    val context = LocalContext.current
+    var enabled by remember { mutableStateOf(MotoHubSettings.autostartEnabled(context)) }
+    var service by remember { mutableStateOf(MotoHubSettings.autostartService(context)) }
+
+    MotoHubDetailScreen(
+        title = motoHubText("Start automatically"),
+        backLabel = "‹ ${context.getString(R.string.settings_general_title)}",
+        onBack = onBack
+    ) {
+        Text(
+            motoHubText(
+                "With this on, MOTO-HUB skips the \"what should I show?\" screen and puts the " +
+                    "chosen screen on the TFT as soon as the motorcycle link comes up. It runs " +
+                    "once per app launch - stop a screen and you are back in control."
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        ToggleRow(
+            title = motoHubText("Start on connect"),
+            description = motoHubText("Off means the mode picker stays, exactly as before."),
+            checked = enabled,
+            onCheckedChange = {
+                enabled = it
+                MotoHubSettings.setAutostartEnabled(context, it)
+                ProjectionEventLog.record("SETTINGS", "Autostart on connect changed to enabled=$it.")
+            }
+        )
+        HorizontalDivider()
+        MonoLabel(motoHubText("WHAT TO START"))
+        AutostartService.entries
+            .filter { BuildConfig.IS_PRO || !it.advancedOnly }
+            .forEach { candidate ->
+                MotoHubRadioRow(
+                    title = motoHubText(candidate.label),
+                    description = motoHubText(candidate.description),
+                    selected = service == candidate,
+                    onClick = {
+                        service = candidate
+                        MotoHubSettings.setAutostartService(context, candidate)
+                        ProjectionEventLog.record("SETTINGS", "Autostart service changed to ${candidate.name}.")
+                    }
+                )
+            }
     }
 }
 

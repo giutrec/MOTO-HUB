@@ -80,6 +80,7 @@ import io.motohub.android.feature.pairing.TBoxQrPhotoProcessingDialog
 import io.motohub.android.feature.pairing.TBoxQrScannerScreen
 import io.motohub.android.feature.pairing.UnverifiedQrDialog
 import io.motohub.android.feature.safety.SafetyDisclaimerDialog
+import io.motohub.android.feature.settings.AutostartService
 import io.motohub.android.feature.settings.MotoHubSettings
 import io.motohub.android.feature.settings.SettingsTabContent
 import io.motohub.android.feature.update.DownloadProgress
@@ -465,6 +466,35 @@ class MainActivity : ComponentActivity() {
                         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
                 }
+                // Hoisted out of the home screen's callbacks so autostart can run the exact same
+                // sequence a tap does - permission checks included - instead of a second, subtly
+                // different copy of it.
+                val startMirroring: () -> Unit = {
+                    val notificationGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                        ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.POST_NOTIFICATIONS
+                        ) == PackageManager.PERMISSION_GRANTED
+                    if (notificationGranted) {
+                        projectionLauncher.launch(projectionManager.createScreenCaptureIntent())
+                    } else {
+                        projectionPermissionPending = true
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
+                val startAndroidAutoWithWarning: () -> Unit = {
+                    if (OfficialCfmotoClient.isInstalled(context) &&
+                        !MotoHubSettings.motoPlayWarningSuppressed(context)
+                    ) {
+                        ProjectionEventLog.record(
+                            "ANDROID_AUTO",
+                            "Official CFMOTO app is installed; showing MotoPlay conflict warning before launch."
+                        )
+                        showOfficialCfmotoWarning = true
+                    } else {
+                        continueAndroidAutoStart()
+                    }
+                }
                 val wifiPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestMultiplePermissions()
                 ) { grants ->
@@ -596,6 +626,38 @@ class MainActivity : ComponentActivity() {
                     }
                     lifecycleOwner.lifecycle.addObserver(observer)
                     onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+                }
+                // ── Autostart on connect ────────────────────────────────────────────────────
+                //
+                // Fires at most once per app launch, the first time a T-Box link comes up (phase
+                // READY - the "what should I show?" screen). One-shot on purpose: stopping a mode
+                // reconnects by itself when auto-connect is on, and re-arming there would restart
+                // the very screen the rider just stopped, leaving no way back to the picker.
+                var autostartArmed by rememberSaveable { mutableStateOf(true) }
+                LaunchedEffect(state.session.phase) {
+                    if (state.session.phase != SessionPhase.READY) return@LaunchedEffect
+                    if (!autostartArmed) return@LaunchedEffect
+                    if (!MotoHubSettings.autostartEnabled(context)) return@LaunchedEffect
+                    val service = MotoHubSettings.autostartService(context)
+                    autostartArmed = false
+                    if (service.advancedOnly) {
+                        ProjectionEventLog.warning(
+                            "AUTOSTART",
+                            "${service.label} is configured but this edition cannot run it; nothing started."
+                        )
+                        return@LaunchedEffect
+                    }
+                    ProjectionEventLog.record(
+                        "AUTOSTART",
+                        "T-Box link is up; starting ${service.label} automatically."
+                    )
+                    // Let the mode screen settle before a system consent dialog lands on top of it.
+                    delay(AUTOSTART_ON_CONNECT_DELAY_MS)
+                    when (service) {
+                        AutostartService.MIRRORING -> startMirroring()
+                        AutostartService.ANDROID_AUTO -> startAndroidAutoWithWarning()
+                        AutostartService.RIDE_DASHBOARD -> Unit
+                    }
                 }
                 val overlayPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.StartActivityForResult()
@@ -1001,33 +1063,11 @@ class MainActivity : ComponentActivity() {
                         onDisconnect = viewModel::disconnect,
                         onStartProjection = {
                             ProjectionEventLog.record("MIRROR", "User selected mirroring mode.")
-                            val notificationGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                                ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.POST_NOTIFICATIONS
-                                ) == PackageManager.PERMISSION_GRANTED
-                            if (notificationGranted) {
-                                projectionLauncher.launch(projectionManager.createScreenCaptureIntent())
-                            } else {
-                                projectionPermissionPending = true
-                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                            }
+                            startMirroring()
                         },
                         androidAutoActive = androidAutoActive,
                         androidAutoStreaming = androidAutoStreaming,
-                        onStartAndroidAuto = {
-                            if (OfficialCfmotoClient.isInstalled(context) &&
-                                !MotoHubSettings.motoPlayWarningSuppressed(context)
-                            ) {
-                                ProjectionEventLog.record(
-                                    "ANDROID_AUTO",
-                                    "Official CFMOTO app is installed; showing MotoPlay conflict warning before launch."
-                                )
-                                showOfficialCfmotoWarning = true
-                            } else {
-                                continueAndroidAutoStart()
-                            }
-                        },
+                        onStartAndroidAuto = startAndroidAutoWithWarning,
                         onStopAndroidAuto = {
                             ProjectionEventLog.record("ANDROID_AUTO", "User requested Android Auto stop.")
                             AndroidAutoSessionService.stop(context)
@@ -1399,6 +1439,7 @@ class MainActivity : ComponentActivity() {
         const val AUTO_CONNECT_AFTER_STOP_DELAY_MS = 900L
         const val AUTO_CONNECT_AFTER_STOP_POLL_MS = 200L
         const val AUTO_CONNECT_AFTER_STOP_MAX_ATTEMPTS = 25
+        const val AUTOSTART_ON_CONNECT_DELAY_MS = 800L
         const val OFFICIAL_APP_CLOSE_RETRY_DELAY_MS = 1_500L
         const val AUTO_UPDATE_CHECK_DELAY_MS = 1_200L
         const val AUTO_UPDATE_CHECK_THROTTLE_MS = 24 * 60 * 60 * 1_000L
