@@ -236,7 +236,8 @@ object MotoHubSettings {
         preferences(context).edit().putBoolean(KEY_AUTO_CONNECT, enabled).apply()
     }
 
-    fun autoRecovery(context: Context): Boolean = preferences(context).getBoolean(KEY_AUTO_RECOVERY, false)
+    /** Recovery is enabled by default so a transient T-Box transport failure does not end a ride. */
+    fun autoRecovery(context: Context): Boolean = preferences(context).getBoolean(KEY_AUTO_RECOVERY, true)
 
     fun setAutoRecovery(context: Context, enabled: Boolean) {
         preferences(context).edit().putBoolean(KEY_AUTO_RECOVERY, enabled).apply()
