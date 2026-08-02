@@ -1534,7 +1534,20 @@ class RideDaemonTransport(
             0x10690L to "QUERY_SPEED",
             0x103a0L to "OTA_FTP_INFO",
             0x103e0L to "CHECK_SN",
-            0x10780L to "LOG_REPORT"
+            0x10780L to "LOG_REPORT",
+            // The periodic pair on an easyride-flavour dash: 113 of each in a four-minute rider
+            // session (2026-08-02), both empty. They are that dash's keepalive beat, in the place
+            // CLOCK_KEEPALIVE occupies on a CFMOTO unit - which is the point of naming them.
+            // Nothing should be gated on a particular opcode being "the" keepalive: the same log
+            // carries zero 0x10600, while a CFDL16 sends six PXC messages in total and then stops.
+            0x10630L to "PERIODIC_NOTIFY",
+            0x10430L to "PERIODIC_NOTIFY_ALT",
+            // Seen twice each in the same session, both empty; named only so a field log stops
+            // reading as a wall of UNKNOWN. open-cfmoto's notes list 0x10450 as empty too, and
+            // 0x10040 as carrying {maxNaviIcon, supportFunction}.
+            0x10450L to "NOTIFY_10450",
+            0x104a0L to "NOTIFY_104A0",
+            0x10040L to "NAVI_CAPS"
         )
 
         private val MEDIA_CONTROL_COMMAND_NAMES = mapOf(

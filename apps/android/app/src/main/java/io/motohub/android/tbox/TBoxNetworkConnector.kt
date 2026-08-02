@@ -547,8 +547,15 @@ class TBoxNetworkConnector(context: Context) {
         // line shows the phone saw no 5GHz network whatsoever, and it convicts the dash's channel
         // rather than the dash when the phone demonstrably reaches the top of the band. A
         // China-market unit parked on channel 149-165 is invisible to a phone in an EU
-        // regulatory domain, and no rider log so far has been able to tell that apart from a dash
+        // regulatory domain, and no rider log had been able to tell that apart from a dash
         // that was simply switched off (VOGE 2026-07-30, QJ 2026-07-31 - both never once seen).
+        //
+        // A third cause outranks both, and is the one to rule out first because it is free to
+        // check: some dashes never broadcast anything, because they are Wi-Fi CLIENTS waiting to
+        // join a hotspot the phone hosts. Confirmed 2026-08-02 - a rider hit exactly this warning
+        // at 11:00, switched to PHONE_HOTSPOT five minutes later, and streamed 9360 frames. The
+        // scan evidence for that dash was indistinguishable from VOGE's and QJ's, so neither of
+        // those is safely attributed to WPA3 or to the regulatory domain yet.
         val perBand = results.groupingBy { bandName(it.frequency) }.eachCount()
         val bandSummary = perBand.entries
             .sortedByDescending { it.value }
@@ -559,8 +566,11 @@ class TBoxNetworkConnector(context: Context) {
             ProjectionEventLog.warning(
                 "NETWORK",
                 "$target is NOT in the phone's latest Wi-Fi scan (${results.size} networks seen: " +
-                    "$bandSummary$reach). Either the dash is not broadcasting it right now, or " +
-                    "the phone cannot see that channel."
+                    "$bandSummary$reach). Either the dash is not broadcasting it right now, the " +
+                    "phone cannot see that channel, or this dash never broadcasts at all and " +
+                    "expects your phone to HOST the network - check whether its pairing screen " +
+                    "says \"open Android hotspot\", and if so pair it again with the " +
+                    "\"My phone hosts the hotspot\" mode."
             )
         } else {
             // The security line is the one that can convict us rather than the dash. The specifier
