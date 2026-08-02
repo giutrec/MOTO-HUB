@@ -52,8 +52,10 @@ object TBoxLinkResolver {
 
     /**
      * Public so a caller can find out which transport a profile will take *before* asking for it.
-     * PRO needs this: the Wi-Fi Direct join runs in CORE's process and has a permission gate the
-     * access-point path does not, so PRO has to know which one it is about to trigger.
+     * PRO needs this: it has to form the Wi-Fi Direct group in its own process before handing the
+     * connect to CORE (Android only grants a P2P join to a caller with a visible activity), while
+     * the access-point join still happens inside CORE. The two paths also differ in their
+     * permission gate, so PRO has to know which one it is about to trigger.
      */
     fun usesWifiDirect(profile: MotorcycleProfile): Boolean = when (profile.connectionMode) {
         TBoxConnectionMode.WIFI_DIRECT -> true

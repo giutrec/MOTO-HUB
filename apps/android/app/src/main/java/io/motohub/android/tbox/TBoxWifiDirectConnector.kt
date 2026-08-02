@@ -91,7 +91,12 @@ class TBoxWifiDirectConnector(
             try {
                 val link = withTimeout(CONNECT_TIMEOUT_MS) {
                     receiver = registerReceiver(manager, channel, profile, outcome)
-                    join(manager, channel, profile, outcome, footprint)
+                    // Adopting comes before joining, and the check is awaited rather than left to
+                    // race the join: asking the framework to form a group that is already up is
+                    // how a working link gets torn back down.
+                    if (!adoptsExistingGroup(manager, channel, profile, outcome)) {
+                        join(manager, channel, profile, outcome, footprint)
+                    }
                     outcome.await()
                 }.getOrThrow()
                 handedOff = true
@@ -166,6 +171,53 @@ class TBoxWifiDirectConnector(
         // A leftover/persistent group may already be formed before this receiver saw any broadcast.
         checkForFormedGroup(manager, channel, profile, ::settle)
         return receiver
+    }
+
+    /**
+     * True when this phone is already a client in the dash's group, so there is nothing to join -
+     * the group check [registerReceiver] fired is on its way to resolving it into a link.
+     *
+     * This is what lets the join work from a process with no screen. Android answers
+     * `connect()` with a bare `ERROR` when the caller has no visible activity, and Core is
+     * exactly that whenever it is only servicing the companion app's bridge: riders' logs show
+     * every AIDL-driven join refused in milliseconds - eight riders, seven phone models - while
+     * the same phone joined the same dash fine from Core's own screen. The companion app now
+     * forms the group in its own foreground process and Core adopts it here.
+     *
+     * Core's own Android Auto recovery gains the same thing: when the dash drops the session but
+     * the group survives, recovery reuses it instead of asking a backgrounded Core for a join the
+     * framework will not grant.
+     *
+     * The accept condition deliberately mirrors [checkForFormedGroup]'s, including its treatment
+     * of an unreadable group name, so the two cannot disagree about the same group.
+     */
+    @SuppressLint("MissingPermission")
+    private suspend fun adoptsExistingGroup(
+        manager: WifiP2pManager,
+        channel: WifiP2pManager.Channel,
+        profile: MotorcycleProfile,
+        outcome: CompletableDeferred<Result<TBoxLink.WifiDirect>>
+    ): Boolean {
+        val info = awaitQuery<WifiP2pInfo> { resume ->
+            manager.requestConnectionInfo(channel) { resume(it) }
+        } ?: return false
+        // An inverted group (this phone as owner) is a failure, not something to adopt;
+        // checkForFormedGroup settles it as one and join() then returns on the completed outcome.
+        if (!info.groupFormed || info.isGroupOwner) return false
+        val group = awaitQuery<WifiP2pGroup> { resume ->
+            manager.requestGroupInfo(channel) { resume(it) }
+        }
+        if (!groupNameMatchesProfile(group?.networkName, profile.ssid)) return false
+        log(
+            "Wi-Fi Direct group ${group?.networkName ?: profile.ssid} is already formed and this " +
+                "phone is a client in it; adopting it instead of joining again."
+        )
+        // Resolve it here rather than leaning on the opportunistic check [registerReceiver] fires:
+        // skipping the join means no connection-changed broadcast is coming, so if that one call
+        // had been dropped nothing else would ever settle and the adopted group would sit out the
+        // whole 35s budget. Settling twice is free - CompletableDeferred keeps the first result.
+        checkForFormedGroup(manager, channel, profile) { outcome.complete(it) }
+        return true
     }
 
     /**
