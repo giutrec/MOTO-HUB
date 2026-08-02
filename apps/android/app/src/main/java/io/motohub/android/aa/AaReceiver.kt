@@ -14,6 +14,7 @@ import android.os.SystemClock
 import android.view.Surface
 import io.motohub.android.androidauto.AaInputBridge
 import io.motohub.android.androidauto.AndroidAutoCapabilityProfile
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import kotlin.concurrent.thread
@@ -187,7 +188,7 @@ class AaReceiver(
      * harmlessly, when the verdict finally arrives.
      */
     private fun bindWirelessServerSocket(): ServerSocket = try {
-        ServerSocket(PORT).apply { reuseAddress = true }
+        openWirelessServerSocket()
     } catch (failure: Exception) {
         if (!isStaleNetworkPinFailure(failure)) throw failure
         log(
@@ -199,7 +200,26 @@ class AaReceiver(
                 .bindProcessToNetwork(null)
         }.getOrDefault(false)
         if (!cleared) throw failure
-        ServerSocket(PORT).apply { reuseAddress = true }
+        openWirelessServerSocket()
+    }
+
+    /**
+     * SO_REUSEADDR only has any effect if it is set *before* the bind, which `ServerSocket(PORT)`
+     * (which binds in its constructor) makes impossible - so the previous `.apply { reuseAddress
+     * = true }` was setting the flag on an already-bound socket and doing nothing. Without it a
+     * still-draining connection from a previous session can keep the port unbindable for a while
+     * after the old listener is gone.
+     */
+    private fun openWirelessServerSocket(): ServerSocket {
+        val socket = ServerSocket()
+        return try {
+            socket.reuseAddress = true
+            socket.bind(InetSocketAddress(PORT))
+            socket
+        } catch (failure: Exception) {
+            runCatching { socket.close() }
+            throw failure
+        }
     }
 
     fun stop() {

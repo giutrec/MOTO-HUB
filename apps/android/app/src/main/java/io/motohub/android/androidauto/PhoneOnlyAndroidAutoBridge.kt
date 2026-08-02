@@ -32,9 +32,24 @@ import kotlinx.coroutines.withTimeoutOrNull
  * fires surfaceDestroyed+surfaceCreated a couple of times during initial layout/window attach: if
  * that had rebuilt the whole receiver each time (as an earlier version of this file did), it
  * re-triggered AaSelfMode and made Google's Android Auto app visibly relaunch several times.
+ *
+ * The bridge itself is a process singleton, and deliberately so: the session it owns (a bound
+ * local socket on 5288 + an EGL compositor) outlives any single Activity instance. Handing each
+ * MainActivity its own bridge meant a configuration change - a plain screen rotation while the
+ * phone preview was open - orphaned the running one: the recreated Activity got an empty bridge,
+ * so closing the preview stopped nothing, and the abandoned receiver kept 5288 bound until the
+ * process died, blocking every later Android Auto start.
  */
 fun createAndroidAutoPhoneOnlyBridge(context: Context): AndroidAutoPhoneOnlyBridge =
-    PhoneOnlyAndroidAutoBridge(context.applicationContext)
+    PhoneOnlyBridgeHolder.get(context.applicationContext)
+
+private object PhoneOnlyBridgeHolder {
+    private var instance: PhoneOnlyAndroidAutoBridge? = null
+
+    @Synchronized
+    fun get(applicationContext: Context): PhoneOnlyAndroidAutoBridge =
+        instance ?: PhoneOnlyAndroidAutoBridge(applicationContext).also { instance = it }
+}
 
 class PhoneOnlyAndroidAutoBridge(private val context: Context) :
     AndroidAutoPreviewController, AndroidAutoPhoneOnlyBridge {
@@ -101,10 +116,10 @@ class PhoneOnlyAndroidAutoBridge(private val context: Context) :
             mapTouchToSource = activeCompositor::mapCanvasToUi,
             capabilityProfile = profile
         )
-        AndroidAutoReceiverOwnership.claim("phone-only") { stop() }
+        AndroidAutoReceiverOwnership.claim(this, "phone-only") { stop() }
         if (!activeReceiver.start()) {
             releaseSession()
-            AndroidAutoReceiverOwnership.release("phone-only")
+            AndroidAutoReceiverOwnership.release(this)
             AndroidAutoRuntime.publish(AndroidAutoRuntimeState.Failed("Android Auto local port ${AaReceiver.PORT} is unavailable."))
             return
         }
@@ -114,12 +129,20 @@ class PhoneOnlyAndroidAutoBridge(private val context: Context) :
     }
 
     override fun stop() {
+        // Now that one bridge is shared by every MainActivity instance, stop() is also reached
+        // from onDestroy() of an Activity that never opened a phone-only session at all. The
+        // teardown below is idempotent, but the Stopped state is not: publishing it with no
+        // session of our own would report over whatever the T-Box session (the other
+        // AndroidAutoRuntime publisher) is currently saying.
+        val hadSession = receiver != null || compositor != null
         selfModeJob?.cancel()
         selfModeJob = null
         releaseSession()
-        AndroidAutoReceiverOwnership.release("phone-only")
+        AndroidAutoReceiverOwnership.release(this)
         AndroidAutoPreviewRuntime.clear(this)
-        AndroidAutoRuntime.publish(AndroidAutoRuntimeState.Stopped("Stopped by the user."))
+        if (hadSession) {
+            AndroidAutoRuntime.publish(AndroidAutoRuntimeState.Stopped("Stopped by the user."))
+        }
     }
 
     /**

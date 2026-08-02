@@ -358,7 +358,9 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                         "Build with -PincludeAndroidAutoIdentity=true for a private sideload APK."
                 )
             }
-            AndroidAutoReceiverOwnership.claim("real-session") { stopSession("Superseded by a new Android Auto session.") }
+            AndroidAutoReceiverOwnership.claim(this@AndroidAutoSessionService, "real-session") {
+                stopSession("Superseded by a new Android Auto session.")
+            }
             if (!activeReceiver.start()) error("Android Auto local port 5288 is unavailable")
             receiver = activeReceiver
             AndroidAutoPreviewRuntime.install(this)
@@ -977,7 +979,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         p2pGroupWatcher = null
         receiver?.stop()
         receiver = null
-        AndroidAutoReceiverOwnership.release("real-session")
+        AndroidAutoReceiverOwnership.release(this@AndroidAutoSessionService)
         simulatorHandlebarBridge?.stop()
         simulatorHandlebarBridge = null
         mediaButtonBridge?.stop()

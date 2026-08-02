@@ -24,6 +24,7 @@ import io.motohub.android.androidauto.AndroidAutoCapabilityProfiles
 import io.motohub.android.androidauto.AndroidAutoDisplayMode
 import io.motohub.android.androidauto.AndroidAutoDisplayModeStore
 import io.motohub.android.androidauto.AndroidAutoPreviewRuntime
+import io.motohub.android.androidauto.AndroidAutoReceiverOwnership
 import io.motohub.android.androidauto.AndroidAutoRuntime
 import io.motohub.android.androidauto.AndroidAutoRuntimeState
 import io.motohub.android.androidauto.AndroidAutoSessionService
@@ -430,6 +431,10 @@ class IpcBridgeService : Service() {
                 mapTouchToSource = activeCompositor::mapCanvasToUi,
                 capabilityProfile = profile
             )
+            // Registering here is what lets a leaked receiver from another feature be handed over
+            // instead of turning into a bare EADDRINUSE: the checks above already refuse while a
+            // *live* Core session is running, so this only ever takes over a stale claim.
+            AndroidAutoReceiverOwnership.claim(this@IpcBridgeService, "embedded") { releaseReceiver() }
             if (!activeReceiver.start()) {
                 releaseReceiver()
                 publishState(AndroidAutoIpcState.FAILED, "Android Auto local port ${AaReceiver.PORT} is unavailable.")
@@ -699,6 +704,8 @@ class IpcBridgeService : Service() {
         compositor?.clearOutput()
         compositor?.release()
         compositor = null
+        // No-op when another owner has already taken the port over (it is the one that called us).
+        AndroidAutoReceiverOwnership.release(this@IpcBridgeService)
     }
 
     private var fullSessionForwardingJob: Job? = null
