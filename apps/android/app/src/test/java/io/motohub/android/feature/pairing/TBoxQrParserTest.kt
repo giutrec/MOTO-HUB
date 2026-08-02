@@ -186,4 +186,27 @@ class TBoxQrParserTest {
         assertTrue(failure.isFailure)
         assertTrue(failure.exceptionOrNull()?.message.orEmpty().contains("Wifi="))
     }
+
+    @Test
+    fun tellsTheRiderToHostTheHotspotWhenACarbitCodeCarriesNoNetwork() {
+        // Some dashes are Wi-Fi clients: they join a hotspot the phone hosts, under an SSID the
+        // dash prints itself, so their QR is a bare product link. Sending that rider to "scan the
+        // pairing code instead" sends them after a code that does not exist.
+        val failure = TBoxQrParser.parse("https://www.carbit.com.cn/app/download.html")
+
+        assertTrue(failure.isFailure)
+        val message = failure.exceptionOrNull()?.message.orEmpty()
+        assertTrue(message, message.contains("hotspot your phone creates"))
+        assertTrue(message, message.contains("Ssid"))
+        // The generic web-address advice must not win: it is the wrong instruction here.
+        assertTrue(message, !message.contains("Scan the dash pairing"))
+    }
+
+    @Test
+    fun stillSendsAnUnrelatedWebAddressBackToThePairingScreen() {
+        val failure = TBoxQrParser.parse("https://example.com/some/page")
+
+        assertTrue(failure.isFailure)
+        assertTrue(failure.exceptionOrNull()?.message.orEmpty().contains("Scan the dash pairing"))
+    }
 }

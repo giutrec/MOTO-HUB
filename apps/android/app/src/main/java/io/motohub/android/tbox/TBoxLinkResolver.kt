@@ -17,7 +17,9 @@ object TBoxLinkResolver {
         networkConnector: TBoxNetworkConnector,
         profile: MotorcycleProfile
     ): Result<TBoxLink> =
-        if (usesWifiDirect(profile)) {
+        if (profile.connectionMode == TBoxConnectionMode.PHONE_HOTSPOT) {
+            hostedLink()
+        } else if (usesWifiDirect(profile)) {
             ProjectionEventLog.record(
                 "NETWORK",
                 "Connecting to ${profile.ssid} through Wi-Fi Direct (${profile.connectionMode})."
@@ -55,7 +57,35 @@ object TBoxLinkResolver {
      */
     fun usesWifiDirect(profile: MotorcycleProfile): Boolean = when (profile.connectionMode) {
         TBoxConnectionMode.WIFI_DIRECT -> true
-        TBoxConnectionMode.ACCESS_POINT -> false
+        TBoxConnectionMode.ACCESS_POINT, TBoxConnectionMode.PHONE_HOTSPOT -> false
         TBoxConnectionMode.AUTO -> TBoxWifiDirectConnector.isWifiDirectSsid(profile.ssid)
+    }
+
+    /**
+     * There is nothing to connect *to* in hotspot mode - the rider has already turned tethering on
+     * by hand, because Android does not let an app create a hotspot with the SSID and password the
+     * dash dictates. All this does is find the interface hosting it, so discovery knows which
+     * subnet the dash is sitting on.
+     *
+     * Failing with a rider-readable message matters more here than anywhere else: "no hotspot
+     * found" is something they can act on immediately, and it is by far the likeliest mistake.
+     */
+    private fun hostedLink(): Result<TBoxLink> {
+        val subnets = TBoxHotspotScan.tetheringSubnets(TBoxHotspotScan.snapshotInterfaces())
+        val subnet = subnets.firstOrNull()
+            ?: return Result.failure(
+                IllegalStateException(
+                    "This motorcycle expects your phone to host the network, but no hotspot is " +
+                        "running. Turn on the Android hotspot with the exact Ssid and Password " +
+                        "the dash is showing, then connect again."
+                )
+            )
+        ProjectionEventLog.record(
+            "NETWORK",
+            "Phone-hosted transport: dash expected on ${subnet.localAddress.hostAddress}/" +
+                "${subnet.prefixLength} via ${subnet.interfaceName}" +
+                if (subnets.size > 1) " (${subnets.size} candidate interfaces)." else "."
+        )
+        return Result.success(TBoxLink.PhoneHotspot(subnet))
     }
 }

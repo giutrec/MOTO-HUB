@@ -75,6 +75,40 @@ sealed interface TBoxLink {
             resolvedNetwork == network
     }
 
+    /**
+     * The phone hosts the network and the dash joined it - see
+     * [io.motohub.android.session.TBoxConnectionMode.PHONE_HOTSPOT].
+     *
+     * Like [WifiDirect] there is no `ConnectivityManager` network to bind to, so sockets are bound
+     * to the phone's own address on the tethering interface. Unlike it there is no known peer: the
+     * dash is a DHCP client somewhere on [subnet], so [peerHint] is null on purpose and discovery
+     * has to sweep for it (`TBoxHotspotScan`).
+     */
+    class PhoneHotspot(val subnet: TBoxHotspotScan.Subnet) : TBoxLink {
+        override val network: Network? = null
+        override val peerHint: Inet4Address? = null
+        override val label: String
+            get() = "hotspot ${subnet.interfaceName} ${subnet.localAddress.hostAddress}/${subnet.prefixLength}"
+
+        override fun createSocket(): Socket = Socket().apply { bind(InetSocketAddress(subnet.localAddress, 0)) }
+
+        override fun disconnect() = Unit
+
+        override fun startNsdDiscovery(
+            nsdManager: NsdManager,
+            serviceType: String,
+            executor: Executor,
+            listener: NsdManager.DiscoveryListener
+        ) {
+            // No bound Network to scope this to; the unscoped overload at least covers the case
+            // where the platform routes mDNS over the tethering interface.
+            nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, listener)
+        }
+
+        // Nothing resolved over the default network belongs to a link with no Network of its own.
+        override fun matchesResolvedNetwork(resolvedNetwork: Network?): Boolean = resolvedNetwork == null
+    }
+
     class WifiDirect(
         val bindIp: Inet4Address,
         val gatewayIp: Inet4Address,

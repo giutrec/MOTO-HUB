@@ -130,4 +130,8 @@ private fun TBoxConnectionMode.label(): String = when (this) {
     TBoxConnectionMode.AUTO -> "Auto"
     TBoxConnectionMode.ACCESS_POINT -> "Access point"
     TBoxConnectionMode.WIFI_DIRECT -> "Wi-Fi Direct (P2P)"
+    // Named from the rider's point of view: what they have to do, not what the dash is. They pick
+    // this after their dash asks them to open a hotspot, so "phone hotspot" is the phrase they
+    // just read on the screen.
+    TBoxConnectionMode.PHONE_HOTSPOT -> "My phone hosts the hotspot"
 }

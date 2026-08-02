@@ -487,6 +487,10 @@ class RideDaemonTransport(
         // the join while the p2p source address is still fresh - waiting 30s for NSD to fail was what
         // let the address go stale and made the probe socket bind fail with EADDRNOTAVAIL.
         if (link is TBoxLink.WifiDirect) return discoverOverWifiDirect(link)
+        // The phone is the gateway here, so there is no advertised dash AP and no `.1` to aim at:
+        // the dash is a DHCP client somewhere on our own tethering subnet. NSD is tried anyway
+        // (cheap, and the dash may well advertise once it has an address) before sweeping.
+        if (link is TBoxLink.PhoneHotspot) return discoverOverPhoneHotspot(link, expectedModelId)
 
         repeat(DISCOVERY_MAX_ATTEMPTS - 1) { attempt ->
             try {
@@ -513,13 +517,35 @@ class RideDaemonTransport(
             )
         }
 
-        // Infrastructure fallback: the probe ACK on an AP link only re-arms one more NSD window;
-        // the host/port must still come from a genuine advertisement (see TBOX_STREAMING_CONTRACT.md).
+        // Infrastructure fallback: a probe ACK on an AP link is preferably spent re-arming one more
+        // NSD window, because a resolved advertisement carries the package name too.
         if (sendEasyConnWakeProbe(link) != null) {
             try {
                 return withTimeout(DISCOVERY_TIMEOUT_MS) { discoverWithAndroidNsd(link, expectedModelId) }
             } catch (timeout: TimeoutCancellationException) {
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            }
+        }
+
+        // Last resort on an AP link, and the reason this exists: field logs from Zontes, VOGE and
+        // QJ dashes show NSD staying empty and 10930 refused while the dash is plainly up. Sweeping
+        // the EasyConn neighborhood and re-running the probe there is the only way to tell "the
+        // dash speaks EasyConn on an unusual port" apart from "the dash never answered at all".
+        // The endpoint is used ONLY when the full CMD_MDNS_RESPOND handshake completes on it - an
+        // open TCP port alone is never promoted to an EC endpoint, so the "no invented port"
+        // rule in TBOX_STREAMING_CONTRACT.md still holds.
+        val peerIp = peerIpv4For(link)
+        val peerAddress = peerIp?.hostAddress
+        if (peerIp != null && peerAddress != null) {
+            val fallback = probeFallbackEasyConnPort(link, peerIp)
+            if (fallback != null) {
+                val (fallbackPort, fallbackIdentity) = fallback
+                ProjectionEventLog.record(
+                    "DISCOVERY",
+                    "EasyConn endpoint confirmed by wake probe on fallback port " +
+                        "$peerAddress:$fallbackPort after NSD stayed empty."
+                )
+                return TBoxHost(peerAddress, fallbackPort, fallbackIdentity)
             }
         }
         throw IllegalStateException(
@@ -552,7 +578,7 @@ class RideDaemonTransport(
         // ports and retry the ACK-verified wake probe there - the endpoint is only ever used
         // when the full CMD_MDNS_RESPOND handshake completed, never invented from an open port.
         if (peerAddress != null) {
-            val fallback = probeFallbackEasyConnPort(link)
+            val fallback = probeFallbackEasyConnPort(link, link.gatewayIp)
             if (fallback != null) {
                 val (fallbackPort, fallbackIdentity) = fallback
                 ProjectionEventLog.record(
@@ -572,19 +598,121 @@ class RideDaemonTransport(
     }
 
     /**
+     * Discovery when the phone hosts the network. NSD is given one window first - it costs a few
+     * seconds and would hand back the service package too, which the sweep cannot - then every
+     * address on the tethering subnet is probed on the well-known port, nearest the phone first.
+     *
+     * The endpoint is adopted only when the full CMD_MDNS_RESPOND handshake completes, exactly as
+     * on the other two transports: an open TCP port is never promoted on its own.
+     */
+    private suspend fun discoverOverPhoneHotspot(
+        link: TBoxLink.PhoneHotspot,
+        expectedModelId: String?
+    ): TBoxHost {
+        try {
+            return withTimeout(DISCOVERY_TIMEOUT_MS) { discoverWithAndroidNsd(link, expectedModelId) }
+        } catch (timeout: TimeoutCancellationException) {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            ProjectionEventLog.record(
+                "DISCOVERY",
+                "No EasyConn advertisement on the hosted network; sweeping " +
+                    "${link.subnet.localAddress.hostAddress}/${link.subnet.prefixLength} for the dash."
+            )
+        }
+        val found = probeHostedSubnet(link)
+            ?: throw IllegalStateException(
+                "No motorcycle answered on the hotspot your phone is hosting. Check that the dash " +
+                    "shows it is connected, and that the hotspot Ssid and Password match exactly " +
+                    "what the dash is asking for."
+            )
+        val (host, identity) = found
+        val address = host.hostAddress
+            ?: throw IllegalStateException("The dash answered but its address could not be read.")
+        ProjectionEventLog.record(
+            "DISCOVERY",
+            "EasyConn endpoint confirmed on the hosted network at $address:$WAKE_PROBE_PORT."
+        )
+        return TBoxHost(address, WAKE_PROBE_PORT, identity)
+    }
+
+    /**
+     * Walks the hosted subnet looking for a dash. Two passes on purpose: a cheap connect to the
+     * well-known port narrows 253 addresses down to the handful that answer at all, and only those
+     * pay for the full ACK-verified probe. One pass of full probes over a /24 would take minutes.
+     */
+    private suspend fun probeHostedSubnet(link: TBoxLink.PhoneHotspot): Pair<Inet4Address, String>? =
+        withContext(Dispatchers.IO) {
+            val candidates = TBoxHotspotScan.candidateHosts(link.subnet)
+            val reachable = mutableListOf<Inet4Address>()
+            for (candidate in candidates) {
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                val open = runCatching {
+                    link.createSocket().use { socket ->
+                        socket.connect(
+                            InetSocketAddress(candidate, WAKE_PROBE_PORT),
+                            HOSTED_SWEEP_CONNECT_TIMEOUT_MS
+                        )
+                    }
+                    true
+                }.getOrDefault(false)
+                if (!open) continue
+                ProjectionEventLog.record(
+                    "DISCOVERY",
+                    "Hosted-network sweep: ${candidate.hostAddress} accepted $WAKE_PROBE_PORT."
+                )
+                reachable += candidate
+                // The dash is the only device on a hotspot opened for it, so the first responder
+                // is almost certainly it - verify immediately rather than sweeping the whole /24.
+                for (identity in EasyConnClientIdentity.probeOrder()) {
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                    val acknowledged = runCatching {
+                        link.createSocket().use { socket ->
+                            socket.connect(
+                                InetSocketAddress(candidate, WAKE_PROBE_PORT),
+                                HOSTED_SWEEP_CONNECT_TIMEOUT_MS
+                            )
+                            socket.soTimeout = WAKE_PROBE_READ_TIMEOUT_MS
+                            writeWakeProbeFrame(socket.getOutputStream(), identity)
+                            readWakeProbeAck(socket.getInputStream())
+                        }
+                    }.getOrDefault(false)
+                    if (acknowledged) {
+                        EasyConnClientIdentity.remember(identity)
+                        return@withContext candidate to identity
+                    }
+                }
+            }
+            ProjectionEventLog.record(
+                "DISCOVERY",
+                if (reachable.isEmpty()) {
+                    "Hosted-network sweep: nothing answered $WAKE_PROBE_PORT on " +
+                        "${candidates.size} addresses. Either the dash has not joined the hotspot " +
+                        "yet, or it speaks on a port MOTO-HUB does not know."
+                } else {
+                    "Hosted-network sweep: ${reachable.joinToString { it.hostAddress.orEmpty() }} " +
+                        "accepted $WAKE_PROBE_PORT but none completed the EasyConn handshake."
+                }
+            )
+            null
+        }
+
+    /**
      * Sweeps the candidate EasyConn ports over the P2P link and retries the wake probe on any
      * that accept a TCP connection. Returns the first port whose CMD_MDNS_RESPOND handshake
      * completes together with the client identity that earned the acknowledgement, or null when
      * no combination answers.
      */
-    private suspend fun probeFallbackEasyConnPort(link: TBoxLink.WifiDirect): Pair<Int, String>? =
+    private suspend fun probeFallbackEasyConnPort(
+        link: TBoxLink,
+        peerIp: Inet4Address
+    ): Pair<Int, String>? =
         withContext(Dispatchers.IO) {
             val openPorts = FALLBACK_EC_PORTS.filter { port ->
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
                 runCatching {
                     link.createSocket().use { socket ->
                         socket.connect(
-                            InetSocketAddress(link.gatewayIp, port),
+                            InetSocketAddress(peerIp, port),
                             FALLBACK_PORT_CONNECT_TIMEOUT_MS
                         )
                     }
@@ -595,14 +723,14 @@ class RideDaemonTransport(
                 ProjectionEventLog.record(
                     "DISCOVERY",
                     "Fallback port sweep found no open EasyConn candidates on " +
-                        "${link.gatewayIp.hostAddress}."
+                        "${peerIp.hostAddress}."
                 )
                 return@withContext null
             }
             ProjectionEventLog.record(
                 "DISCOVERY",
                 "Fallback port sweep: open candidates ${openPorts.joinToString()} on " +
-                    "${link.gatewayIp.hostAddress}; retrying the wake probe on each."
+                    "${peerIp.hostAddress}; retrying the wake probe on each."
             )
             // Identity first, ports second: sweeping every open port with the leading identity
             // before reaching for an alternate keeps the common case as quick as it was, and the
@@ -613,7 +741,7 @@ class RideDaemonTransport(
                     try {
                         link.createSocket().use { socket ->
                             socket.connect(
-                                InetSocketAddress(link.gatewayIp, port),
+                                InetSocketAddress(peerIp, port),
                                 FALLBACK_PORT_CONNECT_TIMEOUT_MS
                             )
                             socket.soTimeout = WAKE_PROBE_READ_TIMEOUT_MS
@@ -656,8 +784,13 @@ class RideDaemonTransport(
      * with a name it never accepts. Only once that identity has been given every chance do the
      * alternates get one attempt each — extra time paid solely by riders the proven name failed.
      */
-    private suspend fun sendEasyConnWakeProbe(link: TBoxLink): String? = withContext(Dispatchers.IO) {
-        val peerIp = link.peerHint ?: link.network?.let { network ->
+    /**
+     * The T-Box address to aim a direct probe at, without waiting for discovery: the link's own
+     * hint on a P2P group, otherwise derived from the AP's routes/DNS. Extracted so the wake probe
+     * and the fallback port sweep aim at the same peer instead of deriving it twice.
+     */
+    private fun peerIpv4For(link: TBoxLink): Inet4Address? =
+        link.peerHint ?: link.network?.let { network ->
             connectivityManager.getLinkProperties(network)?.let { properties ->
                 deriveTBoxPeerIpv4(
                     gateways = properties.routes.filter { route -> route.isDefaultRoute }.mapNotNull { route -> route.gateway },
@@ -666,6 +799,9 @@ class RideDaemonTransport(
                 )
             }
         }
+
+    private suspend fun sendEasyConnWakeProbe(link: TBoxLink): String? = withContext(Dispatchers.IO) {
+        val peerIp = peerIpv4For(link)
         if (peerIp == null) {
             ProjectionEventLog.debug("DISCOVERY", "Wake probe skipped: no usable peer IPv4 could be derived.")
             return@withContext null
@@ -1342,6 +1478,10 @@ class RideDaemonTransport(
         // case the whole block shifted (same range TBoxPortScanner uses for diagnostics).
         val FALLBACK_EC_PORTS: List<Int> = (10915..10935).filter { it != WAKE_PROBE_PORT }
         const val FALLBACK_PORT_CONNECT_TIMEOUT_MS = 800
+        // A hosted subnet is a /24 in the worst case, so this multiplies by 253 - it has to stay
+        // short. Everything on it is one Wi-Fi hop away with no router in between, so a dash that
+        // is going to answer answers well inside this; the budget is for the silent addresses.
+        const val HOSTED_SWEEP_CONNECT_TIMEOUT_MS = 250
         const val WAKE_PROBE_HEADER_SIZE = 16
         const val CMD_MDNS_RESPOND = 0x70000010
         const val CMD_MDNS_RESPOND_ACK = 0x70000011

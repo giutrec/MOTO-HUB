@@ -292,6 +292,18 @@ object TBoxQrParser {
                 "This Moto Morini code carries no Wifi= field, so it is not the pairing code. " +
                     "Open the phone-link / MotoFun screen on the dash and scan the code there."
 
+            // A provisioning-domain URL that carries no credentials is not a rider mistake: some
+            // dashes pair the other way round. They join a hotspot the PHONE hosts, under an SSID
+            // and password the dash itself prints, so their QR has nothing to hand over and the
+            // generic "scan the pairing code instead" advice sends the rider hunting for a code
+            // that does not exist. Confirmed on a tester's dash 2026-08-02, whose screen reads
+            // "Please open Android hotspot and set the following parameters".
+            hostOf(rawValue)?.lowercase()?.let(::isKnownProvisioningHost) == true ->
+                "This dash connects the other way round: it joins a hotspot your phone creates, " +
+                    "so its code carries no network to join. On the dash, read the Ssid and " +
+                    "Password it shows, set your Android hotspot to exactly those values, turn it " +
+                    "on, and the dash will connect by itself."
+
             rawValue.startsWith("http", ignoreCase = true) ->
                 "That is a web address with no network credentials in it. Scan the dash pairing " +
                     "code instead (MotoPlay / EasyConnect / MotoFun)."

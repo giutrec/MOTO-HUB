@@ -41,6 +41,24 @@ group-owner fallback is allowed when the local IPv4 prefix is known and the
 derived network address is valid. MOTO-HUB does not invent a service port or
 package when discovery itself fails.
 
+**What counts as "not invented" (revised 2026-08-02).** The rule above is about
+*provenance*, not about which mechanism found the endpoint. An endpoint is
+admissible when either an NSD advertisement resolved it, or a full EasyConn
+`CMD_MDNS_RESPOND` handshake completed against it — the dash answering the
+probe is itself the confirmation. An open TCP port is **never** sufficient on
+its own, on any link type.
+
+This was previously read as "NSD only, except on Wi-Fi Direct", which left the
+infrastructure path with no recourse: when a dash stays silent on NSD and
+refuses `10930`, discovery gave up without ever establishing whether the dash
+speaks EasyConn on a different port. Field logs from Zontes, VOGE and QJ dashes
+are all that shape. `discoverWithRetry` therefore now ends with the same
+ACK-verified sweep of `FALLBACK_EC_PORTS` (10915–10935) that
+`discoverOverWifiDirect` already used, and adopts a port only when the
+handshake completes on it. NSD remains strictly preferred, because a resolved
+advertisement also carries the service package; the sweep runs only after every
+NSD window and the direct wake probe have failed.
+
 ### Wi-Fi Direct Group Owner dashes (`DIRECT-` SSIDs)
 
 Some dashes (CL-C450 class, and units advertising SSIDs like `DIRECT-go-CFMOTO-xxxx`)
