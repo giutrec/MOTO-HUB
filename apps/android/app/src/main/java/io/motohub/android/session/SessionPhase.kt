@@ -52,7 +52,20 @@ data class MotorcycleProfile(
 data class HubSessionState(
     val phase: SessionPhase = SessionPhase.SETUP_REQUIRED,
     val motorcycle: MotorcycleProfile? = null,
-    val message: String = motoHubText("Set up the motorcycle network to get started.")
+    val message: String = motoHubText("Set up the motorcycle network to get started."),
+    /**
+     * The last failure was Android never joining the dash's access point, on a profile that was
+     * not already [TBoxConnectionMode.PHONE_HOTSPOT]. That is the exact shape a Wi-Fi-client dash
+     * produces - there is no access point to join, so the join can only time out - and whether a
+     * given dash is one of those cannot be inferred from its brand, its SSID, or its modelId
+     * (the modelId only arrives after a link is up, which never happens here). So the app cannot
+     * decide for the rider; it can only make trying the other mode cost one tap instead of a
+     * hunt through the menus.
+     *
+     * Carried as state rather than matched out of [message] because that text is assembled from
+     * the underlying exception and is translated.
+     */
+    val offerPhoneHotspotRetry: Boolean = false
 )
 
 fun HubSessionState.withMotorcycle(profile: MotorcycleProfile): HubSessionState = copy(

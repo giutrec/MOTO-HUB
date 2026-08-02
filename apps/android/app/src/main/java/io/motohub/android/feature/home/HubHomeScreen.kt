@@ -88,6 +88,7 @@ fun HubHomeScreen(
     onScanQr: () -> Unit,
     onImportQrPhoto: () -> Unit,
     onManualPairing: () -> Unit,
+    onTryPhoneHotspot: () -> Unit,
     onConnectAndDiscover: () -> Unit,
     officialCfmotoAppInstalled: Boolean,
     onCloseOfficialCfmotoAndRetry: () -> Unit,
@@ -167,7 +168,8 @@ fun HubHomeScreen(
                             externalDisplayActive = externalDisplayActive,
                             externalDisplayStreaming = externalDisplayStreaming,
                             onStartExternalDisplay = onStartExternalDisplay,
-                            onStopExternalDisplay = onStopExternalDisplay
+                            onStopExternalDisplay = onStopExternalDisplay,
+                            onTryPhoneHotspot = onTryPhoneHotspot
                         )
                         HubTab.GARAGE -> garageContent()
                         HubTab.SETTINGS -> settingsContent()
@@ -191,6 +193,7 @@ private fun HomeTabContent(
     onScanQr: () -> Unit,
     onImportQrPhoto: () -> Unit,
     onManualPairing: () -> Unit,
+    onTryPhoneHotspot: () -> Unit,
     onConnectAndDiscover: () -> Unit,
     officialCfmotoAppInstalled: Boolean,
     onCloseOfficialCfmotoAndRetry: () -> Unit,
@@ -273,6 +276,9 @@ private fun HomeTabContent(
             )
             HubDestination.CONNECTION -> ConnectionContent(
                 errorMessage = session.message.takeIf { session.phase == SessionPhase.ERROR },
+                showPhoneHotspotRetry = session.phase == SessionPhase.ERROR &&
+                    session.offerPhoneHotspotRetry,
+                onTryPhoneHotspot = onTryPhoneHotspot,
                 onConnect = onConnectAndDiscover,
                 officialCfmotoAppInstalled = officialCfmotoAppInstalled,
                 onCloseOfficialCfmotoAndRetry = onCloseOfficialCfmotoAndRetry,
@@ -406,6 +412,8 @@ private fun PairingContent(
 @Composable
 private fun ConnectionContent(
     errorMessage: String?,
+    showPhoneHotspotRetry: Boolean,
+    onTryPhoneHotspot: () -> Unit,
     onConnect: () -> Unit,
     officialCfmotoAppInstalled: Boolean,
     onCloseOfficialCfmotoAndRetry: () -> Unit,
@@ -427,7 +435,9 @@ private fun ConnectionContent(
                 showWifiSettingsAction = message == WifiGate.WIFI_OFF_MESSAGE,
                 onOpenWifiSettings = onOpenWifiSettings,
                 showAndroidAutoSetupHelp = AndroidAutoSelfModeHelp.isMessageAboutSelfMode(message),
-                onOpenAndroidAutoSettings = onOpenAndroidAutoSettings
+                onOpenAndroidAutoSettings = onOpenAndroidAutoSettings,
+                showPhoneHotspotRetry = showPhoneHotspotRetry,
+                onTryPhoneHotspot = onTryPhoneHotspot
             )
         }
         PrimaryAction("Connect", onConnect)
@@ -458,7 +468,9 @@ private fun ErrorBanner(
     showWifiSettingsAction: Boolean,
     onOpenWifiSettings: () -> Unit,
     showAndroidAutoSetupHelp: Boolean = false,
-    onOpenAndroidAutoSettings: () -> Unit = {}
+    onOpenAndroidAutoSettings: () -> Unit = {},
+    showPhoneHotspotRetry: Boolean = false,
+    onTryPhoneHotspot: () -> Unit = {}
 ) {
     var expanded by rememberSaveable(message) { mutableStateOf(false) }
     // The official-app hint is evidence-based only for a port conflict; for every other
@@ -509,6 +521,23 @@ private fun ErrorBanner(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
+            if (showPhoneHotspotRetry) {
+                // Never behind the details fold. Whether a dash broadcasts at all or waits for
+                // the phone to host cannot be told apart from the outside, and a rider who
+                // cannot get past this screen has no other way to find out - so the one action
+                // that settles it stays in front of them, with the credentials already carried
+                // over so trying costs a tap.
+                Text(
+                    motoHubText("Some dashboards never broadcast a network of their own: they join a hotspot your phone creates, using the Ssid and Password shown on the dash. If yours says \"open Android hotspot\", try that instead."),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                SecondaryAction(
+                    motoHubText("Try: my phone hosts the hotspot"),
+                    onTryPhoneHotspot,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
             if (showOfficialAppHintProminently) {
                 // A port conflict is the one failure the official app is known to cause, and
                 // Android gives no way to ask whether another app is currently running -

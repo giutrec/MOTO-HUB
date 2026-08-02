@@ -341,7 +341,13 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                         TBoxVpnDiagnostics.userFacingMessage(
                             error = networkFailure,
                             activeVpnLabel = null
-                        ) ?: "Unable to connect to the T-Box network: ${networkFailure.message}"
+                        ) ?: "Unable to connect to the T-Box network: ${networkFailure.message}",
+                        // Android never joined an access point. On a dash that is itself a Wi-Fi
+                        // client there is no access point to join, so this is the only failure it
+                        // can ever produce - and it is indistinguishable from a dash that is off.
+                        // Offer the other mode instead of leaving the rider to find it.
+                        offerPhoneHotspotRetry =
+                            profile.connectionMode != TBoxConnectionMode.PHONE_HOTSPOT
                     )
                     return@launch
                 }
@@ -492,7 +498,28 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         super.onCleared()
     }
 
-    private fun showError(message: String) {
+    /**
+     * Opens manual pairing already filled in for the phone-hosted transport, keeping the SSID and
+     * password the rider already entered. Retyping them is the whole reason the offer would go
+     * unused: the credentials are the dash's, printed on its screen, and nobody wants to copy
+     * them twice to test a theory.
+     */
+    fun preparePhoneHotspotRetry() {
+        val profile = mutableUiState.value.session.motorcycle
+        ProjectionEventLog.record(
+            "PAIRING",
+            "Rider is retrying ${profile?.ssid ?: "the motorcycle"} as a phone-hosted network " +
+                "after the access-point join failed."
+        )
+        mutableUiState.value = mutableUiState.value.copy(
+            ssid = profile?.ssid.orEmpty(),
+            password = profile?.password.orEmpty(),
+            connectionMode = TBoxConnectionMode.PHONE_HOTSPOT,
+            formError = null
+        )
+    }
+
+    private fun showError(message: String, offerPhoneHotspotRetry: Boolean = false) {
         val userFacingMessage = TBoxConflictDiagnostics.userFacingMessage(message)
         // Recorded as a warning, not an error: this only puts a banner on screen. Whatever
         // actually failed was already reported at ERROR by the layer that detected it, and
@@ -502,7 +529,8 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         mutableUiState.value = mutableUiState.value.copy(
             session = mutableUiState.value.session.copy(
                 phase = SessionPhase.ERROR,
-                message = userFacingMessage
+                message = userFacingMessage,
+                offerPhoneHotspotRetry = offerPhoneHotspotRetry
             )
         )
     }

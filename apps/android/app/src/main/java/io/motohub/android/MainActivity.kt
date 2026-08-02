@@ -936,6 +936,13 @@ class MainActivity : ComponentActivity() {
                             viewModel.resetManualPairingForm()
                             showManualPairing = true
                         },
+                        onTryPhoneHotspot = {
+                            // Same screen as manual pairing, but pre-filled instead of reset: the
+                            // rider is changing one setting on a motorcycle they already entered,
+                            // not adding a new one.
+                            viewModel.preparePhoneHotspotRetry()
+                            showManualPairing = true
+                        },
                         onConnectAndDiscover = {
                             val permissions = arrayOf(
                                 Manifest.permission.NEARBY_WIFI_DEVICES,
