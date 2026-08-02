@@ -124,6 +124,37 @@ object HandlebarCalibration {
         PhysicalPress.entries.any { MotorcycleScope.contains(preferences(context), context, it.id) }
 
     /**
+     * Observed - not taught - that this motorcycle's volume rocker never reaches the phone.
+     *
+     * Deliberately NOT stored as [MISSING] on the volume presses, which is what a straight port
+     * of OpenCfMoto's ButtonPresence would do. Writing any [PhysicalPress] key flips
+     * [isCalibrated] to true, and [gestureFor] then stops handing out [ASSUMED] for *every* press
+     * - so inferring an absent rocker would silently unbind the select button's play/pause on a
+     * rider who never opened the wizard. The key below is not a press id, so [isCalibrated],
+     * [export] and [import] (all of which iterate [PhysicalPress]) are untouched.
+     *
+     * An inference is also weaker than a rider's statement, and is treated as such: it only
+     * suppresses the volume pin, it never hides a row, and the first genuine volume press
+     * clears it.
+     */
+    fun noteVolumeRockerSilent(context: Context) {
+        MotorcycleScope.putString(preferences(context), context, KEY_VOLUME_ROCKER_SILENT, "true")
+    }
+
+    /** The rocker spoke after all: drop the inference so the pin comes back. */
+    fun clearVolumeRockerSilent(context: Context) {
+        if (!isVolumeRockerSilent(context)) return
+        MotorcycleScope.putString(preferences(context), context, KEY_VOLUME_ROCKER_SILENT, "")
+    }
+
+    fun isVolumeRockerSilent(context: Context): Boolean =
+        MotorcycleScope.getString(preferences(context), context, KEY_VOLUME_ROCKER_SILENT, null) == "true"
+
+    /** Not a [PhysicalPress] id, on purpose - see [noteVolumeRockerSilent]. Internal so the
+     *  test can assert that separation rather than trusting the comment. */
+    internal const val KEY_VOLUME_ROCKER_SILENT = "observed_volume_rocker_silent"
+
+    /**
      * Serializes the CURRENT motorcycle's taught bindings as "pressId=value" pairs joined by
      * ',' for the companion→Core session sync. Values are gesture ids, [MISSING], or
      * [UNBOUND]; presses with nothing stored are omitted.

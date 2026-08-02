@@ -205,12 +205,69 @@ class MediaButtonBridge(
     /** Last media volume seen by the observer, for the diagnostic trace only. */
     private var lastObservedVolume = -1
 
+    private var volumeSilenceProbe: Runnable? = null
+
+    /**
+     * Settles "does this handlebar even have a volume rocker?" by watching, instead of waiting
+     * for the rider to open the calibration wizard and say so.
+     *
+     * A rider who never calibrates keeps the assumed rocker forever, so on a dashboard that keeps
+     * its rocker to itself the media volume stays pinned for the whole session and the PHONE's
+     * own volume buttons keep being read as handlebar presses. That is the CFDL16 complaint, and
+     * before this it only ever ended by hand.
+     *
+     * Armed only where the answer is genuinely unknown: capture running, pin taken, nothing
+     * taught, nothing already inferred. Any real volume press cancels it - and clears a previous
+     * inference - so a rocker that is merely idle for two minutes is never mistaken for an absent
+     * one.
+     */
+    private fun scheduleVolumeSilenceProbe() {
+        cancelVolumeSilenceProbe()
+        if (HandlebarCalibration.isCalibrated(context)) return
+        if (HandlebarCalibration.isVolumeRockerSilent(context)) return
+        val probe = Runnable {
+            volumeSilenceProbe = null
+            if (!captureActive || !usesVolumeGestures) return@Runnable
+            if (HandlebarCalibration.isCalibrated(context)) return@Runnable
+            log(
+                "[BTN] no volume press in ${VOLUME_SILENCE_PROBE_MILLIS / 1000}s of capture; " +
+                    "treating this handlebar as having no volume rocker and releasing the pin"
+            )
+            HandlebarCalibration.noteVolumeRockerSilent(context)
+            refreshVolumeGestureUse()
+        }
+        volumeSilenceProbe = probe
+        handler.postDelayed(probe, VOLUME_SILENCE_PROBE_MILLIS)
+    }
+
+    private fun cancelVolumeSilenceProbe() {
+        volumeSilenceProbe?.let(handler::removeCallbacks)
+        volumeSilenceProbe = null
+    }
+
+    /**
+     * A volume press did arrive: this handlebar has a rocker. Cancels the probe, and undoes an
+     * earlier inference - a dash can start answering after a firmware update or a reconnect, and
+     * an inference that could never be revoked would be worse than the assumption it replaced.
+     */
+    private fun noteVolumePressObserved() {
+        cancelVolumeSilenceProbe()
+        if (HandlebarCalibration.isVolumeRockerSilent(context)) {
+            log("[BTN] a volume press arrived after all; restoring the volume rocker")
+            HandlebarCalibration.clearVolumeRockerSilent(context)
+        }
+    }
+
     /**
      * True unless the rider has taught the app that their handlebar's volume presses never
      * arrive. Before calibration the answer is yes: most dashboards do send them, and a
      * missed gesture is worse than a held volume.
      */
     private fun volumeGesturesInUse(): Boolean {
+        // An uncalibrated handlebar assumes a rocker, which is right for most dashboards and
+        // wrong forever for the ones that never send one. The silence probe settles it without
+        // asking the rider (see [scheduleVolumeSilenceProbe]).
+        if (HandlebarCalibration.isVolumeRockerSilent(context)) return false
         if (!HandlebarCalibration.isCalibrated(context)) return true
         return HandlebarCalibration.pressFor(context, HandlebarGesture.VOLUME_UP) != null ||
             HandlebarCalibration.pressFor(context, HandlebarGesture.VOLUME_DOWN) != null ||
@@ -237,6 +294,7 @@ class MediaButtonBridge(
                 previousVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
             }
             pinVolume()
+            scheduleVolumeSilenceProbe()
         } else {
             log("[BTN] volume keys are not delivered by this dashboard; leaving the media volume alone")
         }
@@ -408,6 +466,7 @@ class MediaButtonBridge(
         repeatLatched.clear()
         trackDownAt.clear()
         cancelPendingTaps()
+        cancelVolumeSilenceProbe()
         stopKeepAlive()
         cancelReclaim()
         cancelMediaNotification()
@@ -602,6 +661,9 @@ class MediaButtonBridge(
         }
         val single = if (delta > 0) HandlebarGesture.VOLUME_UP else HandlebarGesture.VOLUME_DOWN
         log("[BTN] volume ${if (delta > 0) "UP" else "DOWN"}; pinned=$pinnedVolume, delta=$delta")
+        // Reached only past every guard above (ignore window, focus-loss duck, unchanged level),
+        // so this is a real press off the handlebar - the one thing that proves a rocker exists.
+        noteVolumePressObserved()
         val streamMax = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
         when (val read = interpretVolumeDelta(delta, HandlebarControlStore.action(context, single), streamMax)) {
             null -> Unit
@@ -1054,6 +1116,14 @@ class MediaButtonBridge(
         private const val ECHO_REFRACTORY_MILLIS = 80L
         private const val SELECT_DEDUP_MILLIS = 100L
         private const val REPIN_IGNORE_MILLIS = 80L
+
+        /**
+         * How long a pinned session may go without a single volume press before the rocker is
+         * taken to be absent. Long enough that a rider who simply has not touched the volume yet
+         * is not misread - the cost of waiting is only that the pin stays a little longer, while
+         * the cost of deciding too early is a rocker that stops working.
+         */
+        private const val VOLUME_SILENCE_PROBE_MILLIS = 90_000L
         private val bridges = ConcurrentHashMap<String, MediaButtonBridge>()
 
         fun setTargetCaptureActive(targetName: String, enabled: Boolean): Boolean {
