@@ -44,7 +44,13 @@ enum class TBoxModelProfile(
      * to false only so that a profile written for a dash known not to need it can stay silent;
      * anything unidentified goes through [GENERIC], which turns it on.
      */
-    val requiresProactivePxcHeartbeat: Boolean = false
+    val requiresProactivePxcHeartbeat: Boolean = false,
+    /**
+     * GOP length in seconds for the TFT AVC encoder; 0 keeps the all-intra stream every dash has
+     * always received. Only compatibility-experiment profiles set this, so it can never change
+     * the wire format of a dash that streams fine today.
+     */
+    val encoderKeyframeIntervalSeconds: Int = 0
 ) {
     MOTO_HUB_SIMULATOR(
         key = "moto_hub_simulator",
@@ -164,6 +170,28 @@ enum class TBoxModelProfile(
         fallbackTBoxVideoArea = TBoxEvent.VideoArea(544, 512),
         requiresSockAuth = false,
         advertisedSupportFunction = 0
+    ),
+    /**
+     * Compatibility experiment for the Zontes 368G (2025, PKE firmware 1.25.x, HUName JCDZ34-*):
+     * the dash completes the whole EasyConn handshake, requests 1280x535, sends STREAM_START and
+     * pulls frames, yet its UI never leaves the pairing-QR page (field log 2026-08-03). Manual
+     * selection only - [score] never claims it, so no dash ever lands here by detection. Two
+     * deltas versus [GENERIC], both suspected requirements of that firmware's decoder:
+     * indexed video framing (any non-GENERIC profile keeps the frame index, see
+     * RideDaemonTransport's plainVideoFramingAllowed) and a 1s GOP instead of all-intra.
+     */
+    ZONTES_368G_TEST(
+        key = "zontes_368g_test",
+        displayName = "Zontes 368G (test)",
+        modelIds = emptySet(),
+        mapTilesRequireCellular = true,
+        supportsScreenTouch = false,
+        defaultAndroidAutoPreset = AndroidAutoVideoPreset.LANDSCAPE_1280X720,
+        fallbackTBoxVideoArea = TBoxEvent.VideoArea(1280, 535),
+        requiresSockAuth = false,
+        advertisedSupportFunction = 0,
+        requiresProactivePxcHeartbeat = true,
+        encoderKeyframeIntervalSeconds = 1
     ),
     /**
      * Where every dashboard no other profile claims ends up, whatever badge is on the tank. The
@@ -356,6 +384,9 @@ enum class TBoxModelProfile(
                     if (identity.contains("moto-hub") || identity.contains("moto hub")) points += 4
                     points
                 }
+                // Manual-selection experiment: detection must never claim it, or the riders whose
+                // Zontes dashes already stream fine would silently change wire format.
+                ZONTES_368G_TEST -> 0
                 GENERIC -> 0
             }
         }

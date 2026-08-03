@@ -14,7 +14,13 @@ data class EncoderProfile(
     val width: Int,
     val height: Int,
     val frameRate: Int = 30,
-    val bitRate: Int = 2_500_000
+    val bitRate: Int = 2_500_000,
+    /**
+     * 0 (the default every dash currently gets) makes every frame an IDR; a positive value is a
+     * regular GOP in seconds. Only [io.motohub.android.tbox.TBoxModelProfile] entries that opt in
+     * change this, so the wire format for existing dashes stays untouched.
+     */
+    val keyframeIntervalSeconds: Int = 0
 ) {
     companion object {
         fun forTBoxArea(width: Int, height: Int): EncoderProfile = EncoderProfile(
@@ -60,7 +66,7 @@ class AvcEncoder(
         ProjectionEventLog.record(
             "ENCODER",
             "Configuring AVC encoder ${profile.width}x${profile.height}@${profile.frameRate}, " +
-                "bitrate=${profile.bitRate}, I-frame interval=0."
+                "bitrate=${profile.bitRate}, I-frame interval=${profile.keyframeIntervalSeconds}."
         )
         try {
             val configuredCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
@@ -73,7 +79,7 @@ class AvcEncoder(
                 setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
                 setInteger(MediaFormat.KEY_BIT_RATE, profile.bitRate)
                 setInteger(MediaFormat.KEY_FRAME_RATE, profile.frameRate)
-                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 0)
+                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, profile.keyframeIntervalSeconds)
                 setInteger(MediaFormat.KEY_PREPEND_HEADER_TO_SYNC_FRAMES, 1)
                 // Keep the existing broadly-supported codec setting. Idle pacing is handled by
                 // the compositor; some phone encoders reject larger repeat-frame intervals here.

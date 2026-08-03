@@ -470,8 +470,14 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
 
         val configuration = configurationResult.getOrThrow()
         val quality = MotoHubSettings.videoQuality(this)
+        val sessionModelProfile = TBoxModelProfile.resolve(
+            handle.motorcycle.modelId,
+            capabilityStore.load(handle.motorcycle)?.capabilities,
+            ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
+        )
         val encoderProfile = configuration.encoderProfile.copy(
-            bitRate = quality.bitrateFor(configuration.encoderProfile.bitRate)
+            bitRate = quality.bitrateFor(configuration.encoderProfile.bitRate),
+            keyframeIntervalSeconds = sessionModelProfile.encoderKeyframeIntervalSeconds
         )
         val negotiatedArea = configuration.rawArea
         val actualGeometry = DisplayGeometry(encoderProfile.width, encoderProfile.height)

@@ -178,8 +178,14 @@ class ProjectionSessionService : Service() {
         val configuration = configurationResult.getOrThrow()
         val area = configuration.rawArea
         val quality = MotoHubSettings.videoQuality(this)
+        val modelProfile = TBoxModelProfile.resolve(
+            handle.motorcycle.modelId,
+            capabilityStore.load(handle.motorcycle)?.capabilities,
+            ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
+        )
         val profile = configuration.encoderProfile.copy(
-            bitRate = quality.bitrateFor(configuration.encoderProfile.bitRate)
+            bitRate = quality.bitrateFor(configuration.encoderProfile.bitRate),
+            keyframeIntervalSeconds = modelProfile.encoderKeyframeIntervalSeconds
         )
         ProjectionEventLog.record("T-BOX", "Handshake completed.")
         if (configuration.source == TBoxVideoAreaSource.LIVE) {
