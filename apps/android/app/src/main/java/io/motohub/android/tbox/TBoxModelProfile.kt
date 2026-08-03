@@ -269,13 +269,19 @@ enum class TBoxModelProfile(
             val landscapeAdaptive = capabilities.landscapeAdaptive ?: false
 
             fun cfdl26BaseScore(): Int {
+                // Identity signals: things only a CFDL26-family CFMOTO dash reports. A modern
+                // sdkVersion (1.x) and supportFunction=128 are true of other brands' EasyConn
+                // firmware too (a generic Zontes dash reports sdkVersion=1.1.3.2 + 128 and was
+                // misclassified as 800NK Advanced by exactly those two), so they only ever
+                // corroborate an identity match, never establish one.
                 var points = 0
                 if (versionName.startsWith("CFDL26")) points += 4
                 if (packageName == "com.cfmoto.easyconnect") points += 3
                 if (sockAuth) points += 2
-                if (sdkVersion.isNotEmpty() && !sdkVersion.startsWith("0.")) points += 2
-                if (points > 0 && supportFunction == 128) points += 1
                 if (identity.contains("cfdl26") || identity.contains("motoplay")) points += 2
+                if (points == 0) return 0
+                if (sdkVersion.isNotEmpty() && !sdkVersion.startsWith("0.")) points += 2
+                if (supportFunction == 128) points += 1
                 return points
             }
 
@@ -330,11 +336,13 @@ enum class TBoxModelProfile(
                     points
                 }
                 CFDL16_MOTOPLAY_LANDSCAPE -> {
-                    // Only a positive, present signal counts - see the comment on
-                    // CFDL26_PORTRAIT above for why an absent (default-false) flag isn't
-                    // treated as evidence either way.
+                    // Primary identification is the QR modelId (66660742). For CLIENT_INFO
+                    // scoring the same identity-vs-corroboration split as cfdl26BaseScore()
+                    // applies: supportLandscapeAdaptive is a generic EasyConn capability flag
+                    // (other brands report it true) and must never claim this profile alone.
                     var points = 0
-                    if (landscapeAdaptive) points += 1
+                    if (identity.contains("cfdl16") || identity.contains("motoplay")) points += 2
+                    if (points > 0 && landscapeAdaptive) points += 1
                     points
                 }
                 CL_C450 -> {

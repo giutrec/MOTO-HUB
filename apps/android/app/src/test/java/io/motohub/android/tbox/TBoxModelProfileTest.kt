@@ -227,6 +227,47 @@ class TBoxModelProfileTest {
     }
 
     @Test
+    fun `generic EasyConn CLIENT_INFO never claims a CFMOTO profile`() {
+        // Exact signals from the Zontes tester's diagnostics (2026-08-03, app 1.1.35): a modern
+        // sdkVersion plus supportFunction=128 plus the generic mirrorOverlayTouch/
+        // landscapeAdaptive flags scored CFDL26 800NK Advanced at 4 (and CFDL16 MotoPlay at 1),
+        // forcing a portrait 720x1280 AA source on a 1024x443 landscape TFT and vetoing the
+        // learned geometry. None of these flags is brand-specific, so the dash must stay GENERIC
+        // and keep the learned-geometry path.
+        val zontes = TBoxCapabilities(
+            huName = "AJQC05-A003",
+            packageName = "linux_no_package",
+            versionName = "1.2.5-20240918.1057",
+            sdkVersion = "1.1.3.2",
+            supportFunction = 128,
+            socketServerAuth = false,
+            screenTouch = false,
+            mirrorOverlayTouch = true,
+            landscapeAdaptive = true,
+            productType = 3,
+            screenType = 1,
+            channel = "48405"
+        )
+        assertEquals(TBoxModelProfile.GENERIC, TBoxModelProfile.resolve("48405", zontes))
+        assertFalse(TBoxModelProfile.hasValidatedAndroidAutoPreset("48405", zontes))
+    }
+
+    @Test
+    fun `weak corroborating signals still count once a real CFDL26 identity is present`() {
+        // The same corroborating signals the Zontes reports must keep boosting a dash that
+        // really is CFDL26 — the fix gates them, it must not discard them.
+        val resolved = TBoxModelProfile.resolve(
+            modelId = null,
+            capabilities = TBoxCapabilities(
+                versionName = "CFDL26.2.3.0.5",
+                sdkVersion = "1.2.0",
+                supportFunction = 128
+            )
+        )
+        assertEquals(TBoxModelProfile.CFDL26_LANDSCAPE, resolved)
+    }
+
+    @Test
     fun `manual override selects the new profiles directly`() {
         assertEquals(TBoxModelProfile.CFDL26_NK_TOUCH, ProfileOverride.CFDL26_NK_TOUCH.resolve())
         assertEquals(
