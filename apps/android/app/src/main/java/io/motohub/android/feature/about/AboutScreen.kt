@@ -2,8 +2,10 @@ package io.motohub.android.feature.about
 
 import io.motohub.android.i18n.motoHubText
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,7 +24,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -34,12 +41,22 @@ import io.motohub.android.ui.components.MotoHubHeader
 const val MOTO_HUB_GITHUB_URL = "https://github.com/vincenzobpt/MOTO-HUB"
 const val MOTO_HUB_DISCORD_URL = "https://discord.gg/Y8bnx9Zxgw"
 
+/** Taps on the version card that reveal an edition's hidden prototype page. */
+private const val PROTOTYPE_UNLOCK_TAP_COUNT = 10
+
 @Composable
 fun AboutScreen(
     onOpenGithub: () -> Unit,
     onOpenDiscord: () -> Unit,
     onCheckUpdates: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    /** Editions with a hidden prototype pass this; where it is null the version
+     *  card is inert and no unlock exists. This screen is shared by both
+     *  flavors, so it never names what it unlocks. */
+    onUnlockPrototype: (() -> Unit)? = null,
+    /** Only the edition that actually draws maps passes true. CORE ships no map, no geocoder and
+     *  no routing, so crediting OpenStreetMap there would claim a dependency it does not have. */
+    showsMaps: Boolean = false
 ) {
     BackHandler(onBack = onBack)
 
@@ -118,7 +135,8 @@ fun AboutScreen(
                 }
             }
 
-            VersionCard()
+            if (showsMaps) MapCreditsCard()
+            VersionCard(onUnlockPrototype = onUnlockPrototype)
             Button(
                 onClick = onCheckUpdates,
                 modifier = Modifier
@@ -143,7 +161,12 @@ fun AboutScreen(
 }
 
 @Composable
-private fun VersionCard() {
+private fun VersionCard(onUnlockPrototype: (() -> Unit)? = null) {
+    val context = LocalContext.current
+    // Android developer-options style easter egg. The count resets every time
+    // the About screen is reopened, and the card is not clickable at all in an
+    // edition that passes no unlock.
+    var tapCount by remember { mutableIntStateOf(0) }
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.09f)
@@ -154,6 +177,32 @@ private fun VersionCard() {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(
+                    if (onUnlockPrototype == null) {
+                        Modifier
+                    } else {
+                        Modifier.clickable {
+                            tapCount++
+                            val remaining = PROTOTYPE_UNLOCK_TAP_COUNT - tapCount
+                            when {
+                                remaining <= 0 -> {
+                                    tapCount = 0
+                                    Toast.makeText(
+                                        context,
+                                        motoHubText("Prototype unlocked"),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    onUnlockPrototype()
+                                }
+                                remaining <= 3 -> Toast.makeText(
+                                    context,
+                                    motoHubText("%d taps away from the prototype", remaining),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    }
+                )
                 .padding(horizontal = 18.dp, vertical = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -175,6 +224,48 @@ private fun VersionCard() {
                     fontWeight = FontWeight.Bold
                 )
             }
+        }
+    }
+}
+
+/**
+ * Where the map data comes from, and who it belongs to.
+ *
+ * OpenStreetMap is under the ODbL and its attribution guidance asks for the credit to be visible
+ * to the person looking at the map - on the map, or one step away from it - which a line in the
+ * repository README does not satisfy. MapLibre Native is BSD-2-Clause and asks for its notice to
+ * travel with the binary. The phone maps also show MapLibre's own attribution control; this card
+ * is what covers the dashboard, where a TFT glanced at mid-ride has no room for one.
+ */
+@Composable
+private fun MapCreditsCard() {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = MaterialTheme.shapes.large
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            MonoLabel(motoHubText("MAPS & DATA"))
+            Text(
+                text = motoHubText(
+                    "Maps, addresses and routes are built on data by © OpenStreetMap " +
+                        "contributors, licensed under the ODbL."
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = motoHubText(
+                    "Map rendering by MapLibre Native (BSD-2-Clause). Vector tiles by OpenFreeMap, " +
+                        "to the OpenMapTiles schema; raster tiles by CARTO. Address search by " +
+                        "Photon. Routing by Valhalla, hosted by Stadia Maps or the FOSSGIS demo " +
+                        "server. Places by Overpass. Weather by Open-Meteo."
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
