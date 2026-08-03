@@ -14,3 +14,6 @@ local.properties
 /archive/cfmoto-cloud-client-poc/
 apps/android/app/src/main/res/raw/aa_cert
 apps/android/app/src/main/res/raw/aa_identity_data
+
+# Local CodeGraph index: machine-specific, 60-100MB, rebuilt by `codegraph init`.
+/.codegraph/

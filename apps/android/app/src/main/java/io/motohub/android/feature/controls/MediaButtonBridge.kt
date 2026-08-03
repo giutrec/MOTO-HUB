@@ -5,8 +5,11 @@ import io.motohub.android.i18n.motoHubText
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.bluetooth.BluetoothAdapter
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.database.ContentObserver
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
@@ -22,6 +25,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import android.view.KeyEvent
+import androidx.core.content.ContextCompat
 import io.motohub.android.R
 import io.motohub.android.androidauto.AndroidAutoInputCodes
 import io.motohub.android.androidauto.AndroidAutoPreviewRuntime
@@ -240,6 +244,51 @@ class MediaButtonBridge(
         handler.postDelayed(probe, VOLUME_SILENCE_PROBE_MILLIS)
     }
 
+    private var bluetoothWaitReceiver: BroadcastReceiver? = null
+
+    /**
+     * Waits for Bluetooth to come back, then starts capture.
+     *
+     * Without this the skip above would trade one fault for another: before it, a session started
+     * with Bluetooth off left the bridge running uselessly but ready, so switching Bluetooth on
+     * mid-ride made the handlebar work. Refusing to start and never looking again would have made
+     * that recoverable case permanent until the rider restarted the whole session.
+     *
+     * Only the adapter turning on is watched. A permission cannot be granted without leaving the
+     * app, and coming back re-runs the session's own start path.
+     */
+    private fun awaitBluetooth() {
+        if (bluetoothWaitReceiver != null) return
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(receiverContext: Context, intent: Intent) {
+                if (intent.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
+                if (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, -1) != BluetoothAdapter.STATE_ON) return
+                handler.post {
+                    if (!pendingCapture || captureActive) return@post
+                    if (!BluetoothStatus.canReceiveHandlebarKeys(context)) return@post
+                    log("[BTN] Bluetooth is back; starting handlebar capture")
+                    enableCapture()
+                }
+            }
+        }
+        runCatching {
+            ContextCompat.registerReceiver(
+                context,
+                receiver,
+                IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+            bluetoothWaitReceiver = receiver
+        }.onFailure { log("[BTN] could not watch for Bluetooth coming back: ${it.message}") }
+    }
+
+    private fun cancelBluetoothWait() {
+        bluetoothWaitReceiver?.let { receiver ->
+            runCatching { context.unregisterReceiver(receiver) }
+        }
+        bluetoothWaitReceiver = null
+    }
+
     private fun cancelVolumeSilenceProbe() {
         volumeSilenceProbe?.let(handler::removeCallbacks)
         volumeSilenceProbe = null
@@ -280,6 +329,25 @@ class MediaButtonBridge(
             log("[BTN] Cannot enable capture before the $targetName service is ready")
             return
         }
+        // Everything below costs the rider something: the media volume is pinned, audio focus is
+        // taken, a silent track plays. All of it is paid for by handlebar presses that arrive over
+        // Bluetooth - so with no adapter, the adapter off, or no permission to use it, there is
+        // nothing to gain and the rider simply loses their own volume buttons. Checked here for
+        // the same reason TBoxWifiDirectConnector checks NEARBY_WIFI_DEVICES before calling the
+        // framework: the failure is knowable in advance, and waiting for it to prove itself costs
+        // the rider the whole session.
+        //
+        // Not a check on whether the motorcycle is connected. A dash that is off or out of range
+        // will turn up during the ride, and refusing to listen for it would be the worse mistake.
+        if (!BluetoothStatus.canReceiveHandlebarKeys(context)) {
+            log(
+                "[BTN] capture skipped: Bluetooth is off or unavailable to this app, so no " +
+                    "handlebar press can arrive - leaving the media volume and audio focus alone"
+            )
+            awaitBluetooth()
+            return
+        }
+        cancelBluetoothWait()
         captureActive = true
         focusLossVolumeGuard = false
         // Pinning the media volume is how a volume-key press becomes readable as a gesture -
@@ -467,6 +535,7 @@ class MediaButtonBridge(
         trackDownAt.clear()
         cancelPendingTaps()
         cancelVolumeSilenceProbe()
+        cancelBluetoothWait()
         stopKeepAlive()
         cancelReclaim()
         cancelMediaNotification()

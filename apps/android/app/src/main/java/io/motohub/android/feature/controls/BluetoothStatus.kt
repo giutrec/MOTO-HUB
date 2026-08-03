@@ -123,6 +123,26 @@ object BluetoothStatus {
         }
     }
 
+    /**
+     * Whether a handlebar press could reach this phone *at all* right now.
+     *
+     * Synchronous on purpose, unlike [query]: this answers a decision taken while a session is
+     * starting, and the profile proxies [query] waits on say which device is connected - a much
+     * later question than whether Bluetooth can deliver a key press in the first place.
+     *
+     * Deliberately does not ask whether the motorcycle is connected. A dash that is merely off or
+     * out of range will connect during the ride, and refusing to listen for it would be worse than
+     * listening in vain. What this rules out is the case that cannot resolve itself while the app
+     * holds the rider's volume: no adapter, adapter off, or no permission to use it.
+     */
+    fun canReceiveHandlebarKeys(context: Context): Boolean {
+        val appContext = context.applicationContext
+        val adapter = (appContext.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+            ?: return false
+        val enabled = runCatching { adapter.isEnabled }.getOrDefault(false)
+        return enabled && hasConnectPermission(appContext)
+    }
+
     /** True if BLUETOOTH_CONNECT is held (always true before Android 12, where it doesn't exist). */
     fun hasConnectPermission(context: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
