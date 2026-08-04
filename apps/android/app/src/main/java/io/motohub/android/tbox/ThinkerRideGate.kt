@@ -25,11 +25,30 @@ internal object ThinkerRideGate {
     fun requiresBle(profile: MotorcycleProfile?): Boolean =
         profile?.connectionMode == TBoxConnectionMode.THINKERRIDE
 
-    fun hasBlePermissions(context: Context): Boolean = blePermissions.all { permission ->
-        context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
+    /**
+     * Like [WifiDirectGate.hasNearbyDevicesPermission], [packageName] matters because the BLE
+     * scan runs in the process that owns the transport: when a companion (PRO) drives the
+     * connection, the pairing happens inside CORE, whose runtime grants are the ones that count
+     * — and which the rider never gets asked for, because CORE stays in the background.
+     */
+    fun hasBlePermissions(
+        context: Context,
+        packageName: String = context.packageName
+    ): Boolean = blePermissions.all { permission ->
+        context.packageManager.checkPermission(permission, packageName) ==
+            PackageManager.PERMISSION_GRANTED
     }
 
     fun missingPermissionMessage(appName: String): String =
-        "$appName does not have the \"Nearby devices\" (Bluetooth) permission, which this " +
-            "dashboard needs for pairing. Allow it in $appName's app info, then tap Connect again."
+        "$appName does not have the $PERMISSION_MARKER, which this dashboard needs for " +
+            "pairing. Allow it in $appName's app info, then tap Connect again."
+
+    /**
+     * Whether an error banner is showing [missingPermissionMessage], so the screen can offer
+     * the one action that fixes it — matched on the message text the same way [WifiDirectGate]
+     * does, and distinct from its marker (this one names Bluetooth).
+     */
+    fun isMissingPermissionMessage(message: String): Boolean = PERMISSION_MARKER in message
+
+    private const val PERMISSION_MARKER = "\"Nearby devices\" (Bluetooth) permission"
 }
