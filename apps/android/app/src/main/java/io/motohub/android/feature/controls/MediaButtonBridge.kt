@@ -885,7 +885,25 @@ class MediaButtonBridge(
         override fun onMediaButtonEvent(intent: Intent): Boolean {
             @Suppress("DEPRECATION")
             val event = intent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
-            if (!captureActive || event == null) return false
+            // Raw trace before every guard below: a keycode this bridge does not handle, or a
+            // press landing while capture is off, was otherwise dropped without a line in the
+            // shared log — indistinguishable from a dash that sends nothing at all (Zontes
+            // 703RR report 2026-08-04: teach screen never lit up, no way to tell which).
+            if (event == null) {
+                log("[BTN] raw media button intent without a KeyEvent")
+                return false
+            }
+            val actionName = when (event.action) {
+                KeyEvent.ACTION_DOWN -> "down"
+                KeyEvent.ACTION_UP -> "up"
+                else -> "action=${event.action}"
+            }
+            log(
+                "[BTN] raw ${KeyEvent.keyCodeToString(event.keyCode)} $actionName " +
+                    "repeat=${event.repeatCount}" +
+                    if (captureActive) "" else " (capture inactive; ignored)"
+            )
+            if (!captureActive) return false
             val handled = isSelectKey(event.keyCode) || event.keyCode == KeyEvent.KEYCODE_MEDIA_NEXT ||
                 event.keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS ||
                 event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ||
