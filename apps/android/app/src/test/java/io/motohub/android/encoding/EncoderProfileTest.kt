@@ -23,4 +23,11 @@ class EncoderProfileTest {
     fun `unknown runtime area is aligned without a device profile`() {
         assertEquals(EncoderProfile(width = 1024, height = 592), EncoderProfile.forTBoxArea(1024, 601))
     }
+
+    @Test
+    fun `negotiated T-Box profile defaults to the all-intra stream`() {
+        // AA projection and mirroring pace frames by dropping encoder output, which is only
+        // decodable on an all-intra stream; GOP encoding is an explicit per-session opt-in.
+        assertEquals(0, EncoderProfile.forTBoxArea(800, 386).keyframeIntervalSeconds)
+    }
 }

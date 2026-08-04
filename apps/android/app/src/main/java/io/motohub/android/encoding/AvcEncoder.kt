@@ -15,11 +15,11 @@ data class EncoderProfile(
     val height: Int,
     val frameRate: Int = 30,
     val bitRate: Int = 2_500_000,
-    /**
-     * 0 (the default every dash currently gets) makes every frame an IDR; a positive value is a
-     * regular GOP in seconds. Only [io.motohub.android.tbox.TBoxModelProfile] entries that opt in
-     * change this, so the wire format for existing dashes stays untouched.
-     */
+    /** 0 keeps the legacy all-intra stream (every frame an IDR keyframe), which tolerates
+     *  arbitrary output-side frame dropping but spends the bitrate like per-frame JPEG.
+     *  A positive value enables a GOP of that many seconds; P-frames then carry most of the
+     *  stream, so the input surface must be paced upstream because P-frames cannot be
+     *  dropped mid-GOP without corrupting the decode until the next keyframe. */
     val keyframeIntervalSeconds: Int = 0
 ) {
     companion object {
@@ -51,6 +51,14 @@ class AvcEncoder(
     private val prependedKeyframes = AtomicLong(0L)
     @Volatile private var frameCap = profile.frameRate
     @Volatile private var frameCapListener: ((Int) -> Unit)? = null
+    @Volatile private var lastRecoverySyncNanos = 0L
+    @Volatile private var intraRefreshActive = false
+
+    // A run of recovery sync-frame requests, coalesced for the log. Only ever touched on the
+    // drain thread. See [recordRecoverySyncRequest].
+    private var recoverySyncRunCount = 0
+    private var recoverySyncRunStartedNanos = 0L
+    private var recoverySyncLastLogNanos = 0L
     private var nextFrameDeadlineNanos = 0L
     var inputSurface: Surface? = null
         private set
@@ -63,15 +71,46 @@ class AvcEncoder(
 
     fun start() {
         check(running.compareAndSet(false, true)) { "Encoder is already running" }
+        recoverySyncRunCount = 0
         ProjectionEventLog.record(
             "ENCODER",
             "Configuring AVC encoder ${profile.width}x${profile.height}@${profile.frameRate}, " +
-                "bitrate=${profile.bitRate}, I-frame interval=${profile.keyframeIntervalSeconds}."
+                "bitrate=${profile.bitRate}, I-frame interval=${profile.keyframeIntervalSeconds}s" +
+                if (profile.keyframeIntervalSeconds == 0) " (all-intra)." else " (GOP)."
         )
         try {
             val configuredCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
             codec = configuredCodec
-            fun encoderFormat(forceBaseline: Boolean) = MediaFormat.createVideoFormat(
+            val capabilities = runCatching {
+                configuredCodec.codecInfo.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC)
+            }.getOrNull()
+            // GOP streams ride links with shallow queues (the CORE video pipe): VBR spikes on
+            // keyframes and fast map motion overflow them and every dropped frame smears the
+            // picture until the next IDR. CBR bounds the per-frame burst instead.
+            val useCbr = profile.keyframeIntervalSeconds > 0 && runCatching {
+                capabilities?.encoderCapabilities
+                    ?.isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
+            }.getOrNull() == true
+            // Periodic IDRs are the remaining burst on a GOP stream, and answering congestion
+            // drops with recovery IDRs feeds the very congestion that caused them. Intra
+            // refresh removes the burst entirely: intra macroblocks are spread over a full
+            // refresh cycle, every frame stays route-sized, and a lost frame heals itself
+            // progressively within one cycle without any recovery signaling.
+            val useIntraRefresh = profile.keyframeIntervalSeconds > 0 && runCatching {
+                capabilities?.isFeatureSupported(
+                    MediaCodecInfo.CodecCapabilities.FEATURE_IntraRefresh
+                )
+            }.getOrNull() == true
+            if (profile.keyframeIntervalSeconds > 0) {
+                ProjectionEventLog.record(
+                    "ENCODER",
+                    "GOP stream rate control: " +
+                        (if (useCbr) "CBR" else "codec default (CBR unsupported)") +
+                        ", intra refresh: " +
+                        if (useIntraRefresh) "enabled." else "unsupported by this codec."
+                )
+            }
+            fun encoderFormat(forceBaseline: Boolean, intraRefresh: Boolean) = MediaFormat.createVideoFormat(
                 MediaFormat.MIMETYPE_VIDEO_AVC,
                 profile.width,
                 profile.height
@@ -79,7 +118,20 @@ class AvcEncoder(
                 setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
                 setInteger(MediaFormat.KEY_BIT_RATE, profile.bitRate)
                 setInteger(MediaFormat.KEY_FRAME_RATE, profile.frameRate)
-                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, profile.keyframeIntervalSeconds)
+                if (intraRefresh) {
+                    // A full picture refresh every ~1s of frames; scheduled IDRs become a rare
+                    // safety net because the rolling refresh keeps the stream healthy on its own.
+                    setInteger(MediaFormat.KEY_INTRA_REFRESH_PERIOD, profile.frameRate)
+                    setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, INTRA_REFRESH_IDR_INTERVAL_SECONDS)
+                } else {
+                    setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, profile.keyframeIntervalSeconds)
+                }
+                if (useCbr) {
+                    setInteger(
+                        MediaFormat.KEY_BITRATE_MODE,
+                        MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR
+                    )
+                }
                 setInteger(MediaFormat.KEY_PREPEND_HEADER_TO_SYNC_FRAMES, 1)
                 // Keep the existing broadly-supported codec setting. Idle pacing is handled by
                 // the compositor; some phone encoders reject larger repeat-frame intervals here.
@@ -92,28 +144,47 @@ class AvcEncoder(
                     setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCLevel31)
                 }
             }
-            try {
-                configuredCodec.configure(
-                    encoderFormat(forceBaseline = true),
-                    null,
-                    null,
-                    MediaCodec.CONFIGURE_FLAG_ENCODE
-                )
-                ProjectionEventLog.record("ENCODER", "Configured H.264 Baseline profile at level 3.1.")
-            } catch (baselineFailure: Throwable) {
-                ProjectionEventLog.warning(
-                    "ENCODER",
-                    "H.264 Baseline profile is unavailable; retrying the default codec profile.",
-                    baselineFailure
-                )
-                configuredCodec.reset()
-                configuredCodec.configure(
-                    encoderFormat(forceBaseline = false),
-                    null,
-                    null,
-                    MediaCodec.CONFIGURE_FLAG_ENCODE
-                )
+            // Preference order: Baseline is the broadly-supported profile, intra refresh the
+            // burst-free stream shape. Fall back through the combinations because a codec that
+            // advertises FEATURE_IntraRefresh can still reject the key on configure().
+            data class ConfigureAttempt(val forceBaseline: Boolean, val intraRefresh: Boolean)
+            val attempts = buildList {
+                if (useIntraRefresh) {
+                    add(ConfigureAttempt(forceBaseline = true, intraRefresh = true))
+                    add(ConfigureAttempt(forceBaseline = false, intraRefresh = true))
+                }
+                add(ConfigureAttempt(forceBaseline = true, intraRefresh = false))
+                add(ConfigureAttempt(forceBaseline = false, intraRefresh = false))
             }
+            var configured: ConfigureAttempt? = null
+            for ((index, attempt) in attempts.withIndex()) {
+                try {
+                    configuredCodec.configure(
+                        encoderFormat(attempt.forceBaseline, attempt.intraRefresh),
+                        null,
+                        null,
+                        MediaCodec.CONFIGURE_FLAG_ENCODE
+                    )
+                    configured = attempt
+                    ProjectionEventLog.record(
+                        "ENCODER",
+                        "Configured H.264 " +
+                            (if (attempt.forceBaseline) "Baseline profile at level 3.1" else "default profile") +
+                            if (attempt.intraRefresh) " with intra refresh." else "."
+                    )
+                    break
+                } catch (failure: Throwable) {
+                    if (index == attempts.lastIndex) throw failure
+                    ProjectionEventLog.warning(
+                        "ENCODER",
+                        "AVC configure rejected (baseline=${attempt.forceBaseline}, " +
+                            "intraRefresh=${attempt.intraRefresh}); trying the next combination.",
+                        failure
+                    )
+                    configuredCodec.reset()
+                }
+            }
+            intraRefreshActive = configured?.intraRefresh == true
             inputSurface = configuredCodec.createInputSurface()
             configuredCodec.start()
             ProjectionEventLog.record("ENCODER", "AVC codec ${configuredCodec.name} started with surface input.")
@@ -157,14 +228,19 @@ class AvcEncoder(
 
     fun requestSyncFrame(reason: String) {
         val activeCodec = codec ?: return
-        runCatching {
-            activeCodec.setParameters(Bundle().apply {
-                putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0)
-            })
-            ProjectionEventLog.record("ENCODER", "Requested AVC sync frame: $reason.")
-        }.onFailure {
-            ProjectionEventLog.warning("ENCODER", "AVC sync-frame request failed: $reason.", it)
-        }
+        applySyncFrameRequest(activeCodec)
+            .onSuccess {
+                ProjectionEventLog.record("ENCODER", "Requested AVC sync frame: $reason.")
+            }
+            .onFailure {
+                ProjectionEventLog.warning("ENCODER", "AVC sync-frame request failed: $reason.", it)
+            }
+    }
+
+    private fun applySyncFrameRequest(activeCodec: MediaCodec): Result<Unit> = runCatching {
+        activeCodec.setParameters(Bundle().apply {
+            putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0)
+        })
     }
 
     /** Adjust the running H.264 bitrate without recreating the codec. */
@@ -251,6 +327,11 @@ class AvcEncoder(
                                         }
                                         if (!onAccessUnit(accessUnit)) {
                                             rejectedAccessUnits.incrementAndGet()
+                                            requestRecoverySyncFrame(
+                                                "access unit rejected on a GOP stream"
+                                            )
+                                        } else {
+                                            noteAccessUnitAccepted()
                                         }
                                     }
                                 }
@@ -275,6 +356,74 @@ class AvcEncoder(
         }
     }
 
+    /** On a GOP stream a lost access unit (sink rejection, or a transport-side drop reported
+     *  via its drop listener) leaves the T-Box decoder without reference history, so request
+     *  an IDR to restore the picture — throttled so a congested link is not fed even more
+     *  keyframe bits. All-intra streams need no recovery: every forwarded frame already
+     *  decodes on its own. */
+    fun requestRecoverySyncFrame(reason: String) {
+        if (profile.keyframeIntervalSeconds <= 0) return
+        // With intra refresh the rolling intra columns repair a lost frame within one refresh
+        // cycle on their own; injecting IDRs here would reintroduce the very keyframe bursts
+        // that congest the link and drop frames in the first place.
+        if (intraRefreshActive) return
+        val now = System.nanoTime()
+        if (now - lastRecoverySyncNanos < RECOVERY_SYNC_THROTTLE_NANOS) return
+        lastRecoverySyncNanos = now
+        val activeCodec = codec ?: return
+        val applied = applySyncFrameRequest(activeCodec)
+        recordRecoverySyncRequest(now, reason, applied.exceptionOrNull())
+    }
+
+    /**
+     * Keeps a run of recovery requests to three log lines - opened, still going, over - instead of
+     * one every 500ms.
+     *
+     * A transport that stops accepting frames entirely rejects every access unit until it is
+     * repaired, so this used to emit two lines a second for as long as the outage lasted. In a
+     * rider's diagnostics of a broken session, 187 of the 800 retained entries were this one
+     * sentence, and they had evicted the very events that would have explained how the session
+     * broke in the first place.
+     */
+    private fun recordRecoverySyncRequest(nowNanos: Long, reason: String, failure: Throwable?) {
+        recoverySyncRunCount++
+        if (recoverySyncRunCount == 1) {
+            recoverySyncRunStartedNanos = nowNanos
+            recoverySyncLastLogNanos = nowNanos
+            if (failure != null) {
+                ProjectionEventLog.warning(
+                    "ENCODER",
+                    "AVC sync-frame request failed: $reason.",
+                    failure
+                )
+            } else {
+                ProjectionEventLog.record("ENCODER", "Requested AVC sync frame: $reason.")
+            }
+            return
+        }
+        if (nowNanos - recoverySyncLastLogNanos < RECOVERY_SYNC_LOG_INTERVAL_NANOS) return
+        recoverySyncLastLogNanos = nowNanos
+        ProjectionEventLog.record(
+            "ENCODER",
+            "Still requesting AVC sync frames ($reason): $recoverySyncRunCount request(s) over " +
+                "${(nowNanos - recoverySyncRunStartedNanos).nanosAsSeconds()}s."
+        )
+    }
+
+    /** Closes an open run of recovery requests once the transport takes a frame again. */
+    private fun noteAccessUnitAccepted() {
+        if (recoverySyncRunCount == 0) return
+        val requests = recoverySyncRunCount
+        val elapsed = (System.nanoTime() - recoverySyncRunStartedNanos).nanosAsSeconds()
+        recoverySyncRunCount = 0
+        ProjectionEventLog.record(
+            "ENCODER",
+            "AVC access units accepted again after $requests sync-frame request(s) over ${elapsed}s."
+        )
+    }
+
+    private fun Long.nanosAsSeconds(): Long = this / 1_000_000_000L
+
     private fun releaseCodec() {
         inputSurface?.release()
         inputSurface = null
@@ -284,6 +433,10 @@ class AvcEncoder(
     }
 
     private fun shouldForwardFrame(isKeyFrame: Boolean): Boolean {
+        // GOP streams must forward every frame: dropping a P-frame corrupts the decode until
+        // the next keyframe. Their frame pacing happens at the input surface instead, via the
+        // frame-cap listener (dashboard renderer / AA compositor).
+        if (profile.keyframeIntervalSeconds > 0) return true
         // Never pace out a sync frame: after a reconnect the T-Box decoder needs the next keyframe
         // immediately or the resumed stream can remain black until the next codec refresh.
         if (isKeyFrame) {
@@ -451,6 +604,20 @@ private fun ByteArray.readAvcConfigNal(offset: Int): Pair<ByteArray, Int>? {
 }
 
 private fun ByteArray.avcNalType(): Int = firstOrNull()?.toInt()?.and(0x1F) ?: -1
+
+/** Minimum spacing between congestion-recovery IDR requests. Half the dashboard GOP: quick
+ *  enough that smearing clears visibly faster than the scheduled keyframe, spaced enough that
+ *  sustained congestion doesn't devolve into an all-keyframe stream. */
+private const val RECOVERY_SYNC_THROTTLE_NANOS = 500_000_000L
+
+/** How often an ongoing run of recovery sync-frame requests may repeat itself in the log. */
+private const val RECOVERY_SYNC_LOG_INTERVAL_NANOS = 15_000_000_000L
+
+/** Scheduled-IDR spacing when intra refresh carries the stream. The rolling refresh keeps the
+ *  picture healthy, so full keyframes are only a rare resync safety net. Shortening this to 4s
+ *  was tried on the bike (2026-07-28) and made the picture worse, so periodic IDR bursts are
+ *  still what this link cannot absorb — keep them rare. */
+private const val INTRA_REFRESH_IDR_INTERVAL_SECONDS = 10
 
 private const val AVC_NAL_IDR = 5
 private const val AVC_NAL_SPS = 7
