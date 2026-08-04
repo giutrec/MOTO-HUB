@@ -2,6 +2,7 @@ package io.motohub.android.ipc;
 
 import android.view.Surface;
 import io.motohub.android.ipc.IAndroidAutoStateListener;
+import io.motohub.android.ipc.INavigationGuidanceListener;
 import io.motohub.android.ipc.AndroidAutoSettingsParcel;
 
 /**
@@ -59,4 +60,13 @@ interface IAndroidAutoReceiverService {
 
     void registerStateListener(IAndroidAutoStateListener listener);
     void unregisterStateListener(IAndroidAutoStateListener listener);
+
+    /**
+     * Instrument-cluster turn-by-turn guidance parsed from the running AA session's
+     * navigation channel. Appended after every pre-existing method so AIDL transaction
+     * ids stay stable across a CORE/companion version skew. The listener receives the
+     * latest known guidance immediately at registration.
+     */
+    void registerNavigationGuidanceListener(INavigationGuidanceListener listener);
+    void unregisterNavigationGuidanceListener(INavigationGuidanceListener listener);
 }

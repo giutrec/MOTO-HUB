@@ -238,6 +238,8 @@ class AaReceiver(
         serverSocket = null
         acceptThread?.interrupt(); acceptThread = null
         headUnitServerThread?.interrupt(); headUnitServerThread = null
+        // The nav app can no longer retract its last turn once the session is gone.
+        AaNavigationGuidance.clear()
         AaLog.sink = null
         log("[AA] receiver stopped")
     }

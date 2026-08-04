@@ -108,6 +108,16 @@ class AndroidAutoReceiverClient(
         service?.stopFullSession()
     }
 
+    /** Safe against an older Core that predates the guidance methods: returns false instead
+     *  of throwing when the remote transaction is unknown. */
+    fun registerNavigationGuidanceListener(listener: INavigationGuidanceListener): Boolean =
+        runCatching { service?.registerNavigationGuidanceListener(listener) }.isSuccess &&
+            service != null
+
+    fun unregisterNavigationGuidanceListener(listener: INavigationGuidanceListener) {
+        runCatching { service?.unregisterNavigationGuidanceListener(listener) }
+    }
+
     private companion object {
         const val TAG = "AndroidAutoReceiverClient"
     }

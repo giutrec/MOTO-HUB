@@ -102,6 +102,19 @@ class ServiceDiscoveryResponse(
                 }.build()
             }.build())
 
+            // --- Navigation status service (instrument-cluster turn-by-turn feed) ---
+            // Nav apps (Google Maps, Waze, …) stream the next maneuver, distances and ETA on
+            // this channel; AapControlNavigation parses it into AaNavigationGuidance for the
+            // Ride Dashboard's Navigation widget. ImageCodesOnly: the widget draws its own
+            // maneuver arrow, so the phone is never asked to rasterize turn icons for us.
+            services.add(Control.Service.newBuilder().also { service ->
+                service.id = Channel.ID_NAV
+                service.navigationStatusService = Control.Service.NavigationStatusService.newBuilder().apply {
+                    minimumIntervalMs = 1000
+                    type = Control.Service.NavigationStatusService.ClusterType.ImageCodesOnly
+                }.build()
+            }.build())
+
             return Control.ServiceDiscoveryResponse.newBuilder().apply {
                 make = VEHICLE_MAKE
                 model = VEHICLE_MODEL

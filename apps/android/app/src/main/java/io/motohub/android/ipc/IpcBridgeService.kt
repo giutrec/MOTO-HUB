@@ -16,6 +16,7 @@ import android.view.Surface
 import androidx.core.app.NotificationCompat
 import io.motohub.android.R
 import io.motohub.android.androidauto.AaInputBridge
+import io.motohub.android.aa.AaNavigationGuidance
 import io.motohub.android.aa.AaReceiver
 import io.motohub.android.aa.AaSelfMode
 import io.motohub.android.aa.SingleKeyKeyManager
@@ -372,8 +373,31 @@ class IpcBridgeService : Service() {
     // ── Android Auto receiver ────────────────────────────────────────
 
     private val stateListeners = RemoteCallbackList<IAndroidAutoStateListener>()
+    private val navigationListeners = RemoteCallbackList<INavigationGuidanceListener>()
     private var compositor: AaCompositor? = null
     private var receiver: AaReceiver? = null
+
+    private fun AaNavigationGuidance.Snapshot.toParcel() = NavigationGuidanceParcel(
+        active = active,
+        rerouting = rerouting,
+        maneuverType = maneuverType,
+        roundaboutExitNumber = roundaboutExitNumber,
+        road = road,
+        distanceToManeuverMeters = distanceToManeuverMeters,
+        timeToManeuverSeconds = timeToManeuverSeconds,
+        distanceRemainingMeters = distanceRemainingMeters,
+        timeToArrivalSeconds = timeToArrivalSeconds,
+        estimatedTimeAtArrival = estimatedTimeAtArrival
+    )
+
+    private fun broadcastGuidance(snapshot: AaNavigationGuidance.Snapshot) {
+        val parcel = snapshot.toParcel()
+        val count = navigationListeners.beginBroadcast()
+        for (i in 0 until count) {
+            runCatching { navigationListeners.getBroadcastItem(i).onGuidanceChanged(parcel) }
+        }
+        navigationListeners.finishBroadcast()
+    }
 
     private val androidAutoBinder = object : IAndroidAutoReceiverService.Stub() {
         override fun attachOutputSurface(surface: Surface, width: Int, height: Int): Boolean {
@@ -637,6 +661,17 @@ class IpcBridgeService : Service() {
             stateListeners.unregister(listener)
         }
 
+        override fun registerNavigationGuidanceListener(listener: INavigationGuidanceListener) {
+            navigationListeners.register(listener)
+            // A widget attaching mid-ride should not wait for the next turn to learn the
+            // current one.
+            runCatching { listener.onGuidanceChanged(AaNavigationGuidance.latest.toParcel()) }
+        }
+
+        override fun unregisterNavigationGuidanceListener(listener: INavigationGuidanceListener) {
+            navigationListeners.unregister(listener)
+        }
+
     }
 
     private var selfModeJob: Job? = null
@@ -765,6 +800,9 @@ class IpcBridgeService : Service() {
     // Advanced streaming sessions already do.
     override fun onCreate() {
         super.onCreate()
+        // Single consumer by design: this bridge is the only cross-process door into CORE, so
+        // it owns the guidance fan-out for however many companion listeners register.
+        AaNavigationGuidance.setListener(::broadcastGuidance)
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
             NotificationChannel(
@@ -797,8 +835,10 @@ class IpcBridgeService : Service() {
         fullSessionForwardingJob?.cancel()
         selfModeJob?.cancel()
         releaseReceiver()
+        AaNavigationGuidance.setListener(null)
         sessionListeners.kill()
         stateListeners.kill()
+        navigationListeners.kill()
         serviceScope.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()

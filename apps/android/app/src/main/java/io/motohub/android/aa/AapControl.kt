@@ -265,7 +265,8 @@ internal class AapControlGateway(
     private val serviceControl: AapControl,
     private val mediaControl: AapControl,
     private val touchControl: AapControl,
-    private val sensorControl: AapControl
+    private val sensorControl: AapControl,
+    private val navigationControl: AapControl
 ) : AapControl {
 
     constructor(aapTransport: AapTransport) : this(
@@ -273,7 +274,8 @@ internal class AapControlGateway(
         AapControlService(aapTransport),
         AapControlMedia(aapTransport),
         AapControlTouch(aapTransport),
-        AapControlSensor(aapTransport)
+        AapControlSensor(aapTransport),
+        AapControlNavigation()
     )
 
     override fun execute(message: AapMessage): Int {
@@ -285,6 +287,7 @@ internal class AapControlGateway(
             Channel.ID_CTR -> return serviceControl.execute(message)
             Channel.ID_INP -> return touchControl.execute(message)
             Channel.ID_SEN -> return sensorControl.execute(message)
+            Channel.ID_NAV -> return navigationControl.execute(message)
             Channel.ID_VID, Channel.ID_AUD, Channel.ID_AU1, Channel.ID_AU2, Channel.ID_MIC -> return mediaControl.execute(message)
         }
         return 0
