@@ -134,4 +134,7 @@ private fun TBoxConnectionMode.label(): String = when (this) {
     // this after their dash asks them to open a hotspot, so "phone hotspot" is the phrase they
     // just read on the screen.
     TBoxConnectionMode.PHONE_HOTSPOT -> "My phone hosts the hotspot"
+    // Normally set by scanning the ThinkerRide QR; offered here for rebadged units whose code
+    // points at an OEM host. "KOVE" is the brand a rider would look for, ThinkerRide the tech.
+    TBoxConnectionMode.THINKERRIDE -> "KOVE / ThinkerRide (Bluetooth)"
 }

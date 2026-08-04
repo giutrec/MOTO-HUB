@@ -24,6 +24,18 @@ sealed interface TBoxEvent {
     data object Stopped : TBoxEvent
 }
 
+/**
+ * Which wire protocol a [TBoxModelProfile] speaks, and therefore which [TBoxTransport]
+ * implementation a session must be routed through (see SelectingTBoxTransport).
+ */
+enum class TBoxTransportFamily {
+    /** Carbit/EasyConn dashes: the phone is the TCP client of the dash's services. */
+    EASYCONN,
+
+    /** ThinkerRide dashes (KOVE family): BLE handshake, then the dash connects to the phone. */
+    THINKERRIDE
+}
+
 sealed interface TBoxTransportStatus {
     data object Unavailable : TBoxTransportStatus
     data object Ready : TBoxTransportStatus

@@ -10,7 +10,7 @@ import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.session.TBoxConnectionMode
 import io.motohub.android.tbox.ProfileOverride
-import io.motohub.android.tbox.RideDaemonTransport
+import io.motohub.android.tbox.SelectingTBoxTransport
 import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxLinkResolver
 import io.motohub.android.tbox.TBoxModelProfile
@@ -22,7 +22,7 @@ import io.motohub.android.tbox.TBoxSessionRegistry
 class CoreTBoxConnector(private val context: Context) {
 
     private val networkConnector = TBoxNetworkConnector(context)
-    private val transport = RideDaemonTransport(context)
+    private val transport = SelectingTBoxTransport(context)
     private val capabilityStore = TBoxCapabilityStore(context)
 
     suspend fun connect(profile: MotorcycleProfile): Boolean {

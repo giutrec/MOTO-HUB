@@ -1,0 +1,51 @@
+package io.motohub.android.tbox
+
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class ThinkerRideProfileRoutingTest {
+
+    @Test
+    fun theQrPseudoModelIdResolvesToTheKoveProfile() {
+        assertEquals(
+            TBoxModelProfile.KOVE_800X,
+            TBoxModelProfile.fromModelId(ThinkerRideProtocol.PROVISIONING_MODEL_ID)
+        )
+        assertEquals(
+            TBoxModelProfile.KOVE_800X,
+            TBoxModelProfile.resolve(ThinkerRideProtocol.PROVISIONING_MODEL_ID, null)
+        )
+    }
+
+    @Test
+    fun theManualOverridePinsTheKoveProfile() {
+        assertEquals(
+            TBoxModelProfile.KOVE_800X,
+            TBoxModelProfile.resolve(null, null, ProfileOverride.KOVE_800X)
+        )
+        assertEquals(ProfileOverride.KOVE_800X, ProfileOverride.byKey("kove_800x"))
+    }
+
+    @Test
+    fun onlyThinkerRideProfilesRouteToTheThinkerRideTransport() {
+        assertEquals(TBoxTransportFamily.THINKERRIDE, TBoxModelProfile.KOVE_800X.transportFamily)
+        // Every EasyConn profile must keep the wire it has always used.
+        TBoxModelProfile.entries
+            .filterNot { it == TBoxModelProfile.KOVE_800X }
+            .forEach { profile ->
+                assertEquals(
+                    "${profile.name} must stay on EasyConn",
+                    TBoxTransportFamily.EASYCONN,
+                    profile.transportFamily
+                )
+            }
+    }
+
+    @Test
+    fun theKoveProfileOwnsThePanelGeometryBecauseTheWireCannotNegotiateOne() {
+        val area = TBoxModelProfile.KOVE_800X.fallbackTBoxVideoArea
+
+        assertEquals(ThinkerRideProtocol.DEFAULT_VIDEO_WIDTH, area?.width)
+        assertEquals(ThinkerRideProtocol.DEFAULT_VIDEO_HEIGHT, area?.height)
+    }
+}

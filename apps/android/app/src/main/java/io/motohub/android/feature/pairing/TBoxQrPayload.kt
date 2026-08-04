@@ -1,5 +1,7 @@
 package io.motohub.android.feature.pairing
 
+import io.motohub.android.session.TBoxConnectionMode
+import io.motohub.android.tbox.ThinkerRideProtocol
 import java.io.ByteArrayOutputStream
 import java.net.URI
 import java.nio.charset.StandardCharsets
@@ -32,7 +34,13 @@ data class TBoxQrPayload(
     // Opaque T-Box provisioning identifier. It is never interpreted as a motorcycle model.
     val modelId: String?,
     val displayName: String?,
-    val origin: TBoxQrOrigin
+    val origin: TBoxQrOrigin,
+    /**
+     * Set only by a dialect that identifies the *transport*, not just the network — the
+     * ThinkerRide code means "pair over BLE, the dash connects to you", which no SSID shape or
+     * modelId could re-derive later. Null leaves the saved profile's mode untouched.
+     */
+    val suggestedConnectionMode: TBoxConnectionMode? = null
 )
 
 object TBoxQrParser {
@@ -52,7 +60,54 @@ object TBoxQrParser {
         val trimmed = rawValue.trim()
         parseWifiNetworkCode(trimmed)
             ?: parseMotoFunUrl(trimmed)
+            ?: parseThinkerRideUrl(trimmed)
             ?: parseProvisioningUrl(trimmed)
+    }
+
+    /**
+     * The ThinkerRide (KOVE) pairing code:
+     *
+     *     http://g.thinkerride.com/?<SSID>&<PASSWORD>&ap=1
+     *
+     * The credentials are *positional* — two bare query components with no `key=` at all — which
+     * no other dialect produces, so the shape is recognisable on its own. The host corroborates
+     * it; a rebadged unit serving the same shape from an OEM host needs the `ap=` marker as a
+     * second witness and still goes to the rider as [TBoxQrOrigin.UNVERIFIED]. Like MotoFun,
+     * this one returns null the moment the shape is absent, so Carbit query strings
+     * (`ssid=...&pwd=...`) fall through untouched to [parseProvisioningUrl].
+     *
+     * Beyond the network, this dialect decides the *transport*: a ThinkerRide dash pairs over
+     * BLE and then connects to the phone, so the payload carries
+     * [TBoxConnectionMode.THINKERRIDE] and the pseudo modelId that routes later sessions to the
+     * ThinkerRide profile family.
+     */
+    private fun parseThinkerRideUrl(rawValue: String): TBoxQrPayload? {
+        val uri = runCatching { URI(rawValue) }.getOrNull()
+        val query = (uri?.rawQuery ?: rawValue.substringAfter('?', "").substringBefore('#'))
+        val components = query.split('&').filter(String::isNotBlank)
+        if (components.size < 2) return null
+        val positional = components.take(2)
+        if (positional.any { it.contains('=') }) return null
+
+        val host = (uri?.host ?: hostOf(rawValue))?.lowercase()
+        val thinkerRideHost = host != null && THINKER_RIDE_DOMAINS.any { host == it || host.endsWith(".$it") }
+        val accessPointMarker = components.drop(2).any { it.equals("ap=1", ignoreCase = true) }
+        if (!thinkerRideHost && !accessPointMarker) return null
+
+        val ssid = decode(positional[0]).trim()
+        if (ssid.isEmpty()) return null
+
+        return TBoxQrPayload(
+            ssid = ssid,
+            password = decode(positional[1]),
+            // Every ThinkerRide dash seen runs a WPA2 access point; a passphrase was just read
+            // out of the code, so an open network is not a possibility.
+            encryption = "wpa2-psk",
+            modelId = ThinkerRideProtocol.PROVISIONING_MODEL_ID,
+            displayName = null,
+            origin = if (thinkerRideHost) TBoxQrOrigin.RECOGNISED else TBoxQrOrigin.UNVERIFIED,
+            suggestedConnectionMode = TBoxConnectionMode.THINKERRIDE
+        )
     }
 
     private fun parseProvisioningUrl(rawValue: String): TBoxQrPayload {
@@ -261,6 +316,9 @@ object TBoxQrParser {
         // Moto Morini / MotoFun serves the dialect below from its own domain.
         "motomorini.com"
     )
+
+    /** Hosts the ThinkerRide (KOVE) pairing code has been seen served from. */
+    private val THINKER_RIDE_DOMAINS = listOf("thinkerride.com")
 
     private fun isKnownProvisioningHost(host: String): Boolean =
         KNOWN_PROVISIONING_DOMAINS.any { host == it || host.endsWith(".$it") }

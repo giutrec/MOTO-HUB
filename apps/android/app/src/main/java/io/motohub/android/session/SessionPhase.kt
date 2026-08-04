@@ -23,7 +23,16 @@ enum class TBoxConnectionMode {
      * mode only tells the transport to stop looking for a dash AP and start looking for a dash
      * *on the phone's own tethering subnet*.
      */
-    PHONE_HOTSPOT
+    PHONE_HOTSPOT,
+
+    /**
+     * ThinkerRide dashboards (KOVE family): the phone joins the dash's ordinary access point,
+     * but everything after that is inverted — pairing runs over a BLE GATT handshake and the
+     * dash then connects to TCP servers the phone opens. Selected automatically when the
+     * ThinkerRide pairing QR (`g.thinkerride.com`) is scanned; also selectable by hand for a
+     * rebadged unit whose QR points at some OEM host.
+     */
+    THINKERRIDE
 }
 
 enum class SessionPhase {

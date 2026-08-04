@@ -50,7 +50,9 @@ enum class TBoxModelProfile(
      * always received. Only compatibility-experiment profiles set this, so it can never change
      * the wire format of a dash that streams fine today.
      */
-    val encoderKeyframeIntervalSeconds: Int = 0
+    val encoderKeyframeIntervalSeconds: Int = 0,
+    /** Which wire protocol the dash speaks; routes the session to the matching transport. */
+    val transportFamily: TBoxTransportFamily = TBoxTransportFamily.EASYCONN
 ) {
     MOTO_HUB_SIMULATOR(
         key = "moto_hub_simulator",
@@ -192,6 +194,35 @@ enum class TBoxModelProfile(
         advertisedSupportFunction = 0,
         requiresProactivePxcHeartbeat = true,
         encoderKeyframeIntervalSeconds = 1
+    ),
+    /**
+     * KOVE 800X (and, until they earn their own profiles, other ThinkerRide-family dashes): a
+     * 600x1024 portrait TFT paired over BLE, reached through [TBoxTransportFamily.THINKERRIDE].
+     * The ThinkerRide protocol never reports a panel size — the phone declares the stream
+     * geometry and the dash scales — so [fallbackTBoxVideoArea] IS the negotiated area here,
+     * and a future KOVE model with a different panel is a new profile with a different area
+     * (pinned via [ProfileOverride] until its QR can be told apart). The modelId is the
+     * pseudo-id the ThinkerRide QR dialect records, since the QR itself carries no model
+     * information. GOP mirrors the reference implementation (streaming ~1.8 Mbps with a short
+     * GOP, never all-intra) and detection scoring never claims this profile: CLIENT_INFO is an
+     * EasyConn concept and does not exist on this wire.
+     */
+    KOVE_800X(
+        key = "kove_800x",
+        displayName = "KOVE 800X (ThinkerRide)",
+        modelIds = setOf(ThinkerRideProtocol.PROVISIONING_MODEL_ID),
+        mapTilesRequireCellular = true,
+        defaultAndroidAutoDisplayMode = AndroidAutoDisplayMode.FILL,
+        supportsScreenTouch = false,
+        defaultAndroidAutoPreset = AndroidAutoVideoPreset.PORTRAIT_720X1280,
+        fallbackTBoxVideoArea = TBoxEvent.VideoArea(
+            ThinkerRideProtocol.DEFAULT_VIDEO_WIDTH,
+            ThinkerRideProtocol.DEFAULT_VIDEO_HEIGHT
+        ),
+        requiresSockAuth = false,
+        advertisedSupportFunction = 0,
+        encoderKeyframeIntervalSeconds = 1,
+        transportFamily = TBoxTransportFamily.THINKERRIDE
     ),
     /**
      * Where every dashboard no other profile claims ends up, whatever badge is on the tank. The
@@ -387,6 +418,9 @@ enum class TBoxModelProfile(
                 // Manual-selection experiment: detection must never claim it, or the riders whose
                 // Zontes dashes already stream fine would silently change wire format.
                 ZONTES_368G_TEST -> 0
+                // ThinkerRide dashes never produce CLIENT_INFO (an EasyConn concept), so scoring
+                // has nothing to say; they resolve by the QR's pseudo modelId or a manual pin.
+                KOVE_800X -> 0
                 GENERIC -> 0
             }
         }

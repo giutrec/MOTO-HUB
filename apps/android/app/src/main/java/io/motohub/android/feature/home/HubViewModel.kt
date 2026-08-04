@@ -15,7 +15,7 @@ import io.motohub.android.session.TBoxConnectionMode
 import io.motohub.android.session.withMotorcycle
 import io.motohub.android.feature.pairing.TBoxQrPayload
 import io.motohub.android.androidauto.AndroidAutoRuntime
-import io.motohub.android.tbox.RideDaemonTransport
+import io.motohub.android.tbox.SelectingTBoxTransport
 import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxLinkResolver
 import io.motohub.android.tbox.TBoxModelProfile
@@ -56,7 +56,7 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
     )
     val uiState: StateFlow<HubUiState> = mutableUiState.asStateFlow()
     private val networkConnector = TBoxNetworkConnector(application)
-    private val transport = RideDaemonTransport(application)
+    private val transport = SelectingTBoxTransport(application)
     private val capabilityStore = TBoxCapabilityStore(application)
     private var connectJob: Job? = null
 
@@ -182,12 +182,14 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         val profile = existing?.copy(
             password = payload.password,
             modelId = payload.modelId ?: existing.modelId,
-            displayName = payload.displayName ?: existing.displayName
+            displayName = payload.displayName ?: existing.displayName,
+            connectionMode = payload.suggestedConnectionMode ?: existing.connectionMode
         ) ?: MotorcycleProfile(
             ssid = payload.ssid,
             password = payload.password,
             modelId = payload.modelId,
-            displayName = payload.displayName
+            displayName = payload.displayName,
+            connectionMode = payload.suggestedConnectionMode ?: TBoxConnectionMode.AUTO
         )
         val persistenceFailure = profileStore.save(profile).exceptionOrNull()
         mutableUiState.value = mutableUiState.value.copy(
@@ -358,7 +360,11 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                 mutableUiState.value = mutableUiState.value.copy(
                     session = mutableUiState.value.session.copy(
                         phase = SessionPhase.DISCOVERING_TBOX,
-                        message = motoHubText("Network connected. Searching for the EasyConn service.")
+                        message = if (profile.connectionMode == TBoxConnectionMode.THINKERRIDE) {
+                            motoHubText("Network connected. Pairing over Bluetooth and waiting for the dashboard.")
+                        } else {
+                            motoHubText("Network connected. Searching for the EasyConn service.")
+                        }
                     )
                 )
                 transport.configureProtocolProfile(

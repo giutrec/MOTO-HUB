@@ -10,7 +10,7 @@ fun createTBoxSessionEstablisher(context: Context): TBoxSessionEstablisher =
     LocalTBoxSessionEstablisher(context)
 
 class LocalTBoxSessionEstablisher(private val context: Context) : TBoxSessionEstablisher {
-    override val transport: TBoxTransport = RideDaemonTransport(context)
+    override val transport: TBoxTransport = SelectingTBoxTransport(context)
     override val networkConnector: TBoxNetworkConnector = TBoxNetworkConnector(context)
     private val capabilityStore = TBoxCapabilityStore(context)
 

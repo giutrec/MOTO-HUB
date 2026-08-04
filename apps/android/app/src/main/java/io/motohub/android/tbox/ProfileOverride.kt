@@ -25,6 +25,7 @@ enum class ProfileOverride(
     CFDL16_MOTOPLAY_LANDSCAPE("cfdl16_motoplay_landscape", "MotoPlay Landscape (CFDL16)", "modelId 66660742, Wi-Fi Direct, non-touch"),
     CL_C450("cl_c450", "CL-C450", "Near-square panel, 544x512"),
     ZONTES_368G_TEST("zontes_368g_test", "Zontes 368G (test)", "Experiment for JCDZ dashes stuck on the QR page: indexed framing + 1s GOP"),
+    KOVE_800X("kove_800x", "KOVE 800X (ThinkerRide)", "BLE-paired ThinkerRide dash, 600x1024 portrait"),
     MOTO_HUB_SIMULATOR("moto_hub_simulator", "MOTO-HUB Simulator", "Development simulator profile");
 
     fun resolve(): TBoxModelProfile? = when (this) {
@@ -39,6 +40,7 @@ enum class ProfileOverride(
         CFDL16_MOTOPLAY_LANDSCAPE -> TBoxModelProfile.CFDL16_MOTOPLAY_LANDSCAPE
         CL_C450 -> TBoxModelProfile.CL_C450
         ZONTES_368G_TEST -> TBoxModelProfile.ZONTES_368G_TEST
+        KOVE_800X -> TBoxModelProfile.KOVE_800X
         MOTO_HUB_SIMULATOR -> TBoxModelProfile.MOTO_HUB_SIMULATOR
     }
 

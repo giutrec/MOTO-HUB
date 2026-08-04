@@ -1,0 +1,389 @@
+package io.motohub.android.tbox
+
+import android.content.Context
+import android.net.ConnectivityManager
+import io.motohub.android.session.ProjectionEventLog
+import java.io.IOException
+import java.io.OutputStream
+import java.net.Inet4Address
+import java.net.InetSocketAddress
+import java.net.NetworkInterface
+import java.net.ServerSocket
+import java.net.Socket
+import java.nio.charset.StandardCharsets
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.ScheduledThreadPoolExecutor
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+
+/**
+ * ThinkerRide projection transport (KOVE-family dashboards). The roles are the inverse of
+ * EasyConn: after [ThinkerRideBleLink] completes the BLE handshake, the *dash* connects to three
+ * TCP servers the phone opens on the shared Wi-Fi network — control (17818), keep-alive (15457)
+ * and video (15456). See [ThinkerRideProtocol] for the wire format and refs/KoveMirror for the
+ * decoded reference implementation.
+ *
+ * The [TBoxTransport] lifecycle maps as: [discover] = bind the servers, pair over BLE and wait
+ * for the dash's control connection (its "I can reach your phone" proof); [start] = tell the
+ * dash over BLE to begin mirroring and wait for its video connection. The dash never reports a
+ * panel size, so [start] emits the configured profile's geometry as the session's video area —
+ * that is what makes other ThinkerRide models with other TFT resolutions a profile entry, not a
+ * code change.
+ */
+class ThinkerRideTransport(context: Context) : TBoxTransport {
+
+    private val appContext = context.applicationContext
+    private val mutableEvents = MutableSharedFlow<TBoxEvent>(
+        extraBufferCapacity = 8,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    override val events: Flow<TBoxEvent> = mutableEvents.asSharedFlow()
+
+    @Volatile
+    private var protocolProfile: TBoxModelProfile? = null
+
+    @Volatile
+    private var session: Session? = null
+    private val sessionLock = Any()
+
+    override fun configureProtocolProfile(profile: TBoxModelProfile) {
+        protocolProfile = profile
+    }
+
+    override suspend fun discover(link: TBoxLink, expectedModelId: String?): Result<TBoxHost> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                teardownSession()
+                if (!ThinkerRideGate.hasBlePermissions(appContext)) {
+                    error(ThinkerRideGate.missingPermissionMessage("MOTO-HUB"))
+                }
+                val created = Session(link)
+                synchronized(sessionLock) { session = created }
+                try {
+                    created.bindServers()
+                    created.startAccepting()
+                    val deviceName = created.ble.connect(BLE_SCAN_TIMEOUT_MS).getOrThrow()
+                    ProjectionEventLog.record(
+                        "THINKERRIDE",
+                        "Bluetooth handshake running with \"$deviceName\"; waiting for the dash " +
+                            "to open the control connection on port ${ThinkerRideProtocol.CONTROL_PORT}."
+                    )
+                    val controlArrived =
+                        withTimeoutOrNull(CONTROL_CONNECT_TIMEOUT_MS) { created.controlConnected.await() }
+                    if (controlArrived == null) {
+                        error(
+                            "The dashboard paired over Bluetooth but never connected to this " +
+                                "phone. Make sure the phone is on the dashboard's Wi-Fi network " +
+                                "(scan the QR on the dash again if unsure), then retry."
+                        )
+                    }
+                    TBoxHost(
+                        ipAddress = created.localAddress(),
+                        port = ThinkerRideProtocol.VIDEO_PORT,
+                        packageName = THINKERRIDE_PACKAGE_TAG
+                    )
+                } catch (failure: Throwable) {
+                    teardownSession()
+                    throw failure
+                }
+            }
+        }
+
+    override suspend fun start(host: TBoxHost): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val active = session ?: error("ThinkerRide session is not established; discover first.")
+            val area = protocolProfile?.fallbackTBoxVideoArea
+                ?: TBoxEvent.VideoArea(
+                    ThinkerRideProtocol.DEFAULT_VIDEO_WIDTH,
+                    ThinkerRideProtocol.DEFAULT_VIDEO_HEIGHT
+                )
+            active.ble.sendMirrorStatus(true)
+            ProjectionEventLog.record(
+                "THINKERRIDE",
+                "Mirror-start sent over Bluetooth; waiting for the dash video connection " +
+                    "(stream ${area.width}x${area.height})."
+            )
+            val video = withTimeoutOrNull(VIDEO_CONNECT_TIMEOUT_MS) { active.videoConnected.await() }
+                ?: error(
+                    "The dashboard acknowledged the session but never opened the video " +
+                        "connection. Power-cycle the dash screen and connect again."
+                )
+            active.beginVideo(video, area)
+            mutableEvents.tryEmit(TBoxEvent.VideoArea(area.width, area.height, isFallback = false))
+            mutableEvents.tryEmit(TBoxEvent.VideoStreamStart)
+            Unit
+        }
+    }
+
+    override fun offerAccessUnit(avcc: ByteArray): Boolean {
+        val active = session ?: return false
+        return active.offerAccessUnit(avcc)
+    }
+
+    override suspend fun stop() {
+        val active = session ?: return
+        // Tell the dash the mirror ended so its UI returns to the stock dashboard, and give the
+        // two spaced BLE writes time to leave before the link is torn down under them.
+        runCatching { active.ble.sendMirrorStatus(false) }
+        delay(2 * ThinkerRideProtocol.BLE_WRITE_SPACING_MS + 100)
+        teardownSession()
+        mutableEvents.tryEmit(TBoxEvent.Stopped)
+    }
+
+    private fun teardownSession() {
+        val previous = synchronized(sessionLock) {
+            val current = session
+            session = null
+            current
+        }
+        previous?.close()
+    }
+
+    private fun reportFatal(message: String) {
+        val active = session ?: return
+        if (active.fatalReported.compareAndSet(false, true)) {
+            ProjectionEventLog.error("THINKERRIDE", message)
+            mutableEvents.tryEmit(TBoxEvent.FatalError(message))
+        }
+    }
+
+    /** Everything owned by one dash connection, torn down as a unit. */
+    private inner class Session(private val link: TBoxLink) {
+        val closed = AtomicBoolean(false)
+        val fatalReported = AtomicBoolean(false)
+        val controlConnected = CompletableDeferred<Socket>()
+        val videoConnected = CompletableDeferred<Socket>()
+
+        val ble = ThinkerRideBleLink(
+            appContext,
+            log = { message -> ProjectionEventLog.record("THINKERRIDE", message) },
+            onLinkLost = { reason -> reportFatal(reason) }
+        )
+
+        private var controlServer: ServerSocket? = null
+        private var heartbeatServer: ServerSocket? = null
+        private var videoServer: ServerSocket? = null
+        private val liveSockets = java.util.concurrent.CopyOnWriteArrayList<Socket>()
+
+        private val pulseScheduler = ScheduledThreadPoolExecutor(1) { runnable ->
+            Thread(runnable, "MotoHubThinkerRidePulse").apply { isDaemon = true }
+        }.apply { removeOnCancelPolicy = true }
+        private var heartbeatPulse: ScheduledFuture<*>? = null
+        private var videoKeepalive: ScheduledFuture<*>? = null
+
+        // Same shape as RideDaemonTransport's pushFrameExecutor: one frame queued at most, so a
+        // stalled dash socket produces rejected offers (which VideoBackpressureGuard understands)
+        // instead of an unbounded backlog of stale video.
+        private val frameExecutor = ThreadPoolExecutor(
+            1,
+            1,
+            0L,
+            TimeUnit.MILLISECONDS,
+            ArrayBlockingQueue(1)
+        ) { runnable -> Thread(runnable, "MotoHubThinkerRideVideo").apply { isDaemon = true } }
+
+        @Volatile
+        private var videoOut: OutputStream? = null
+
+        @Volatile
+        private var videoSocket: Socket? = null
+
+        fun bindServers() {
+            val busy = mutableListOf<Int>()
+            controlServer = bindOrNull(ThinkerRideProtocol.CONTROL_PORT) ?: run { busy += ThinkerRideProtocol.CONTROL_PORT; null }
+            heartbeatServer = bindOrNull(ThinkerRideProtocol.HEARTBEAT_PORT) ?: run { busy += ThinkerRideProtocol.HEARTBEAT_PORT; null }
+            videoServer = bindOrNull(ThinkerRideProtocol.VIDEO_PORT) ?: run { busy += ThinkerRideProtocol.VIDEO_PORT; null }
+            if (busy.isNotEmpty()) {
+                error(
+                    "Ports ${busy.joinToString()} are already in use on this phone, so the " +
+                        "dashboard cannot connect. Close the other dashboard/mirroring app and retry."
+                )
+            }
+        }
+
+        private fun bindOrNull(port: Int): ServerSocket? = runCatching {
+            ServerSocket().apply {
+                reuseAddress = true
+                bind(InetSocketAddress(port), 1)
+            }
+        }.getOrNull()
+
+        fun startAccepting() {
+            acceptLoop("control", controlServer) { socket -> runControl(socket) }
+            acceptLoop("heartbeat", heartbeatServer) { socket -> runHeartbeat(socket) }
+            acceptLoop("video", videoServer) { socket ->
+                socket.tcpNoDelay = true
+                if (!videoConnected.isCompleted) videoConnected.complete(socket)
+            }
+        }
+
+        private fun acceptLoop(label: String, server: ServerSocket?, onAccepted: (Socket) -> Unit) {
+            val listening = server ?: return
+            Thread({
+                while (!closed.get()) {
+                    val socket = runCatching { listening.accept() }.getOrNull() ?: break
+                    liveSockets += socket
+                    ProjectionEventLog.record(
+                        "THINKERRIDE",
+                        "Dash connected to the $label channel from ${socket.inetAddress?.hostAddress}."
+                    )
+                    runCatching { onAccepted(socket) }
+                }
+            }, "MotoHubThinkerRideAccept-$label").apply { isDaemon = true }.start()
+        }
+
+        private fun runControl(socket: Socket) {
+            if (!controlConnected.isCompleted) controlConnected.complete(socket)
+            val out = socket.getOutputStream()
+            writeQuietly(out, ThinkerRideProtocol.controlOpeningQuery())
+            Thread({
+                val buffer = ByteArray(4096)
+                var handshakeSent = false
+                val input = runCatching { socket.getInputStream() }.getOrNull() ?: return@Thread
+                while (!closed.get()) {
+                    val read = runCatching { input.read(buffer) }.getOrDefault(-1)
+                    if (read <= 0) break
+                    logControlPayload(buffer, read)
+                    if (ThinkerRideProtocol.isKeepaliveProbe(buffer, read)) {
+                        writeQuietly(out, ThinkerRideProtocol.KEEPALIVE_PACKET)
+                    }
+                    if (!handshakeSent) {
+                        handshakeSent = true
+                        // The reference implementation waits 100 ms after the dash's first
+                        // packet before the binary handshake; firmware drops it otherwise.
+                        pulseScheduler.schedule({
+                            writeQuietly(out, ThinkerRideProtocol.controlHandshake())
+                            ThinkerRideProtocol.controlNaviQueries().forEach { writeQuietly(out, it) }
+                        }, 100, TimeUnit.MILLISECONDS)
+                    }
+                }
+            }, "MotoHubThinkerRideControl").apply { isDaemon = true }.start()
+        }
+
+        private fun runHeartbeat(socket: Socket) {
+            val out = socket.getOutputStream()
+            heartbeatPulse?.cancel(false)
+            heartbeatPulse = pulseScheduler.scheduleWithFixedDelay(
+                { writeQuietly(out, ThinkerRideProtocol.KEEPALIVE_PACKET) },
+                0,
+                ThinkerRideProtocol.HEARTBEAT_PULSE_INTERVAL_MS,
+                TimeUnit.MILLISECONDS
+            )
+        }
+
+        fun beginVideo(socket: Socket, area: TBoxEvent.VideoArea) {
+            val out = socket.getOutputStream()
+            out.write(ThinkerRideProtocol.videoSizeHeader(area.width, area.height))
+            out.flush()
+            videoSocket = socket
+            videoOut = out
+            videoKeepalive?.cancel(false)
+            videoKeepalive = pulseScheduler.scheduleWithFixedDelay(
+                { writeQuietly(out, ThinkerRideProtocol.KEEPALIVE_PACKET) },
+                ThinkerRideProtocol.VIDEO_KEEPALIVE_INTERVAL_MS,
+                ThinkerRideProtocol.VIDEO_KEEPALIVE_INTERVAL_MS,
+                TimeUnit.MILLISECONDS
+            )
+        }
+
+        fun offerAccessUnit(avcc: ByteArray): Boolean {
+            val out = videoOut ?: return false
+            return try {
+                frameExecutor.execute {
+                    try {
+                        synchronized(out) {
+                            out.write(ThinkerRideProtocol.annexBFromAvcc(avcc))
+                            out.flush()
+                        }
+                    } catch (failure: IOException) {
+                        reportFatal("The dashboard video connection dropped: ${failure.message}")
+                    }
+                }
+                true
+            } catch (_: RejectedExecutionException) {
+                // A frame is already queued behind a slow socket; drop this one instead of
+                // building latency. VideoBackpressureGuard turns a persistent streak into a stop.
+                false
+            }
+        }
+
+        fun localAddress(): String {
+            (link.network)?.let { network ->
+                val properties = appContext.getSystemService(ConnectivityManager::class.java)
+                    ?.getLinkProperties(network)
+                properties?.linkAddresses
+                    ?.map { it.address }
+                    ?.filterIsInstance<Inet4Address>()
+                    ?.firstOrNull()
+                    ?.hostAddress
+                    ?.let { return it }
+            }
+            return runCatching {
+                NetworkInterface.getNetworkInterfaces().toList()
+                    .asSequence()
+                    .filter { it.isUp && !it.isLoopback }
+                    .flatMap { it.inetAddresses.asSequence() }
+                    .filterIsInstance<Inet4Address>()
+                    .firstOrNull { it.isSiteLocalAddress }
+                    ?.hostAddress
+            }.getOrNull() ?: "0.0.0.0"
+        }
+
+        private fun writeQuietly(out: OutputStream, data: ByteArray) {
+            try {
+                synchronized(out) {
+                    out.write(data)
+                    out.flush()
+                }
+            } catch (_: IOException) {
+                // Channel-level drops are surfaced by the video path / watchdogs, not here.
+            }
+        }
+
+        private fun logControlPayload(buffer: ByteArray, length: Int) {
+            // The control channel is where an unknown ThinkerRide model would identify itself,
+            // so keep whatever readable content arrives; a future profile is written from these
+            // lines the same way EasyConn profiles are written from CLIENT_INFO logs.
+            val text = String(buffer, 0, length, StandardCharsets.UTF_8)
+            val printable = text.count { it.code in 32..126 }
+            if (printable >= length / 2 && text.isNotBlank()) {
+                ProjectionEventLog.record("THINKERRIDE", "Dash control payload: ${text.trim()}")
+            }
+        }
+
+        fun close() {
+            if (!closed.compareAndSet(false, true)) return
+            heartbeatPulse?.cancel(false)
+            videoKeepalive?.cancel(false)
+            pulseScheduler.shutdownNow()
+            frameExecutor.shutdownNow()
+            ble.close()
+            videoOut = null
+            videoSocket = null
+            liveSockets.forEach { runCatching { it.close() } }
+            liveSockets.clear()
+            runCatching { controlServer?.close() }
+            runCatching { heartbeatServer?.close() }
+            runCatching { videoServer?.close() }
+        }
+    }
+
+    private companion object {
+        const val THINKERRIDE_PACKAGE_TAG = "thinkerride"
+        const val BLE_SCAN_TIMEOUT_MS = 20_000L
+        const val CONTROL_CONNECT_TIMEOUT_MS = 20_000L
+        const val VIDEO_CONNECT_TIMEOUT_MS = 15_000L
+    }
+}

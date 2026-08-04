@@ -59,7 +59,11 @@ object TBoxLinkResolver {
      */
     fun usesWifiDirect(profile: MotorcycleProfile): Boolean = when (profile.connectionMode) {
         TBoxConnectionMode.WIFI_DIRECT -> true
-        TBoxConnectionMode.ACCESS_POINT, TBoxConnectionMode.PHONE_HOTSPOT -> false
+        // THINKERRIDE inverts the TCP roles, but the Wi-Fi join itself is a plain access-point
+        // request — the dash's AP is ordinary WPA2, so it rides the infrastructure path here.
+        TBoxConnectionMode.ACCESS_POINT,
+        TBoxConnectionMode.PHONE_HOTSPOT,
+        TBoxConnectionMode.THINKERRIDE -> false
         TBoxConnectionMode.AUTO -> TBoxWifiDirectConnector.isWifiDirectSsid(profile.ssid)
     }
 

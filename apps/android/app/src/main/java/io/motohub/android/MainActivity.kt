@@ -57,6 +57,7 @@ import io.motohub.android.androidauto.TBoxScreenMarginsStore
 import io.motohub.android.data.MotorcyclePhotoStore
 import io.motohub.android.data.MotorcycleProfileStore
 import io.motohub.android.session.MotorcycleProfile
+import io.motohub.android.tbox.ThinkerRideGate
 import io.motohub.android.feature.about.AboutScreen
 import io.motohub.android.feature.about.MOTO_HUB_DISCORD_URL
 import io.motohub.android.feature.about.MOTO_HUB_GITHUB_URL
@@ -541,11 +542,8 @@ class MainActivity : ComponentActivity() {
                             "AUTO_CONNECT",
                             "Reconnecting automatically after $mode stop."
                         )
-                        val permissions = arrayOf(
-                            Manifest.permission.NEARBY_WIFI_DEVICES,
-                            Manifest.permission.ACCESS_COARSE_LOCATION,
-                            Manifest.permission.ACCESS_FINE_LOCATION
-                        )
+                        val permissions =
+                            tboxConnectPermissions(viewModel.uiState.value.session.motorcycle)
                         if (permissions.all { permission ->
                                 ContextCompat.checkSelfPermission(context, permission) ==
                                     PackageManager.PERMISSION_GRANTED
@@ -597,11 +595,7 @@ class MainActivity : ComponentActivity() {
                         "AUTO_CONNECT",
                         "Launching automatic connection to saved motorcycle ${profile.ssid}."
                     )
-                    val permissions = arrayOf(
-                        Manifest.permission.NEARBY_WIFI_DEVICES,
-                        Manifest.permission.ACCESS_COARSE_LOCATION,
-                        Manifest.permission.ACCESS_FINE_LOCATION
-                    )
+                    val permissions = tboxConnectPermissions(profile)
                     if (permissions.all { permission ->
                             ContextCompat.checkSelfPermission(context, permission) ==
                                 PackageManager.PERMISSION_GRANTED
@@ -1006,11 +1000,8 @@ class MainActivity : ComponentActivity() {
                             showManualPairing = true
                         },
                         onConnectAndDiscover = {
-                            val permissions = arrayOf(
-                                Manifest.permission.NEARBY_WIFI_DEVICES,
-                                Manifest.permission.ACCESS_COARSE_LOCATION,
-                                Manifest.permission.ACCESS_FINE_LOCATION
-                            )
+                            val permissions =
+                                tboxConnectPermissions(viewModel.uiState.value.session.motorcycle)
                             if (permissions.all { permission ->
                                     ContextCompat.checkSelfPermission(context, permission) ==
                                         PackageManager.PERMISSION_GRANTED
@@ -1444,4 +1435,21 @@ class MainActivity : ComponentActivity() {
         const val AUTO_UPDATE_CHECK_DELAY_MS = 1_200L
         const val AUTO_UPDATE_CHECK_THROTTLE_MS = 24 * 60 * 60 * 1_000L
     }
+}
+
+/**
+ * Runtime permissions a connect to [profile] needs before it can start: the Wi-Fi join set
+ * always, plus the Bluetooth pair for a ThinkerRide (KOVE) motorcycle — asked together so the
+ * rider sees one permission sheet, not one per radio.
+ */
+private fun tboxConnectPermissions(profile: MotorcycleProfile?): Array<String> {
+    val permissions = mutableListOf(
+        Manifest.permission.NEARBY_WIFI_DEVICES,
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+        Manifest.permission.ACCESS_FINE_LOCATION
+    )
+    if (ThinkerRideGate.requiresBle(profile)) {
+        permissions += ThinkerRideGate.blePermissions
+    }
+    return permissions.toTypedArray()
 }
