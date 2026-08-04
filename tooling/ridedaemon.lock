@@ -1,12 +1,14 @@
 # Generated dependency record. Update this file whenever hudlib.aar is rebuilt.
 source_repository=https://github.com/vincenzobpt/ridedaemon-lib
-source_commit=e15e3768e20335714a08665132fafa11d7edf62f
+source_commit=fb2e63d848a5ef0cc5973fba4d7c8e8dbe2127b8
 source_dirty=false
 source_checkout=refs/ridedaemon-lib-motohub
 gomobile_android_api=34
 artifact=apps/android/app/libs/hudlib.aar
-sha256=fb343f104adadf9843dad211b89dbb7cc1218c6af24365d60870a2f1fa2d8953
+sha256=a5cd65cf17d73979a0ec695cd36661b890f49a0c77acbd84d52f87b540bef513
 license=GPL-3.0-only
-# Rebuilt 2026-08-02 for the HU_TIME_SYNC ack. Verify the artifact by grepping
-# libgojni.so for "Answering PXC HU_TIME_SYNC" rather than trusting source_commit.
-source_note=hu-time-sync-ack
+# Rebuilt 2026-08-04 for the QUERY_TIME (0x10450) JSON reply, which is the clock
+# question easyride-flavour dashes actually ask - they never send HU_TIME_SYNC.
+# Verify the artifact by grepping libgojni.so for "Answering PXC QUERY_TIME"
+# rather than trusting source_commit, since this fix has not been road-tested.
+source_note=query-time-json-reply

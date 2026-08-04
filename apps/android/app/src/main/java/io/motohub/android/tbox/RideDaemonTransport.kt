@@ -174,6 +174,11 @@ class RideDaemonTransport(
                 // video frame format from its own supportExtendProtocol byte. Every
                 // recognised unit keeps the indexed framing it already displays.
                 setPlainVideoFramingAllowed(profile == TBoxModelProfile.GENERIC)
+                // The dash asks for wall-clock time over PXC and the daemon answers it,
+                // but only Android knows the zone id: Go's local location carries no
+                // usable name on a device. Read per session so a rider who crosses a
+                // border gets the new zone on the next connect.
+                setTimeZoneID(java.util.TimeZone.getDefault().id)
             }
             val generation = nextSessionGeneration.incrementAndGet()
             val createdSession = Api.newMobileSession(
@@ -194,7 +199,8 @@ class RideDaemonTransport(
                     "package=${host.packageName}; profile=${profile.key}; " +
                     "supportFunction=${profile.advertisedSupportFunction}; " +
                     "proactivePxcHeartbeat=${profile.requiresProactivePxcHeartbeat}; " +
-                    "plainVideoFramingAllowed=${profile == TBoxModelProfile.GENERIC}."
+                    "plainVideoFramingAllowed=${profile == TBoxModelProfile.GENERIC}; " +
+                    "timeZone=${java.util.TimeZone.getDefault().id}."
             )
             host
         }.onFailure { failure ->
@@ -1545,7 +1551,12 @@ class RideDaemonTransport(
             // Seen twice each in the same session, both empty; named only so a field log stops
             // reading as a wall of UNKNOWN. open-cfmoto's notes list 0x10450 as empty too, and
             // 0x10040 as carrying {maxNaviIcon, supportFunction}.
-            0x10450L to "NOTIFY_10450",
+            //
+            // 0x10450 turned out to be the OTHER clock question, answered with JSON rather than
+            // the binary stamp 0x10600 wants. A dash sends one or the other, never both: a Voge
+            // log (DIRECT-VOGE-034672, 2026-08-02) has one 0x10450 right after the handshake and
+            // zero 0x10600 across five days, which is why its clock was never set.
+            0x10450L to "QUERY_TIME",
             0x104a0L to "NOTIFY_104A0",
             0x10040L to "NAVI_CAPS"
         )
