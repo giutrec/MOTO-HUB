@@ -1534,6 +1534,7 @@ class RideDaemonTransport(
             PXC_HEARTBEAT_COMMAND to "HEARTBEAT",
             PXC_HEARTBEAT_ACK_COMMAND to "HEARTBEAT_ACK",
             PXC_CLOCK_KEEPALIVE_COMMAND to "CLOCK_KEEPALIVE",
+            0x10601L to "CLOCK_KEEPALIVE_ACK",
             PXC_HUD_CONFIG_COMMAND to "CLIENT_INFO",
             0x10011L to "CLIENT_INFO_RLY",
             0x10020L to "MEDIA_FEATURE_CFG",
@@ -1557,6 +1558,7 @@ class RideDaemonTransport(
             // log (DIRECT-VOGE-034672, 2026-08-02) has one 0x10450 right after the handshake and
             // zero 0x10600 across five days, which is why its clock was never set.
             0x10450L to "QUERY_TIME",
+            0x10451L to "QUERY_TIME_ACK",
             0x104a0L to "NOTIFY_104A0",
             0x10040L to "NAVI_CAPS"
         )
