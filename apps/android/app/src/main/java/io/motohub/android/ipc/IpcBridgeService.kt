@@ -176,9 +176,11 @@ class IpcBridgeService : Service() {
         // The connector comes from CoreTBoxConnectors rather than being built here: a connector
         // owns an exclusive WifiNetworkSpecifier request, and a second live one fights the first
         // for the association. Building one per call left an orphan behind on every reconnect.
+        // CoreTBoxConnectors also reuses the previous connector across retries for the same SSID
+        // instead of tearing it down, so a still-pending Wi-Fi hunt survives a retry.
         override fun connect(request: MotorcycleConnectRequest): Boolean =
             kotlinx.coroutines.runBlocking {
-                val connector = CoreTBoxConnectors.replace(applicationContext)
+                val connector = CoreTBoxConnectors.acquire(applicationContext, request.ssid)
                 val deferred = serviceScope.async { connector.connect(request.toProfile()) }
                 activeConnect = connector to deferred
                 val result = try {

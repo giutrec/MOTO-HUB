@@ -24,6 +24,17 @@ class CoreTBoxConnector(private val context: Context) {
     private val networkConnector = TBoxNetworkConnector(context)
     private val transport = SelectingTBoxTransport(context)
     private val capabilityStore = TBoxCapabilityStore(context)
+    private var installed = false
+
+    /**
+     * Whether an AIDL retry for [ssid] can keep using this connector instead of being handed a
+     * fresh one. Only true before this connector has ever installed a session: once one is live,
+     * calling [connect] again would re-run EasyConn discovery underneath an already-streaming
+     * session, which nothing downstream expects. A connector that never got that far - still
+     * mid Wi-Fi join, or one whose join already failed - is exactly what a retry should keep
+     * using, so the WifiNetworkSpecifier hunt it holds does not get torn down and restarted.
+     */
+    fun isReusableFor(ssid: String): Boolean = !installed && networkConnector.isHuntingFor(ssid)
 
     suspend fun connect(profile: MotorcycleProfile): Boolean {
         // A session CORE started for itself outlives the activity on purpose - a projection has to
@@ -72,6 +83,7 @@ class CoreTBoxConnector(private val context: Context) {
         TBoxSessionRegistry.install(
             TBoxSessionHandle(transport, host, networkConnector, profile, link)
         )
+        installed = true
         ProjectionEventLog.record("IPC_TBOX", "AIDL connect: session installed; READY.")
         return true
     }

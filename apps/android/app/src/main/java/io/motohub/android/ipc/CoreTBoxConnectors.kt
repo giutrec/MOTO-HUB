@@ -33,6 +33,18 @@ internal class SingleLiveInstance<T : Any>(
         create().also { current = it }
     }
 
+    /**
+     * The live instance if [reuse] accepts it, otherwise [replace]'s behaviour: release it and
+     * adopt a fresh one. Runs under the same lock as [replace], so "at most one live instance"
+     * holds exactly as it does there - a reuse decision and a concurrent replacement can never
+     * both see the pre-decision instance as live.
+     */
+    suspend fun acquire(reuse: (T) -> Boolean, create: () -> T): T = mutex.withLock {
+        current?.let { if (reuse(it)) return@withLock it }
+        releaseCurrentLocked()
+        create().also { current = it }
+    }
+
     /** The live instance, or null when nothing is held. */
     fun peek(): T? = current
 
@@ -73,15 +85,27 @@ internal object CoreTBoxConnectors {
     )
 
     /**
-     * The connector for a new connect attempt, with the previous one torn down first.
+     * The connector for a new connect attempt targeting [ssid].
      *
-     * Releasing through `cancel()` rather than `disconnect()` is deliberate: `cancel()` tears down
-     * *that* connector's own transport and network connector directly, which is exactly what an
-     * orphan needs, while `disconnect()` would look up whatever session the registry happens to
-     * hold and could leave the orphan's Wi-Fi request open.
+     * The previous one is reused as-is when it is still chasing this same SSID and has not yet
+     * installed a session ([CoreTBoxConnector.isReusableFor]) - so a retry (auto-reconnect, the
+     * rider reopening the app, a QR rescan) joins a `WifiNetworkSpecifier` hunt already in
+     * progress instead of tearing it down and asking Android to start over. That reset-to-zero
+     * was silently defeating the "reuse a still-pending request" fix in
+     * [io.motohub.android.tbox.TBoxNetworkConnector.connect] for every AIDL retry, because that
+     * fix lives on the connector *instance* and every retry used to be handed a brand new one -
+     * QJ SRT 700X field log, 2026-08-05: the phone never associated within 30s on any of six
+     * consecutive retries across two days, each one a fresh hunt that could only succeed by luck
+     * against Android's own scan timing.
+     *
+     * Any other case - a different SSID, or a connector that already has a live session - is torn
+     * down and replaced exactly as before. Releasing through `cancel()` rather than `disconnect()`
+     * is deliberate: `cancel()` tears down *that* connector's own transport and network connector
+     * directly, which is exactly what an orphan needs, while `disconnect()` would look up whatever
+     * session the registry happens to hold and could leave the orphan's Wi-Fi request open.
      */
-    suspend fun replace(context: Context): CoreTBoxConnector =
-        live.replace { CoreTBoxConnector(context) }
+    suspend fun acquire(context: Context, ssid: String): CoreTBoxConnector =
+        live.acquire(reuse = { it.isReusableFor(ssid) }, create = { CoreTBoxConnector(context) })
 
     fun current(): CoreTBoxConnector? = live.peek()
 

@@ -376,6 +376,15 @@ class TBoxNetworkConnector(context: Context) {
     /** Current Wi-Fi network confirmed by the SSID-specific request callback, if still active. */
     fun currentNetwork(): Network? = activeNetwork
 
+    /**
+     * Whether this connector's live-or-pending Wi-Fi request already targets [ssid] - the same
+     * check [connect] uses internally to decide whether a retry can reuse it instead of resetting
+     * Android's join hunt from zero. Exposed so a caller that owns *this connector's identity*
+     * (deciding whether to hand it back out for another attempt, rather than building a new one)
+     * can make that call before [connect] ever runs.
+     */
+    fun isHuntingFor(ssid: String): Boolean = activeProfile?.ssid == ssid
+
     /** Waits for the persistent network request to reacquire the T-Box AP. */
     suspend fun awaitNetworkAvailable(timeoutMillis: Long): Network? =
         withTimeoutOrNull(timeoutMillis) {

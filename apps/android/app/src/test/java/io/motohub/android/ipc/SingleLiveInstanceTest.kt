@@ -70,6 +70,73 @@ class SingleLiveInstanceTest {
     }
 
     @Test
+    fun `acquire returns the live instance when reuse accepts it, without releasing it`() = runBlocking {
+        val released = mutableListOf<Int>()
+        val holder = SingleLiveInstance<Tracked>(release = { released += it.id })
+
+        val first = holder.replace { Tracked(1) }
+        val reused = holder.acquire(reuse = { true }, create = { Tracked(2) })
+
+        assertSame("A reuse-accepted instance must not be torn down", first, reused)
+        assertTrue(released.isEmpty())
+        assertSame(first, holder.peek())
+    }
+
+    @Test
+    fun `acquire releases and replaces the live instance when reuse rejects it`() = runBlocking {
+        val released = mutableListOf<Int>()
+        val holder = SingleLiveInstance<Tracked>(release = { released += it.id })
+
+        holder.replace { Tracked(1) }
+        val second = holder.acquire(reuse = { false }, create = { Tracked(2) })
+
+        assertEquals(listOf(1), released)
+        assertEquals(2, second.id)
+        assertSame(second, holder.peek())
+    }
+
+    @Test
+    fun `acquire creates an instance when nothing is held, without calling reuse`() = runBlocking {
+        val holder = SingleLiveInstance<Tracked>(release = { error("nothing was held to release") })
+
+        var reuseCalled = false
+        val created = holder.acquire(reuse = { reuseCalled = true; true }, create = { Tracked(1) })
+
+        assertTrue("reuse has nothing to accept or reject when nothing is live", !reuseCalled)
+        assertSame(created, holder.peek())
+    }
+
+    @Test
+    fun `concurrent acquires never leave two instances live`() = runBlocking {
+        val liveCount = AtomicInteger(0)
+        val peakLive = AtomicInteger(0)
+        val releaseGate = CompletableDeferred<Unit>()
+        val holder = SingleLiveInstance<Tracked>(
+            release = {
+                releaseGate.await()
+                liveCount.decrementAndGet()
+            }
+        )
+
+        coroutineScope {
+            val creators = (1..4).map { id ->
+                async {
+                    holder.acquire(reuse = { false }) {
+                        val live = liveCount.incrementAndGet()
+                        peakLive.updateAndGet { peak -> maxOf(peak, live) }
+                        Tracked(id)
+                    }
+                }
+            }
+            releaseGate.complete(Unit)
+            creators.awaitAll()
+        }
+
+        assertEquals("Only one instance may be live at a time", 1, peakLive.get())
+        assertEquals(1, liveCount.get())
+    }
+
+    @Test
     fun `concurrent replacements never leave two instances live`() = runBlocking {
         val liveCount = AtomicInteger(0)
         val peakLive = AtomicInteger(0)
