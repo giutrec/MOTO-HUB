@@ -517,6 +517,30 @@ class TBoxNetworkConnector(context: Context) {
         )
     }
 
+    private fun ScanResult.ssidText(): String =
+        (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) wifiSsid?.toString() else null)
+            ?.removeSurrounding("\"")
+            ?: @Suppress("DEPRECATION") SSID.orEmpty().removeSurrounding("\"")
+
+    /**
+     * Whether the dash is broadcasting its own SSID right now - **null when that cannot be said**.
+     *
+     * Tri-state is the whole point. A dash that is visibly on the air proves a PHONE_HOTSPOT
+     * profile is aimed at the wrong transport, and [TBoxLinkResolver] uses exactly that to recover
+     * instead of dead-ending. But an absent or empty scan is not evidence of absence - the long
+     * comment in [logVisibleApSnapshot] lists the four ways a phone hands back nothing while the
+     * dash is measurably there - and a false "not broadcasting" would send a rider whose hotspot
+     * simply is not on down a join that cannot work. Only a definite sighting returns true.
+     */
+    @SuppressLint("MissingPermission")
+    fun isDashBroadcasting(profile: MotorcycleProfile): Boolean? {
+        val target = profile.ssid.trim().removeSurrounding("\"")
+        if (target.isEmpty()) return null
+        val results = runCatching { wifiManager.scanResults }.getOrNull() ?: return null
+        if (results.isEmpty()) return null
+        return results.any { it.ssidText().equals(target, ignoreCase = true) }
+    }
+
     @SuppressLint("MissingPermission")
     private fun logVisibleApSnapshot(profile: MotorcycleProfile) {
         val target = profile.ssid.trim().removeSurrounding("\"")
@@ -529,11 +553,6 @@ class TBoxNetworkConnector(context: Context) {
             publishScanFacts(visibility = "scan_unavailable")
             return
         }
-        fun ScanResult.ssidText(): String =
-            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) wifiSsid?.toString() else null)
-                ?.removeSurrounding("\"")
-                ?: @Suppress("DEPRECATION") SSID.orEmpty().removeSurrounding("\"")
-
         // An EMPTY result list is not evidence about the dash: it means this phone handed back no
         // scan at all - a cache the platform has not refreshed, scan throttling, or the
         // location/permission gate on getScanResults() - and a phone that can see nothing

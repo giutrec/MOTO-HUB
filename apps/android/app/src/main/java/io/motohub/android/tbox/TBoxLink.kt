@@ -87,8 +87,12 @@ sealed interface TBoxLink {
     class PhoneHotspot(val subnet: TBoxHotspotScan.Subnet) : TBoxLink {
         override val network: Network? = null
         override val peerHint: Inet4Address? = null
+        // "hotspot" was a claim this link is in no position to make: the scan behind it accepts
+        // any private /24 the phone holds, so a log line reading "hotspot wlan0" was produced on
+        // a phone whose hotspot was switched off and whose wlan0 was the rider's home Wi-Fi. The
+        // interface name is the fact; what is hosting it is not.
         override val label: String
-            get() = "hotspot ${subnet.interfaceName} ${subnet.localAddress.hostAddress}/${subnet.prefixLength}"
+            get() = "phone-hosted ${subnet.interfaceName} ${subnet.localAddress.hostAddress}/${subnet.prefixLength}"
 
         override fun createSocket(): Socket = Socket().apply { bind(InetSocketAddress(subnet.localAddress, 0)) }
 

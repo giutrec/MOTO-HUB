@@ -59,6 +59,69 @@ class TBoxHotspotScanTest {
     }
 
     @Test
+    fun ranksAPeerToPeerLinkAboveAnUnknownNameAndBelowARealSoftAp() {
+        // The 2026-08-06 field log: p2p0, wlan0 and wlan2 all qualified at once and all tied at
+        // the bottom rank, so the winner was whatever the kernel enumerated first - p2p0 reached
+        // the dash in 114ms, the other two swept 253 addresses for 45s and found nothing. Every
+        // rank has to be distinct or the sort decides nothing.
+        val subnets = TBoxHotspotScan.tetheringSubnets(
+            listOf(
+                snapshot("wlan0", "192.168.1.34"),
+                snapshot("p2p0", "192.168.49.1"),
+                snapshot("wlan2", "192.168.2.7"),
+                snapshot("ap0", "192.168.43.1")
+            )
+        )
+
+        assertEquals(listOf("ap0", "p2p0", "wlan0", "wlan2"), subnets.map { it.interfaceName })
+    }
+
+    @Test
+    fun keepsAHostedInterfaceEvenWhenItLooksLikeANetworkThePhoneIsUsing() {
+        // The exclusion exists to drop the phone's uplink, never a plausible SoftAP. If an OEM
+        // ever surfaced its own tethering interface as a visible network, excluding by address
+        // alone would delete the only correct answer - so a hosted NAME overrides the exclusion.
+        val subnets = TBoxHotspotScan.tetheringSubnets(
+            interfaces = listOf(
+                snapshot("wlan0", "192.168.1.34"),
+                snapshot("ap0", "192.168.43.1")
+            ),
+            excluding = setOf(ipv4("192.168.1.34"), ipv4("192.168.43.1"))
+        )
+
+        assertEquals(listOf("ap0"), subnets.map { it.interfaceName })
+    }
+
+    @Test
+    fun keepsAPeerLinkEvenWhenTheStackReportsItAsANetworkInUse() {
+        // Ranking p2p0 above an unknown name says a Wi-Fi Direct group is a plausible place to
+        // find the dash - it is why PEER_LINK_PREFIXES exists, after that interface reached the
+        // dash in 114ms while wlan0 and wlan2 swept 253 addresses for nothing. An exclusion that
+        // deleted it anyway would leave the rank describing a candidate that can never be chosen.
+        // On a P2P group the phone is the group owner and the dash its only client, so this is a
+        // network the phone hosts.
+        val subnets = TBoxHotspotScan.tetheringSubnets(
+            interfaces = listOf(snapshot("p2p0", "192.168.49.1")),
+            excluding = setOf(ipv4("192.168.49.1"))
+        )
+
+        assertEquals(listOf("p2p0"), subnets.map { it.interfaceName })
+    }
+
+    @Test
+    fun dropsAnUnrecognisedInterfaceThatIsActuallyANetworkThePhoneIsUsing() {
+        // The immunity is still narrow: it is granted by NAME, to the shapes Android uses for a
+        // network it hosts. An OEM name nobody recognises, reported by the stack as in use, is the
+        // rider's own link - the wlan2 of the 2026-08-06 log - and sweeping it wastes 45s.
+        val subnets = TBoxHotspotScan.tetheringSubnets(
+            interfaces = listOf(snapshot("wlan2", "192.168.2.7")),
+            excluding = setOf(ipv4("192.168.2.7"))
+        )
+
+        assertTrue(subnets.map { it.interfaceName }.toString(), subnets.isEmpty())
+    }
+
+    @Test
     fun rejectsInterfacesThatCannotBeAHostedNetwork() {
         val subnets = TBoxHotspotScan.tetheringSubnets(
             listOf(

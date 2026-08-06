@@ -21,9 +21,45 @@ object TBoxHotspotScan {
      * Interface-name prefixes Android has used for the tethering/SoftAP side. The list is
      * corroboration, not a gate: [tetheringSubnets] accepts any interface that looks like a
      * hosted network, because vendors rename these freely and a missed name would cost the
-     * whole feature. Names only decide ordering, so the likeliest candidate is swept first.
+     * whole feature. Names decide ordering, so the likeliest candidate is swept first - and
+     * they decide one thing more, see [isHostedName].
      */
     private val LIKELY_AP_PREFIXES = listOf("ap", "swlan", "wlan1", "softap", "rndis", "tether")
+
+    /**
+     * Ranked below a real SoftAP interface but above an unrecognised name.
+     *
+     * A Wi-Fi Direct group is not a hotspot, yet it produces the same shape - the phone holding a
+     * private /24 with the dash as the only other host - and several EasyConn dashes reach the
+     * phone that way while the rider's hotspot is switched off entirely. Field log 2026-08-06
+     * (OnePlus CPH2653, EASYCONN_5G-F3116E): three interfaces qualified at once (`p2p0`, `wlan0`,
+     * `wlan2`), all tied at the bottom rank, so a stable sort left the choice to kernel
+     * enumeration order - `p2p0` found the dash in 114ms, `wlan0` and `wlan2` swept 253 addresses
+     * for 45s and found nothing. Same phone, same bike, opposite outcomes, decided by luck.
+     */
+    private val PEER_LINK_PREFIXES = listOf("p2p")
+
+    /**
+     * Whether a name is one Android uses for a network it *hosts*, as opposed to one it joined.
+     *
+     * This is the one place a name is more than a hint: [tetheringSubnets] refuses to drop such an
+     * interface for being "in use". Excluding the phone's own uplink is what stops a rider's home
+     * subnet from being swept, but if some OEM ever surfaced its SoftAP as a visible network too,
+     * the same exclusion would delete the only correct answer. Immunity by name makes that
+     * regression impossible rather than unlikely.
+     *
+     * Peer links earn the same immunity, and it took a contradiction to see why. Ranking `p2p0`
+     * above an unknown name says a Wi-Fi Direct group is a plausible place to find the dash - it
+     * is the reason [PEER_LINK_PREFIXES] exists at all, after that interface reached the dash in
+     * 114ms. Letting the exclusion delete it anyway would leave the rank describing a candidate
+     * that can no longer be chosen. Which way to resolve that is settled by who holds the subnet:
+     * on a P2P group the phone is the group owner and the dash is its only client, so this is a
+     * network the phone hosts in every sense the sweep cares about.
+     */
+    private fun isHostedName(interfaceName: String): Boolean {
+        val lowered = interfaceName.lowercase()
+        return LIKELY_AP_PREFIXES.any(lowered::startsWith) || PEER_LINK_PREFIXES.any(lowered::startsWith)
+    }
 
     /** A hosted IPv4 subnet: the phone's own address on it, and how wide it is. */
     data class Subnet(val localAddress: Inet4Address, val prefixLength: Int, val interfaceName: String)
@@ -59,7 +95,7 @@ object TBoxHotspotScan {
             .flatMap { candidate ->
                 candidate.addresses.mapNotNull { (address, prefixLength) ->
                     val ipv4 = address as? Inet4Address ?: return@mapNotNull null
-                    if (ipv4 in excluding) return@mapNotNull null
+                    if (ipv4 in excluding && !isHostedName(candidate.name)) return@mapNotNull null
                     if (ipv4.isLoopbackAddress || ipv4.isLinkLocalAddress || ipv4.isAnyLocalAddress) {
                         return@mapNotNull null
                     }
@@ -71,11 +107,18 @@ object TBoxHotspotScan {
             }
             .sortedBy { subnet -> rank(subnet.interfaceName) }
 
-    /** Named interfaces first, in the order of [LIKELY_AP_PREFIXES]; unknown names last. */
+    /**
+     * SoftAP names first in the order of [LIKELY_AP_PREFIXES], then [PEER_LINK_PREFIXES], then
+     * unknown names. Every rank is distinct so the sort is a decision rather than a tie broken by
+     * enumeration order.
+     */
     private fun rank(interfaceName: String): Int {
         val lowered = interfaceName.lowercase()
-        val index = LIKELY_AP_PREFIXES.indexOfFirst(lowered::startsWith)
-        return if (index < 0) LIKELY_AP_PREFIXES.size else index
+        val hosted = LIKELY_AP_PREFIXES.indexOfFirst(lowered::startsWith)
+        if (hosted >= 0) return hosted
+        val peer = PEER_LINK_PREFIXES.indexOfFirst(lowered::startsWith)
+        if (peer >= 0) return LIKELY_AP_PREFIXES.size + peer
+        return LIKELY_AP_PREFIXES.size + PEER_LINK_PREFIXES.size
     }
 
     /**
