@@ -1,15 +1,19 @@
 # Generated dependency record. Update this file whenever hudlib.aar is rebuilt.
 source_repository=https://github.com/vincenzobpt/ridedaemon-lib
-source_commit=bcd552c738339056a01cdc4b0c0e77a50d69d1bc
+source_commit=6690e771bd04334b0ec87815385b35725fc71aff
 source_dirty=false
 source_checkout=refs/ridedaemon-lib-motohub
 gomobile_android_api=34
 artifact=apps/android/app/libs/hudlib.aar
-sha256=970e7805c6136e6fb34af2082ef4914d8db276465e9f6cf6da73d485cb351f24
+sha256=e5e24ae11ee21a96f9bd2f7bf9209e64a863a860085a9a27a955b811c42e1f63
 license=GPL-3.0-only
-# Rebuilt 2026-08-05: the HU_TIME_SYNC/QUERY_TIME ack now also emits as a PXC
-# event, not just written to the wire, so a rider's diagnostics export can
-# finally show whether the reply happened - it could not before. Verify by
-# grepping libgojni.so for "Answering PXC QUERY_TIME" as before; the new
-# behaviour itself only shows up in a live session's Events, not the binary.
-source_note=clock-ack-visible-in-events
+
+# Rebuilt 2026-08-06: the clock replies now carry the RIDER'S wall clock. Both
+# 0x10450 QUERY_TIME and 0x10600 HU_TIME_SYNC were built from Go's time.Now(),
+# whose location on Android is UTC, so a Voge dash on 1.1.45 was told
+# "05.08.2026 18:06:56" at 20:06:56 local and a currentTime with no offset in
+# it - the clock was set, and set two hours wrong. Android now also supplies
+# the UTC offset (MobileConfig.TimeZoneOffsetSeconds) and PXCControl.hostNow()
+# presents every clock answer in it. Binding surface diffed against the
+# previous AAR: identical apart from the new setter.
+source_note=clock-ack-uses-host-timezone-offset

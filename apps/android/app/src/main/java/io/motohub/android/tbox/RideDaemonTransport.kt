@@ -175,10 +175,20 @@ class RideDaemonTransport(
                 // recognised unit keeps the indexed framing it already displays.
                 setPlainVideoFramingAllowed(profile == TBoxModelProfile.GENERIC)
                 // The dash asks for wall-clock time over PXC and the daemon answers it,
-                // but only Android knows the zone id: Go's local location carries no
-                // usable name on a device. Read per session so a rider who crosses a
-                // border gets the new zone on the next connect.
+                // but only Android knows the zone: Go's local location on a device is
+                // UTC and carries no usable name. The id alone was not enough - it only
+                // labelled the reply while the times inside it stayed on UTC, so a
+                // rider's Voge dash was being set two hours wrong (log 2026-08-06, app
+                // 1.1.45). The offset is what actually moves the clock, and Android is
+                // the only side that knows it with DST applied. Both are read per
+                // session, so a rider who crosses a border gets the new zone on the
+                // next connect.
                 setTimeZoneID(java.util.TimeZone.getDefault().id)
+                setTimeZoneOffsetSeconds(
+                    java.util.TimeZone.getDefault()
+                        .getOffset(System.currentTimeMillis())
+                        .toLong() / 1000L
+                )
             }
             val generation = nextSessionGeneration.incrementAndGet()
             val createdSession = Api.newMobileSession(
