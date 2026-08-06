@@ -1,6 +1,7 @@
 package io.motohub.android.tbox
 
 import android.annotation.SuppressLint
+import android.app.ActivityManager
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.LinkProperties
@@ -159,6 +160,14 @@ class TBoxNetworkConnector(context: Context) {
     /** When the live specifier request was submitted, so onUnavailable can say how fast it came. */
     @Volatile
     private var specifierSubmittedAt = 0L
+
+    /**
+     * Process importance at submit time. Android refuses a specifier request from a process that
+     * is neither a foreground app nor a foreground service, and the refusal is indistinguishable
+     * from "the dash is not broadcasting" unless this number is in the log next to it.
+     */
+    @Volatile
+    private var specifierSubmitImportance = 0
 
     /** Terminal failure produced by the registered callback, observed by [awaitRequestedNetwork]. */
     @Volatile
@@ -797,18 +806,28 @@ class TBoxNetworkConnector(context: Context) {
                     .takeIf { it > 0L }
                     ?.let { "${SystemClock.elapsedRealtime() - it}ms after the request" }
                     ?: "with no recorded request time"
+                // Refused for being in the background, not for anything about the dash: telling
+                // this rider to rescan the QR code sends them to fix a profile that is fine.
+                val refusedAsBackground = !networkGranted &&
+                    specifierSubmitImportance > FOREGROUND_SERVICE_IMPORTANCE
                 ProjectionEventLog.error(
                     "NETWORK",
                     "Android reported the requested T-Box Wi-Fi as unavailable $elapsed; " +
-                        "granted=$networkGranted."
+                        "granted=$networkGranted, importanceAtRequest=$specifierSubmitImportance."
                 )
                 pendingFailure = IllegalStateException(
-                    if (networkGranted) {
-                        "Android dropped the ${profile.ssid} network before it became usable."
-                    } else {
-                        "Android gave up connecting to ${profile.ssid}: either the dash was not " +
-                            "broadcasting it, the saved password no longer matches, or the " +
-                            "connection dialog was dismissed. Rescan the dash QR code and retry."
+                    when {
+                        networkGranted ->
+                            "Android dropped the ${profile.ssid} network before it became usable."
+                        refusedAsBackground ->
+                            "Android refused the request for ${profile.ssid} without trying it: " +
+                                "MOTO-HUB was in the background when it was made. Open MOTO-HUB " +
+                                "and tap Connect again."
+                        else ->
+                            "Android gave up connecting to ${profile.ssid}: either the dash was " +
+                                "not broadcasting it, the saved password no longer matches, or " +
+                                "the connection dialog was dismissed. Rescan the dash QR code " +
+                                "and retry."
                     }
                 )
                 releaseCallback(networkCallback)
@@ -826,9 +845,16 @@ class TBoxNetworkConnector(context: Context) {
             .setNetworkSpecifier(specifier)
             .build()
 
+        val importanceNow = processImportance()
         ProjectionEventLog.debug(
             "NETWORK",
-            "Submitting WifiNetworkSpecifier request for ${profile.ssid} without INTERNET capability."
+            "Submitting WifiNetworkSpecifier request for ${profile.ssid} without INTERNET " +
+                "capability; process importance=$importanceNow" +
+                if (importanceNow > FOREGROUND_SERVICE_IMPORTANCE) {
+                    " (background - Android will refuse this request)."
+                } else {
+                    "."
+                }
         )
 
         // Drop the previous registration, reset this attempt's shared state, take ownership and
@@ -849,6 +875,7 @@ class TBoxNetworkConnector(context: Context) {
             lastSampledRssi = UNSAMPLED_RSSI
             lastSampleDescription = null
             specifierSubmittedAt = SystemClock.elapsedRealtime()
+            specifierSubmitImportance = importanceNow
             callback = networkCallback
             registeredCallbacks += networkCallback
             syncLiveRequesterCount()
@@ -868,6 +895,17 @@ class TBoxNetworkConnector(context: Context) {
             return
         }
         schedulePendingGiveUp(profile)
+    }
+
+    /**
+     * How close to the user this process is, on Android's own scale (smaller is closer). Recorded
+     * per request because it is the difference between "the dash is not there" and "we asked from
+     * the background", which the failure itself cannot tell apart.
+     */
+    private fun processImportance(): Int {
+        val state = ActivityManager.RunningAppProcessInfo()
+        ActivityManager.getMyMemoryState(state)
+        return state.importance
     }
 
     /** Success bookkeeping shared by both callback paths (bound and deliberately unbound). */
@@ -1236,6 +1274,13 @@ class TBoxNetworkConnector(context: Context) {
          * reported. Bounded, because a rider who leaves the picker open pushes it out of reach.
          */
         const val UNAVAILABLE_GRACE_MS = 6_000L
+        /**
+         * `ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE` - the ceiling
+         * AOSP's `WifiNetworkFactory.isRequestFromForegroundAppOrService` accepts. Anything
+         * higher (larger number = further from the user) has its specifier request dropped.
+         */
+        const val FOREGROUND_SERVICE_IMPORTANCE =
+            ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE
         const val EXISTING_WIFI_POLL_MS = 250L
         const val NETWORK_POLL_MS = 250L
         const val SIMULATOR_MONITOR_POLL_MS = 1_000L

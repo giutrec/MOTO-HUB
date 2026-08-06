@@ -3,6 +3,7 @@ package io.motohub.android
 import io.motohub.android.i18n.motoHubText
 
 import android.app.Activity
+import android.app.ActivityManager
 import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.ClipData
@@ -42,6 +43,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.withResumed
 import io.motohub.android.aa.AaSelfMode
 import io.motohub.android.androidauto.PhoneOnlyAndroidAutoLaunchRequest
 import io.motohub.android.androidauto.AndroidAutoRuntime
@@ -152,6 +154,58 @@ class MainActivity : ComponentActivity() {
     private val androidAutoPhoneOnlyBridge by lazy {
         io.motohub.android.androidauto.createAndroidAutoPhoneOnlyBridge(applicationContext)
     }
+
+    /**
+     * Starts a connection only once Android is willing to accept the Wi-Fi request behind it.
+     *
+     * `WifiNetworkFactory` drops a `WifiNetworkSpecifier` request coming from a process that is
+     * neither a foreground app nor a foreground service, and answers `onUnavailable` a few tens
+     * of milliseconds later. The join never happens, and the verdict reads exactly like a dash
+     * that stopped broadcasting - riders were re-scanning QR codes over a race they could not
+     * see. The race is real: the runtime permission sheet leaves this activity PAUSED for a few
+     * frames after its result callback runs, so a first pairing (the one case that always asks
+     * for permissions) connected from a background process every single time.
+     *
+     * The gate is the importance the platform itself reads, not the lifecycle state alone -
+     * during mirroring the projection foreground service legitimately carries the request with
+     * this activity in the background, and that path must keep working untouched.
+     */
+    private fun connectWhenAndroidAccepts(reason: String) {
+        if (isForegroundEnoughForWifiRequest()) {
+            viewModel.connectAndDiscover()
+            return
+        }
+        ProjectionEventLog.record(
+            "CONNECTION",
+            "Connect ($reason) deferred: MOTO-HUB is not in the foreground yet " +
+                "(importance=${processImportance()}); Android would refuse the Wi-Fi request."
+        )
+        lifecycleScope.launch {
+            withResumed {}
+            // Process importance trails the resume callback by a frame or two on some builds.
+            var waited = 0L
+            while (!isForegroundEnoughForWifiRequest() && waited < FOREGROUND_SETTLE_TIMEOUT_MS) {
+                delay(FOREGROUND_SETTLE_POLL_MS)
+                waited += FOREGROUND_SETTLE_POLL_MS
+            }
+            ProjectionEventLog.record(
+                "CONNECTION",
+                "Running the deferred connect ($reason) ${waited}ms after the resume; " +
+                    "importance=${processImportance()}."
+            )
+            viewModel.connectAndDiscover()
+        }
+    }
+
+    private fun processImportance(): Int {
+        val state = ActivityManager.RunningAppProcessInfo()
+        ActivityManager.getMyMemoryState(state)
+        return state.importance
+    }
+
+    /** Mirrors AOSP's `WifiNetworkFactory.isRequestFromForegroundAppOrService`. */
+    private fun isForegroundEnoughForWifiRequest(): Boolean =
+        processImportance() <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -504,7 +558,7 @@ class MainActivity : ComponentActivity() {
                         "Wi-Fi permission results: ${grants.entries.joinToString { "${it.key.substringAfterLast('.')}=${it.value}" }}."
                     )
                     if (grants.values.all { it }) {
-                        viewModel.connectAndDiscover()
+                        connectWhenAndroidAccepts("after the Wi-Fi permission grant")
                     } else {
                         viewModel.onNearbyWifiPermissionDenied()
                     }
@@ -549,7 +603,7 @@ class MainActivity : ComponentActivity() {
                                     PackageManager.PERMISSION_GRANTED
                             }
                         ) {
-                            viewModel.connectAndDiscover()
+                            connectWhenAndroidAccepts("after the $mode stop")
                         } else {
                             wifiPermissionLauncher.launch(permissions)
                         }
@@ -601,7 +655,7 @@ class MainActivity : ComponentActivity() {
                                 PackageManager.PERMISSION_GRANTED
                         }
                     ) {
-                        viewModel.connectAndDiscover()
+                        connectWhenAndroidAccepts("auto-connect")
                     } else {
                         wifiPermissionLauncher.launch(permissions)
                     }
@@ -1007,7 +1061,7 @@ class MainActivity : ComponentActivity() {
                                         PackageManager.PERMISSION_GRANTED
                                 }
                             ) {
-                                viewModel.connectAndDiscover()
+                                connectWhenAndroidAccepts("Connect button")
                             } else {
                                 wifiPermissionLauncher.launch(permissions)
                             }
@@ -1022,7 +1076,9 @@ class MainActivity : ComponentActivity() {
                             )
                             lifecycleScope.launch {
                                 delay(OFFICIAL_APP_CLOSE_RETRY_DELAY_MS)
-                                viewModel.connectAndDiscover()
+                                // The rider was sent to another app's settings to force-stop it,
+                                // so this retry often lands with MOTO-HUB still in the background.
+                                connectWhenAndroidAccepts("official-app conflict retry")
                             }
                         },
                         onOpenOfficialCfmotoSettings = {
@@ -1432,6 +1488,8 @@ class MainActivity : ComponentActivity() {
         const val AUTO_CONNECT_AFTER_STOP_MAX_ATTEMPTS = 25
         const val AUTOSTART_ON_CONNECT_DELAY_MS = 800L
         const val OFFICIAL_APP_CLOSE_RETRY_DELAY_MS = 1_500L
+        const val FOREGROUND_SETTLE_TIMEOUT_MS = 1_000L
+        const val FOREGROUND_SETTLE_POLL_MS = 50L
         const val AUTO_UPDATE_CHECK_DELAY_MS = 1_200L
         const val AUTO_UPDATE_CHECK_THROTTLE_MS = 24 * 60 * 60 * 1_000L
     }
