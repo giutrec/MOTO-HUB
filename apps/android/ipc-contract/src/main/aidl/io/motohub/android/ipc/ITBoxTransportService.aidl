@@ -75,4 +75,31 @@ interface ITBoxTransportService {
      * Same tail-position rule as above for compatibility with older Cores.
      */
     void clearDiagnosticLog();
+
+    /**
+     * Revision of this contract that Core implements, so a caller can tell a Core that simply
+     * does not know a call from one that answered it. A Core older than this method returns 0:
+     * the dead transaction leaves the reply parcel empty and an empty parcel reads as 0.
+     * Same tail-position rule as the two calls above.
+     */
+    int getContractVersion();
+
+    /**
+     * connect() for a Wi-Fi Direct group the CALLER has already formed and still owns.
+     *
+     * Core cannot resolve the phone's own 192.168.49.x address for a group another process
+     * formed - field logs (samsung SM-S918B, Android 16, VOGE dash, 2026-08-06) show 35 of 44
+     * handovers failing with "no usable 192.168.49.x address appeared", 10s apart, while the
+     * companion app that formed the group read its address instantly. So the caller passes the
+     * addresses it already resolved and Core skips its own interface lookup. Core verifies the
+     * group is really formed and never releases it: the process that formed it still owns it.
+     *
+     * @param localIpv4 the phone's address inside the group, as the caller resolved it
+     * @param groupOwnerIpv4 the dash's address (the P2P Group Owner)
+     */
+    boolean connectOverFormedGroup(
+        in MotorcycleConnectRequest request,
+        String localIpv4,
+        String groupOwnerIpv4
+    );
 }

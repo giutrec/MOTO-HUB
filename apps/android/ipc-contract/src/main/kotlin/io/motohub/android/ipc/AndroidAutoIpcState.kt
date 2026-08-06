@@ -24,6 +24,19 @@ object IpcBridgeContract {
     /** Signature-level permission a caller must hold to bind IpcBridgeService. */
     const val BIND_PERMISSION = "io.motohub.android.permission.BIND_CORE_SERVICE"
 
+    /**
+     * Revision of ITBoxTransportService this build implements, answered by getContractVersion().
+     * Bump it whenever a call is appended, and gate the caller on the constant naming the call
+     * it needs - a Core that predates getContractVersion() itself answers 0.
+     *
+     * 1: everything up to clearDiagnosticLog(), which had no version call.
+     * 2: connectOverFormedGroup().
+     */
+    const val CONTRACT_VERSION = 2
+
+    /** First [CONTRACT_VERSION] whose Core implements connectOverFormedGroup(). */
+    const val CONTRACT_VERSION_FORMED_GROUP = 2
+
     const val CORE_PACKAGE_NAME = "io.motohub.android"
     const val CORE_MAIN_ACTIVITY_CLASS_NAME = "io.motohub.android.MainActivity"
 

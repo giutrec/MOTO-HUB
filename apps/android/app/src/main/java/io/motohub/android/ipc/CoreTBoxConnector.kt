@@ -9,6 +9,7 @@ import android.content.Context
 import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.session.TBoxConnectionMode
+import io.motohub.android.tbox.FormedP2pGroup
 import io.motohub.android.tbox.ProfileOverride
 import io.motohub.android.tbox.SelectingTBoxTransport
 import io.motohub.android.tbox.TBoxCapabilityStore
@@ -36,7 +37,15 @@ class CoreTBoxConnector(private val context: Context) {
      */
     fun isReusableFor(ssid: String): Boolean = !installed && networkConnector.isHuntingFor(ssid)
 
-    suspend fun connect(profile: MotorcycleProfile): Boolean {
+    /**
+     * @param formedGroup set when the caller has already formed the Wi-Fi Direct group and is
+     *   handing it over with its addresses; this process then adopts it instead of attempting a
+     *   join the framework refuses a backgrounded Core anyway.
+     */
+    suspend fun connect(
+        profile: MotorcycleProfile,
+        formedGroup: FormedP2pGroup? = null
+    ): Boolean {
         // A session CORE started for itself outlives the activity on purpose - a projection has to
         // survive the screen going away - and a companion app asking to connect in that moment used
         // to build a SECOND TBoxNetworkConnector beside it. Two exclusive WifiNetworkSpecifier
@@ -57,7 +66,7 @@ class CoreTBoxConnector(private val context: Context) {
             )
             return false
         }
-        val connected = TBoxLinkResolver.connect(context, networkConnector, profile)
+        val connected = TBoxLinkResolver.connect(context, networkConnector, profile, formedGroup)
         val link = connected.getOrElse {
             ProjectionEventLog.error("IPC_TBOX", "AIDL connect: T-Box network connection failed.", it)
             return false

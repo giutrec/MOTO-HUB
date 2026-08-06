@@ -13,12 +13,29 @@ import java.net.InetAddress
  * Wi-Fi Direct, which is essential for dashboards that act as P2P Group Owners without exposing
  * a conventional access point.
  */
+/**
+ * A Wi-Fi Direct group formed and owned by another process, described well enough for this one to
+ * use it without looking it up. Only the forming process can read the phone's own address inside
+ * the group, so it travels across the bridge instead of being resolved twice.
+ */
+data class FormedP2pGroup(
+    val localIpv4: Inet4Address,
+    val groupOwnerIpv4: Inet4Address
+)
+
 object TBoxLinkResolver {
 
+    /**
+     * @param formedGroup a Wi-Fi Direct group ANOTHER process already formed and still owns,
+     *   with the addresses it resolved there. Present only on the companion-app bridge; it makes
+     *   this process adopt that group instead of joining one of its own, which it cannot do -
+     *   see [TBoxWifiDirectConnector.adoptFormedGroup].
+     */
     suspend fun connect(
         context: Context,
         networkConnector: TBoxNetworkConnector,
-        profile: MotorcycleProfile
+        profile: MotorcycleProfile,
+        formedGroup: FormedP2pGroup? = null
     ): Result<TBoxLink> =
         if (profile.connectionMode == TBoxConnectionMode.PHONE_HOTSPOT) {
             hostedLink(context).recoverCatching { hostedFailure ->
@@ -27,9 +44,16 @@ object TBoxLinkResolver {
         } else if (usesWifiDirect(profile)) {
             ProjectionEventLog.record(
                 "NETWORK",
-                "Connecting to ${profile.ssid} through Wi-Fi Direct (${profile.connectionMode})."
+                "Connecting to ${profile.ssid} through Wi-Fi Direct (${profile.connectionMode})" +
+                    if (formedGroup != null) ", adopting the group the companion app formed." else "."
             )
-            TBoxWifiDirectConnector(context).connect(profile).map { it }
+            if (formedGroup != null) {
+                TBoxWifiDirectConnector(context)
+                    .adoptFormedGroup(profile, formedGroup.localIpv4, formedGroup.groupOwnerIpv4)
+                    .map { it }
+            } else {
+                TBoxWifiDirectConnector(context).connect(profile).map { it }
+            }
         } else {
             ProjectionEventLog.record(
                 "NETWORK",
@@ -38,14 +62,28 @@ object TBoxLinkResolver {
             networkConnector.connect(profile).map { TBoxLink.Infrastructure(it) }
         }
 
-    /** Recovery variant: reuse a still-alive infrastructure network before reconnecting. */
+    /**
+     * Recovery variant: reuse a still-alive infrastructure network before reconnecting.
+     *
+     * @param currentLink the link the session being recovered was using, when there is one. A
+     *   Wi-Fi Direct group formed by the companion app must be re-adopted, never rejoined: this
+     *   process cannot form or resolve one, so a rejoin here is the "connect() failed: internal
+     *   error" storm the watchdog used to produce on every recovery of a handed-over session.
+     */
     suspend fun reacquire(
         context: Context,
         networkConnector: TBoxNetworkConnector,
         profile: MotorcycleProfile,
-        awaitNetworkMillis: Long
+        awaitNetworkMillis: Long,
+        currentLink: TBoxLink? = null
     ): TBoxLink {
         if (usesWifiDirect(profile)) {
+            val handedOver = (currentLink as? TBoxLink.WifiDirect)?.takeIf { it.formedElsewhere }
+            if (handedOver != null) {
+                return TBoxWifiDirectConnector(context)
+                    .adoptFormedGroup(profile, handedOver.bindIp, handedOver.gatewayIp)
+                    .getOrThrow()
+            }
             // A P2P group has no ConnectivityManager-visible network to await; rejoin directly.
             return TBoxWifiDirectConnector(context).connect(profile).getOrThrow()
         }

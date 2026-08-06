@@ -35,6 +35,7 @@ import io.motohub.android.feature.settings.AndroidAutoResolutionMode
 import io.motohub.android.feature.settings.MotoHubSettings
 import io.motohub.android.feature.settings.VideoQuality
 import io.motohub.android.session.ProjectionEventLog
+import io.motohub.android.tbox.FormedP2pGroup
 import io.motohub.android.tbox.ProfileOverride
 import io.motohub.android.tbox.TBoxModelProfile
 import io.motohub.android.tbox.TBoxSessionHandle
@@ -178,10 +179,43 @@ class IpcBridgeService : Service() {
         // for the association. Building one per call left an orphan behind on every reconnect.
         // CoreTBoxConnectors also reuses the previous connector across retries for the same SSID
         // instead of tearing it down, so a still-pending Wi-Fi hunt survives a retry.
-        override fun connect(request: MotorcycleConnectRequest): Boolean =
+        override fun connect(request: MotorcycleConnectRequest): Boolean = runConnect(request, null)
+
+        override fun getContractVersion(): Int = IpcBridgeContract.CONTRACT_VERSION
+
+        // The caller formed the Wi-Fi Direct group in its own process and passes the addresses it
+        // resolved there, because this one cannot resolve them for a group it did not form. Bad
+        // addresses are refused here rather than deep in the connect: a caller that cannot say
+        // where the group is has not really handed one over.
+        override fun connectOverFormedGroup(
+            request: MotorcycleConnectRequest,
+            localIpv4: String?,
+            groupOwnerIpv4: String?
+        ): Boolean {
+            val local = parseIpv4(localIpv4)
+            val groupOwner = parseIpv4(groupOwnerIpv4)
+            if (local == null || groupOwner == null) {
+                ProjectionEventLog.error(
+                    "IPC_TBOX",
+                    "AIDL connectOverFormedGroup refused: unusable addresses " +
+                        "(local=$localIpv4, groupOwner=$groupOwnerIpv4)."
+                )
+                return false
+            }
+            ProjectionEventLog.record(
+                "IPC_TBOX",
+                "AIDL connect over the group the companion app formed: phone=$localIpv4, dash=$groupOwnerIpv4."
+            )
+            return runConnect(request, FormedP2pGroup(local, groupOwner))
+        }
+
+        private fun runConnect(
+            request: MotorcycleConnectRequest,
+            formedGroup: FormedP2pGroup?
+        ): Boolean =
             kotlinx.coroutines.runBlocking {
                 val connector = CoreTBoxConnectors.acquire(applicationContext, request.ssid)
-                val deferred = serviceScope.async { connector.connect(request.toProfile()) }
+                val deferred = serviceScope.async { connector.connect(request.toProfile(), formedGroup) }
                 activeConnect = connector to deferred
                 val result = try {
                     deferred.await()
@@ -191,6 +225,15 @@ class IpcBridgeService : Service() {
                 if (activeConnect?.second === deferred) activeConnect = null
                 result
             }
+
+        // Dotted-quad literals only. getByName() would resolve anything else through DNS, on the
+        // binder thread, for a value that is always a literal when the caller is honest.
+        private fun parseIpv4(value: String?): java.net.Inet4Address? {
+            val text = value?.trim().orEmpty()
+            if (!IPV4_LITERAL.matches(text)) return null
+            return runCatching { java.net.InetAddress.getByName(text) }
+                .getOrNull() as? java.net.Inet4Address
+        }
 
         override fun cancelConnect() {
             val (connector, deferred) = activeConnect ?: return
@@ -857,5 +900,6 @@ class IpcBridgeService : Service() {
         const val ANDROID_AUTO_RECEIVER_SETTLE_MS = 900L
         const val CHANNEL_ID = "core_bridge_v1"
         const val NOTIFICATION_ID = 9101
+        val IPV4_LITERAL = Regex("""^(\d{1,3}\.){3}\d{1,3}$""")
     }
 }

@@ -97,6 +97,27 @@ class TBoxTransportClient(
     /** Asks Core to establish the T-Box connection in its own process (it owns the GPL transport). */
     fun connect(request: MotorcycleConnectRequest): Boolean = service?.connect(request) ?: false
 
+    /**
+     * Which revision of the contract the bound Core implements, or 0 when it is not bound or is
+     * old enough not to know the call at all. Gate an appended call on this rather than calling
+     * it and reading the answer: a dead transaction returns the same `false` a real refusal does.
+     */
+    fun contractVersion(): Int = runCatching { service?.getContractVersion() }.getOrNull() ?: 0
+
+    /**
+     * Hands Core a Wi-Fi Direct group THIS process formed, with the addresses already resolved
+     * here - see ITBoxTransportService.aidl for why Core cannot resolve them itself. Only call
+     * it when [contractVersion] is at least [IpcBridgeContract.CONTRACT_VERSION_FORMED_GROUP];
+     * an older Core answers false without ever running a connect.
+     */
+    fun connectOverFormedGroup(
+        request: MotorcycleConnectRequest,
+        localIpv4: String,
+        groupOwnerIpv4: String
+    ): Boolean =
+        runCatching { service?.connectOverFormedGroup(request, localIpv4, groupOwnerIpv4) }
+            .getOrNull() ?: false
+
     /** Aborts an in-flight connect() on Core's side; see ITBoxTransportService.aidl. */
     fun cancelConnect() {
         service?.cancelConnect()

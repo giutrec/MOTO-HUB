@@ -900,7 +900,8 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
             applicationContext,
             previousHandle.networkConnector,
             previousHandle.motorcycle,
-            NETWORK_REJOIN_WAIT_MILLIS
+            NETWORK_REJOIN_WAIT_MILLIS,
+            previousHandle.link
         )
         previousHandle.transport.configureProtocolProfile(
             TBoxModelProfile.resolve(

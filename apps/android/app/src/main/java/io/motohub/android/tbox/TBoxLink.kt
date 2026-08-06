@@ -8,6 +8,7 @@ import android.net.Network
 import android.net.nsd.NsdManager
 import android.net.wifi.p2p.WifiP2pInfo
 import android.net.wifi.p2p.WifiP2pManager
+import io.motohub.android.session.ProjectionEventLog
 import java.net.Inet4Address
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -113,11 +114,18 @@ sealed interface TBoxLink {
         override fun matchesResolvedNetwork(resolvedNetwork: Network?): Boolean = resolvedNetwork == null
     }
 
+    /**
+     * @param formedElsewhere the group was formed by ANOTHER process (the companion app) and
+     *   handed over. Nothing here may release it - the process that formed it owns it and is the
+     *   only one that can put it back - and a recovery must reuse this link rather than rejoining,
+     *   because this process cannot resolve the group's local address on its own.
+     */
     class WifiDirect(
         val bindIp: Inet4Address,
         val gatewayIp: Inet4Address,
         private val leaveGroup: () -> Unit,
-        private val appContext: Context? = null
+        private val appContext: Context? = null,
+        val formedElsewhere: Boolean = false
     ) : TBoxLink {
         override val network: Network? = null
         override val peerHint: Inet4Address = gatewayIp
@@ -178,18 +186,35 @@ sealed interface TBoxLink {
             // when it is still assigned: the p2p address can be reassigned by DHCP between the
             // join and later socket use, and binding a stale address throws EADDRNOTAVAIL. If
             // pinning is not possible, an unbound socket still reaches 192.168.49.1.
-            val source = currentP2pSourceIp()
+            // For a group formed elsewhere the address is real but invisible to this process's
+            // NetworkInterface view - that invisibility is the whole reason the addresses are
+            // handed over - so the captured one is still worth trying: the kernel binds by what
+            // is assigned to the device, not by what this API is willing to list. If that is
+            // refused too, the unbound socket below is the documented fallback.
+            val source = currentP2pSourceIp() ?: bindIp.takeIf { formedElsewhere }
             if (source != null) {
                 val pinned = Socket()
                 try {
                     pinned.bind(InetSocketAddress(source, 0))
                     return pinned
-                } catch (_: Exception) {
+                } catch (failure: Exception) {
                     runCatching { pinned.close() }
+                    if (unpinnedSocketReported.compareAndSet(false, true)) {
+                        ProjectionEventLog.warning(
+                            "WIFI_DIRECT",
+                            "Cannot pin sockets to ${source.hostAddress} " +
+                                "(${failure.javaClass.simpleName}: ${failure.message}); using " +
+                                "unbound sockets, which reach the dash only while the p2p route " +
+                                "wins over the default network."
+                        )
+                    }
                 }
             }
             return Socket()
         }
+
+        /** One line per link, not per socket: the reverse channels alone would repeat it. */
+        private val unpinnedSocketReported = AtomicBoolean(false)
 
         override fun disconnect() {
             groupWatchers.toList().forEach { runCatching { it.close() } }

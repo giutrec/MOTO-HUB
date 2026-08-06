@@ -132,6 +132,85 @@ class TBoxWifiDirectConnector(
             }
         }
 
+    /**
+     * Takes over a group the COMPANION APP formed, using the addresses it resolved there.
+     *
+     * The local 192.168.49.x address of a group is not readable from a process that did not form
+     * it - `NetworkInterface` simply never shows it. Field log, samsung SM-S918B on Android 16
+     * (2026-08-06): 35 of 44 handovers died with "no usable 192.168.49.x address appeared on
+     * null" after the full 10s poll, in the same second the companion app had printed its own
+     * address; the handful that worked were the ones where Core had itself just formed a group.
+     * So Core stops looking and trusts the addresses the forming process passes across.
+     *
+     * What is still verified is that the group is really there and really the dash's: the
+     * framework answers [WifiP2pManager.requestConnectionInfo] for any process. The group is
+     * never released from here - the process that formed it owns it.
+     */
+    @SuppressLint("MissingPermission")
+    suspend fun adoptFormedGroup(
+        profile: MotorcycleProfile,
+        localIpv4: Inet4Address,
+        groupOwnerIpv4: Inet4Address
+    ): Result<TBoxLink.WifiDirect> = withContext(Dispatchers.IO) {
+        val manager = appContext.getSystemService(Context.WIFI_P2P_SERVICE) as? WifiP2pManager
+            ?: return@withContext Result.failure(
+                IllegalStateException("This device has no Wi-Fi Direct (P2P) support.")
+            )
+        val channel = manager.initialize(appContext, Looper.getMainLooper(), null)
+            ?: return@withContext Result.failure(
+                IllegalStateException("Wi-Fi Direct is unavailable (channel could not be initialized).")
+            )
+        try {
+            // Polled, not asked once: the handover crosses a Binder call, and the framework can
+            // still be publishing the group to this process when the request lands.
+            val deadline = System.nanoTime() + ADOPT_VERIFY_TIMEOUT_MS * 1_000_000
+            var lastState = "no answer from the framework"
+            while (System.nanoTime() < deadline) {
+                val info = awaitQuery<WifiP2pInfo> { resume ->
+                    manager.requestConnectionInfo(channel) { resume(it) }
+                }
+                val group = awaitQuery<WifiP2pGroup> { resume ->
+                    manager.requestGroupInfo(channel) { resume(it) }
+                }
+                when {
+                    info == null || !info.groupFormed ->
+                        lastState = "no Wi-Fi Direct group is formed on this phone any more"
+                    info.isGroupOwner ->
+                        lastState = "this phone is the Group Owner, so the dash is not"
+                    !groupNameMatchesProfile(group?.networkName, profile.ssid) ->
+                        lastState = "the formed group is '${group?.networkName}', not ${profile.ssid}"
+                    else -> {
+                        val gateway = info.groupOwnerAddress as? Inet4Address ?: groupOwnerIpv4
+                        log(
+                            "Adopting the Wi-Fi Direct group ${profile.ssid} formed by the " +
+                                "companion app: phone=${localIpv4.hostAddress}, " +
+                                "dash(GO)=${gateway.hostAddress}. Its addresses come from that " +
+                                "app; this process never releases the group."
+                        )
+                        return@withContext Result.success(
+                            TBoxLink.WifiDirect(
+                                bindIp = localIpv4,
+                                gatewayIp = gateway,
+                                leaveGroup = {},
+                                appContext = appContext,
+                                formedElsewhere = true
+                            )
+                        )
+                    }
+                }
+                delay(ADOPT_VERIFY_POLL_MS)
+            }
+            Result.failure(
+                IllegalStateException(
+                    "The Wi-Fi Direct group for ${profile.ssid} was gone by the time Core looked: " +
+                        "$lastState. Retry the connection with the dash screen on."
+                )
+            )
+        } finally {
+            runCatching { channel.close() }
+        }
+    }
+
     private fun registerReceiver(
         manager: WifiP2pManager,
         channel: WifiP2pManager.Channel,
@@ -612,6 +691,12 @@ class TBoxWifiDirectConnector(
         Thread({
             val bindIp = pollLocalP2pIpv4(iface)
             if (bindIp == null) {
+                // What the process could actually see, not just that it saw nothing: this poll
+                // comes up empty for two very different reasons - DHCP still pending on a group
+                // this process formed, or a group formed by ANOTHER process, whose address never
+                // becomes visible here at all. Without the interface list they read identically,
+                // which is exactly how the companion-app handover failure hid for weeks.
+                log("Interfaces visible while waiting for the p2p address: ${visibleInterfaces()}")
                 settle(
                     Result.failure(
                         IllegalStateException(
@@ -647,6 +732,21 @@ class TBoxWifiDirectConnector(
         }
         return localP2pIpv4(iface)
     }
+
+    /** Every up, non-loopback interface with its IPv4 addresses - or why the list is unavailable. */
+    private fun visibleInterfaces(): String = runCatching {
+        NetworkInterface.getNetworkInterfaces()
+            .toList()
+            .filter { it.isUp && !it.isLoopback }
+            .joinToString("; ") { nic ->
+                val addresses = nic.inetAddresses
+                    .toList()
+                    .filterIsInstance<Inet4Address>()
+                    .mapNotNull { it.hostAddress }
+                "${nic.name}=[${addresses.joinToString(",")}]"
+            }
+            .ifBlank { "none" }
+    }.getOrElse { "unreadable (${it.javaClass.simpleName}: ${it.message})" }
 
     private fun localP2pIpv4(iface: String?): Inet4Address? = runCatching {
         for (nic in NetworkInterface.getNetworkInterfaces()) {
@@ -809,6 +909,8 @@ class TBoxWifiDirectConnector(
         private const val CONNECT_RETRY_DELAY_MS = 1_200L
         private const val IP_POLL_TIMEOUT_MS = 10_000L
         private const val IP_POLL_INTERVAL_MS = 500L
+        private const val ADOPT_VERIFY_TIMEOUT_MS = 3_000L
+        private const val ADOPT_VERIFY_POLL_MS = 300L
         private const val GROUP_OWNER_IP = "192.168.49.1"
         private const val DIRECT_PREFIX = "DIRECT-"
 
