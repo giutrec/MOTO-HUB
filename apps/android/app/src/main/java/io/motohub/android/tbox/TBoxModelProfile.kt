@@ -52,7 +52,14 @@ enum class TBoxModelProfile(
      */
     val encoderKeyframeIntervalSeconds: Int = 0,
     /** Which wire protocol the dash speaks; routes the session to the matching transport. */
-    val transportFamily: TBoxTransportFamily = TBoxTransportFamily.EASYCONN
+    val transportFamily: TBoxTransportFamily = TBoxTransportFamily.EASYCONN,
+    /**
+     * Yunmo only: use the OEM map-navigation display path (A0 cmd=6, with each keyframe split into
+     * standalone SPS / PPS / coded-picture frames) instead of a plain mirror. This is the newest,
+     * still-unconfirmed compatibility experiment for the X-Cape 1200, so it stays off unless a
+     * profile opts in — a plain mirror is the safe default for any Yunmo dash.
+     */
+    val yunmoMapNavExperiment: Boolean = false
 ) {
     MOTO_HUB_SIMULATOR(
         key = "moto_hub_simulator",
@@ -247,6 +254,37 @@ enum class TBoxModelProfile(
         // socket. Sending a keepalive to a dash that does not need one is harmless; not
         // sending one to a dash that does costs the whole session.
         requiresProactivePxcHeartbeat = true
+    ),
+    /**
+     * Moto Morini X-Cape 1200 — the one dash known to speak Yunmo over its `ML*` SoftAP at
+     * 192.168.4.1:8200 instead of EasyConn. Reached through [TBoxTransportFamily.YUNMO].
+     *
+     * [modelIds] is deliberately empty: the pairing QR's `ProductID=00297` is shared with the
+     * X-Cape 649 / 700 and the Seiemmezzo, which speak EasyConn, so keying this profile off that
+     * id would break those bikes. It is reachable only by a manual [ProfileOverride] pin until an
+     * owner's CLIENT_INFO (or a distinguishing SSID) can tell the 1200 apart. Geometry is a
+     * fallback only — the Yunmo dim-query normally reports half the canvas and the transport
+     * doubles it to the measured 1024x464 OEM display; 800x480 backstops a dash that never
+     * answers.
+     *
+     * Map-nav is ON here, unlike any other Yunmo dash would default to. An owner's ADB capture of
+     * the OEM app (Ride MO 1.0.23, 2026-08-07) showed it never mirrors this dash: the TFT menu
+     * offers two *navigation* presentations (compact arrows / full-screen map) and the OEM always
+     * drives the navigation path, latching the TFT's chosen mode at navigation startup. A plain
+     * mirror is therefore unlikely to be a mode this firmware has at all.
+     */
+    MORINI_XCAPE_1200(
+        key = "morini_xcape_1200",
+        displayName = "Moto Morini X-Cape 1200 (Yunmo)",
+        modelIds = emptySet(),
+        mapTilesRequireCellular = true,
+        supportsScreenTouch = false,
+        defaultAndroidAutoPreset = AndroidAutoVideoPreset.LANDSCAPE_800X480,
+        fallbackTBoxVideoArea = TBoxEvent.VideoArea(800, 480),
+        requiresSockAuth = false,
+        advertisedSupportFunction = 0,
+        transportFamily = TBoxTransportFamily.YUNMO,
+        yunmoMapNavExperiment = true
     );
 
     companion object {
@@ -421,6 +459,10 @@ enum class TBoxModelProfile(
                 // ThinkerRide dashes never produce CLIENT_INFO (an EasyConn concept), so scoring
                 // has nothing to say; they resolve by the QR's pseudo modelId or a manual pin.
                 KOVE_800X -> 0
+                // Yunmo dashes never produce CLIENT_INFO either, and the X-Cape 1200 shares its
+                // QR ProductID with EasyConn Morinis, so detection must never claim it: it is a
+                // manual pin only.
+                MORINI_XCAPE_1200 -> 0
                 GENERIC -> 0
             }
         }

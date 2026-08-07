@@ -26,6 +26,11 @@ enum class ProfileOverride(
     CL_C450("cl_c450", "CL-C450", "Near-square panel, 544x512"),
     ZONTES_368G_TEST("zontes_368g_test", "Zontes 368G (test)", "Experiment for JCDZ dashes stuck on the QR page: indexed framing + 1s GOP"),
     KOVE_800X("kove_800x", "KOVE 800X (ThinkerRide)", "BLE-paired ThinkerRide dash, 600x1024 portrait"),
+    MORINI_XCAPE_1200(
+        "morini_xcape_1200",
+        "X-Cape 1200 (Yunmo)",
+        "Moto Morini X-Cape 1200 SoftAP dash on Yunmo :8200 (not the 649/700/Seiemmezzo)"
+    ),
     MOTO_HUB_SIMULATOR("moto_hub_simulator", "MOTO-HUB Simulator", "Development simulator profile");
 
     fun resolve(): TBoxModelProfile? = when (this) {
@@ -41,6 +46,7 @@ enum class ProfileOverride(
         CL_C450 -> TBoxModelProfile.CL_C450
         ZONTES_368G_TEST -> TBoxModelProfile.ZONTES_368G_TEST
         KOVE_800X -> TBoxModelProfile.KOVE_800X
+        MORINI_XCAPE_1200 -> TBoxModelProfile.MORINI_XCAPE_1200
         MOTO_HUB_SIMULATOR -> TBoxModelProfile.MOTO_HUB_SIMULATOR
     }
 

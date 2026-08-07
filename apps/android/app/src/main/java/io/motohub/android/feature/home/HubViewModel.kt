@@ -367,12 +367,14 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     )
                 )
+                val requestedOverride = ProfileOverride.byKey(profile.profileOverrideKey)
+                ProjectionEventLog.record(
+                    "PROFILE",
+                    "Resolving protocol profile: modelId=${profile.modelId ?: "none"}, " +
+                        "override=${requestedOverride.key}, connectionMode=${profile.connectionMode}."
+                )
                 transport.configureProtocolProfile(
-                    TBoxModelProfile.resolve(
-                        profile.modelId,
-                        null,
-                        ProfileOverride.byKey(profile.profileOverrideKey)
-                    )
+                    TBoxModelProfile.resolve(profile.modelId, null, requestedOverride)
                 )
                 val discovered = transport.discover(establishedLink, profile.modelId)
                 val discoveryFailure = discovered.exceptionOrNull()

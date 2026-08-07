@@ -33,7 +33,10 @@ enum class TBoxTransportFamily {
     EASYCONN,
 
     /** ThinkerRide dashes (KOVE family): BLE handshake, then the dash connects to the phone. */
-    THINKERRIDE
+    THINKERRIDE,
+
+    /** Yunmo SoftAP dashes (Moto Morini X-Cape 1200): one TCP socket to 192.168.4.1:8200. */
+    YUNMO
 }
 
 sealed interface TBoxTransportStatus {

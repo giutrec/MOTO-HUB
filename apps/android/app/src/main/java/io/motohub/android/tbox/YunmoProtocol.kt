@@ -1,0 +1,390 @@
+package io.motohub.android.tbox
+
+import java.io.InputStream
+
+/**
+ * Wire-level constants and codecs for the "Yunmo" :8200 SoftAP projection protocol, spoken by the
+ * Moto Morini X-Cape 1200 dashboard (SoftAP SSID `ML*`, host `192.168.4.1`). Everything here is
+ * pure byte work so it stays JVM-testable; sockets live in [YunmoTransport].
+ *
+ * Yunmo is neither EasyConn nor ThinkerRide: there is no NSD, no PXC, no JSON CLIENT_INFO and no
+ * BLE. The phone opens one TCP socket, asks the dash for its canvas size, tells it to start, then
+ * pushes length-prefixed H.264 access units. Reverse-engineered from the OpenCfMoto v2.0.7
+ * pre-release (`YunmoFrame` / `YunmoLink`, decompiled 2026-08-07); that source was never published.
+ *
+ * Two facts drive the whole design and both are re-derived in the tests:
+ *  - **The dash reports HALF its real canvas.** The OK/dimension reply carries width/height that
+ *    must be doubled (then rounded up to a multiple of 16) to get the encode canvas. A 512x232
+ *    report is a 1024x464 panel — exactly the OEM `NaviVirtualDisplay` an X-Cape 1200 owner
+ *    measured over ADB, which is the independent confirmation that the doubling is real.
+ *  - **The media header carries no frame metadata on the wire.** The shipping build always encodes
+ *    with media-type byte `2` and the metadata block (frameId/width/height) left zero. An earlier
+ *    build that wrote those fields produced a black TFT, so [encodeH264Ex] defaults to omitting
+ *    them and [YunmoTransport] never turns that off.
+ */
+object YunmoProtocol {
+
+    const val DEFAULT_HOST = "192.168.4.1"
+    const val DEFAULT_PORT = 8200
+
+    /** Outer frame guard: four sync bytes then a one-byte command. */
+    const val SYNC: Byte = 0xFE.toByte()
+
+    // Commands (byte [4] of every frame).
+    const val CMD_H264_EX = 0x1D
+    const val CMD_OK_A = 0x32
+    const val CMD_OK_B = 0x33
+    const val CMD_ERR = 0x34
+    const val CMD_DISPLAY = 0xA0
+    const val CMD_DISPLAY_ALT = 0xB0
+
+    // DISPLAY payload opcodes (a single byte).
+    const val DISP_START_MIRROR = 7
+    const val DISP_MAP_NAVI = 6
+    const val DISP_EXIT_A = 3
+    const val DISP_EXIT_B = 5
+
+    // Media-type byte written at header offset [15]. The shipping build only ever sends LEGACY;
+    // the finer types exist in the reference but are dead code there, so the wire always sees 2.
+    const val MEDIA_TYPE_LEGACY = 2
+
+    /** Payload of the size query sent (with [CMD_DISPLAY_ALT]) before anything else. */
+    val DIM_QUERY_PAYLOAD = byteArrayOf(1, 0, 1)
+
+    /** How many frames may be in flight (unacked) before the sender must wait. */
+    const val SEND_WINDOW = 3
+
+    /** Largest simple-frame payload the parser will accept, matching the reference guard. */
+    private const val MAX_SIMPLE_PAYLOAD = 10240
+
+    /** Largest number of byte slips the resync will tolerate before giving up on a frame. */
+    private const val MAX_RESYNC_SLIP = 4096
+
+    /** The dash's reported canvas; the real panel is [mapsWidth] x [mapsHeight] (double). */
+    data class DimensionReport(val reportedWidth: Int, val reportedHeight: Int) {
+        val mapsWidth: Int get() = reportedWidth * 2
+        val mapsHeight: Int get() = reportedHeight * 2
+    }
+
+    /** One decoded simple frame: its command byte and its raw payload. */
+    data class SimpleFrame(val command: Int, val payload: ByteArray) {
+        override fun equals(other: Any?): Boolean =
+            this === other ||
+                (other is SimpleFrame && command == other.command && payload.contentEquals(other.payload))
+
+        override fun hashCode(): Int = 31 * command + payload.contentHashCode()
+    }
+
+    // ---- Encoders ----------------------------------------------------------------------------
+
+    /**
+     * Encodes a control/display frame:
+     * `FE FE FE FE | cmd | lenHi | lenLo | (lenHi+lenLo)&0xFF | payload | checksum`
+     * where checksum is the low byte of the sum of bytes [4 .. 8+len).
+     */
+    fun encodeSimple(command: Int, payload: ByteArray): ByteArray {
+        val length = payload.size
+        val frame = ByteArray(length + 9)
+        frame[0] = SYNC
+        frame[1] = SYNC
+        frame[2] = SYNC
+        frame[3] = SYNC
+        frame[4] = command.toByte()
+        val hi = (length ushr 8).toByte()
+        val lo = length.toByte()
+        frame[5] = hi
+        frame[6] = lo
+        frame[7] = ((hi.toInt() and 0xFF) + (lo.toInt() and 0xFF)).toByte()
+        payload.copyInto(frame, destinationOffset = 8)
+        var sum = 0
+        for (i in 4 until 8 + length) sum += frame[i].toInt() and 0xFF
+        frame[8 + length] = (sum and 0xFF).toByte()
+        return frame
+    }
+
+    /**
+     * Encodes one H.264 access unit as a [CMD_H264_EX] frame: a 40-byte header then the access
+     * unit zero-padded to a 32-byte multiple.
+     *
+     * [omitMeta] (the shipping default) leaves offsets [16..24] — frameId, width, height — zero;
+     * the dash reads none of them and an earlier build that filled them blacked the TFT out.
+     */
+    fun encodeH264Ex(
+        accessUnit: ByteArray,
+        width: Int,
+        height: Int,
+        frameId: Int,
+        mediaType: Int = MEDIA_TYPE_LEGACY,
+        omitMeta: Boolean = true
+    ): ByteArray {
+        val padded = ((accessUnit.size + 31) / 32) * 32
+        val frame = ByteArray(padded + 40)
+        accessUnit.copyInto(frame, destinationOffset = 40)
+        frame[0] = SYNC
+        frame[1] = SYNC
+        frame[2] = SYNC
+        frame[3] = SYNC
+        frame[4] = CMD_H264_EX.toByte()
+        val blocks = (padded + 32) / 32
+        val bHi = (blocks ushr 8).toByte()
+        val bLo = blocks.toByte()
+        frame[5] = bHi
+        frame[6] = bLo
+        frame[7] = ((bHi.toInt() and 0xFF) + (bLo.toInt() and 0xFF)).toByte()
+        frame[14] = 0
+        frame[15] = mediaType.toByte()
+        if (!omitMeta) {
+            putLe(frame, 16, frameId, 4)
+            putLe(frame, 20, width, 2)
+            putLe(frame, 22, height, 2)
+            frame[24] = 0
+        }
+        putLe(frame, 8, accessUnit.size, 4)
+        var sum = 0
+        for (b in accessUnit) sum += b.toInt() and 0xFF
+        putLe(frame, 12, sum and 0xFFFF, 2)
+        return frame
+    }
+
+    // ---- The three handshake / teardown frames ----------------------------------------------
+
+    /** `B0` + `01 00 01`: asks the dash to report its canvas size. */
+    fun dimQueryFrame(): ByteArray = encodeSimple(CMD_DISPLAY_ALT, DIM_QUERY_PAYLOAD)
+
+    /** The mirror-start pair, in order: `B0{7}` then `A0{7}`. */
+    fun startMirrorFrames(): List<ByteArray> = listOf(
+        encodeSimple(CMD_DISPLAY_ALT, byteArrayOf(DISP_START_MIRROR.toByte())),
+        encodeSimple(CMD_DISPLAY, byteArrayOf(DISP_START_MIRROR.toByte()))
+    )
+
+    /** `A0{6}`: asks the dash to enter its OEM map-navigation display path. */
+    fun mapNaviFrame(): ByteArray = encodeSimple(CMD_DISPLAY, byteArrayOf(DISP_MAP_NAVI.toByte()))
+
+    /** The teardown pair, in order: `A0{3}` then `A0{5}`; returns the dash to its stock UI. */
+    fun stopFrames(): List<ByteArray> = listOf(
+        encodeSimple(CMD_DISPLAY, byteArrayOf(DISP_EXIT_A.toByte())),
+        encodeSimple(CMD_DISPLAY, byteArrayOf(DISP_EXIT_B.toByte()))
+    )
+
+    // ---- Parsing -----------------------------------------------------------------------------
+
+    /**
+     * Reads and validates one simple frame, resyncing on the `FE FE FE FE` guard. Returns null on
+     * EOF, a checksum/length failure, or after [MAX_RESYNC_SLIP] bytes without a valid header.
+     * H.264 frames are never parsed back — the phone only ever receives control/ack frames.
+     */
+    fun readSimpleFrame(input: InputStream): SimpleFrame? {
+        val header = ByteArray(8)
+        if (!readFully(input, header)) return null
+        var slips = 0
+        while (true) {
+            val framed = header[0] == SYNC && header[1] == SYNC && header[2] == SYNC &&
+                header[3] == SYNC && header[4] != SYNC
+            if (framed) {
+                val hi = header[5].toInt() and 0xFF
+                val lo = header[6].toInt() and 0xFF
+                val length = (hi shl 8) or lo
+                if (((hi + lo) and 0xFF) != (header[7].toInt() and 0xFF) ||
+                    length < 0 || length > MAX_SIMPLE_PAYLOAD
+                ) {
+                    return null
+                }
+                val payload = ByteArray(length)
+                if (length > 0 && !readFully(input, payload)) return null
+                val checksum = input.read()
+                if (checksum < 0) return null
+                var sum = 0
+                for (i in 4 until 8) sum += header[i].toInt() and 0xFF
+                for (b in payload) sum += b.toInt() and 0xFF
+                if ((sum and 0xFF) != (checksum and 0xFF)) return null
+                return SimpleFrame(header[4].toInt() and 0xFF, payload)
+            }
+            // Not aligned: drop the first byte, pull one more, and try again.
+            System.arraycopy(header, 1, header, 0, 7)
+            val next = input.read()
+            if (next < 0) return null
+            header[7] = next.toByte()
+            if (++slips > MAX_RESYNC_SLIP) return null
+        }
+    }
+
+    /** Parses the canvas size out of an OK (`0x32`/`0x33`) payload; both axes are big-endian. */
+    fun parseOkDimension(payload: ByteArray): DimensionReport? {
+        if (payload.size < 8) return null
+        val width = ((payload[4].toInt() and 0xFF) shl 8) or (payload[5].toInt() and 0xFF)
+        val height = ((payload[6].toInt() and 0xFF) shl 8) or (payload[7].toInt() and 0xFF)
+        if (width < 16 || height < 16 || width > 4096 || height > 4096) return null
+        return DimensionReport(width, height)
+    }
+
+    /** True when a [CMD_DISPLAY] payload is the dash confirming map-nav (opcode 6) with a reset. */
+    fun isMapNaviConfirm(payload: ByteArray): Boolean =
+        payload.isNotEmpty() && (payload[0].toInt() and 0xFF) == DISP_MAP_NAVI
+
+    /**
+     * Parses an acked frame id out of a [CMD_DISPLAY] payload (`payload[0]==0`, at least 5 bytes),
+     * where bytes [1..4] are the id little-endian; returns null when the payload is not an ack.
+     */
+    fun parseAck(payload: ByteArray): Int? {
+        if (payload.size < 5 || payload[0].toInt() != 0) return null
+        return (payload[1].toInt() and 0xFF) or
+            ((payload[2].toInt() and 0xFF) shl 8) or
+            ((payload[3].toInt() and 0xFF) shl 16) or
+            ((payload[4].toInt() and 0xFF) shl 24)
+    }
+
+    // ---- Canvas sizing -----------------------------------------------------------------------
+
+    /**
+     * The encode canvas for a session: the reported size doubled and rounded up to a multiple of
+     * 16 when the dash answered, otherwise the caller's fallback (clamped to a sane floor).
+     */
+    fun encodeCanvas(report: DimensionReport?, fallbackWidth: Int, fallbackHeight: Int): Pair<Int, Int> {
+        if (report != null) return alignTo16(report.mapsWidth) to alignTo16(report.mapsHeight)
+        return maxOf(fallbackWidth, 16) to maxOf(fallbackHeight, 16)
+    }
+
+    private fun alignTo16(value: Int): Int = (value + 15) and 0xFFF0
+
+    // ---- H.264 Annex-B NAL helpers -----------------------------------------------------------
+
+    /** One Annex-B NAL unit with its type (the low 5 bits of the first byte after the start code). */
+    data class AnnexBNal(val type: Int, val bytes: ByteArray) {
+        override fun equals(other: Any?): Boolean =
+            this === other || (other is AnnexBNal && type == other.type && bytes.contentEquals(other.bytes))
+
+        override fun hashCode(): Int = 31 * type + bytes.contentHashCode()
+    }
+
+    /**
+     * Converts one AVCC access unit (4-byte big-endian NAL lengths, the shape AvcEncoder emits) to
+     * the Annex-B byte stream Yunmo carries. A payload already in Annex-B is returned untouched, and
+     * a unit that does not parse cleanly is shipped as-is rather than corrupted.
+     */
+    fun annexBFromAvcc(accessUnit: ByteArray): ByteArray {
+        if (startsWithAnnexBCode(accessUnit)) return accessUnit
+        val out = ArrayList<ByteArray>()
+        var cursor = 0
+        while (cursor + 4 <= accessUnit.size) {
+            val nalLength = ((accessUnit[cursor].toInt() and 0xFF) shl 24) or
+                ((accessUnit[cursor + 1].toInt() and 0xFF) shl 16) or
+                ((accessUnit[cursor + 2].toInt() and 0xFF) shl 8) or
+                (accessUnit[cursor + 3].toInt() and 0xFF)
+            if (nalLength <= 0 || cursor + 4 + nalLength > accessUnit.size) return accessUnit
+            out += accessUnit.copyOfRange(cursor + 4, cursor + 4 + nalLength)
+            cursor += 4 + nalLength
+        }
+        if (cursor != accessUnit.size || out.isEmpty()) return accessUnit
+        val total = out.sumOf { 4 + it.size }
+        val result = ByteArray(total)
+        var offset = 0
+        for (nal in out) {
+            result[offset + 3] = 1
+            nal.copyInto(result, offset + 4)
+            offset += 4 + nal.size
+        }
+        return result
+    }
+
+    /** Splits an Annex-B buffer into its NAL units (start codes stripped). */
+    fun splitAnnexB(data: ByteArray): List<AnnexBNal> {
+        val starts = ArrayList<Int>()
+        var i = 0
+        while (i + 3 < data.size) {
+            if (data[i].toInt() == 0 && data[i + 1].toInt() == 0) {
+                val codeLen = when {
+                    data[i + 2].toInt() == 1 -> 3
+                    data[i + 2].toInt() == 0 && i + 3 < data.size && data[i + 3].toInt() == 1 -> 4
+                    else -> 0
+                }
+                if (codeLen > 0) {
+                    starts += i
+                    i += codeLen
+                    continue
+                }
+            }
+            i++
+        }
+        if (starts.isEmpty()) return emptyList()
+        val nals = ArrayList<AnnexBNal>(starts.size)
+        for (index in starts.indices) {
+            val start = starts[index]
+            val end = if (index + 1 < starts.size) starts[index + 1] else data.size
+            val codeLen = if (start + 2 < data.size && data[start + 2].toInt() == 0) 4 else 3
+            val payloadStart = start + codeLen
+            if (payloadStart < end) {
+                nals += AnnexBNal(data[payloadStart].toInt() and 0x1F, data.copyOfRange(payloadStart, end))
+            }
+        }
+        return nals
+    }
+
+    /** True when the buffer carries at least one NAL of [nalType]. */
+    fun annexBContainsNal(data: ByteArray, nalType: Int): Boolean =
+        splitAnnexB(data).any { it.type == nalType }
+
+    /** Re-frames a single NAL (start-code stripped) as its own Annex-B buffer. */
+    fun toAnnexBFrame(nal: AnnexBNal): ByteArray {
+        val out = ByteArray(nal.bytes.size + 4)
+        out[3] = 1
+        nal.bytes.copyInto(out, 4)
+        return out
+    }
+
+    /** Drops the leading SPS (7) and PPS (8) NALs, leaving the coded picture. */
+    fun stripLeadingSpsPps(data: ByteArray): ByteArray {
+        val nals = splitAnnexB(data)
+        if (nals.isEmpty()) return data
+        val kept = nals.filter { it.type != NAL_SPS && it.type != NAL_PPS }
+        if (kept.size == nals.size) return data
+        if (kept.isEmpty()) return ByteArray(0)
+        val total = kept.sumOf { 4 + it.bytes.size }
+        val result = ByteArray(total)
+        var offset = 0
+        for (nal in kept) {
+            result[offset + 3] = 1
+            nal.bytes.copyInto(result, offset + 4)
+            offset += 4 + nal.bytes.size
+        }
+        return result
+    }
+
+    const val NAL_P = 1
+    const val NAL_IDR = 5
+    const val NAL_SPS = 7
+    const val NAL_PPS = 8
+
+    /** Short human name for a NAL type, for the session phase log. */
+    fun nalName(type: Int): String = when (type) {
+        NAL_P -> "P"
+        NAL_IDR -> "IDR"
+        NAL_SPS -> "SPS"
+        NAL_PPS -> "PPS"
+        else -> "NAL$type"
+    }
+
+    // ---- Internals ---------------------------------------------------------------------------
+
+    private fun startsWithAnnexBCode(data: ByteArray): Boolean =
+        (data.size >= 4 && data[0].toInt() == 0 && data[1].toInt() == 0 &&
+            data[2].toInt() == 0 && data[3].toInt() == 1) ||
+            (data.size >= 3 && data[0].toInt() == 0 && data[1].toInt() == 0 && data[2].toInt() == 1)
+
+    private fun putLe(buffer: ByteArray, offset: Int, value: Int, byteCount: Int) {
+        var v = value
+        for (i in 0 until byteCount) {
+            buffer[offset + i] = (v and 0xFF).toByte()
+            v = v ushr 8
+        }
+    }
+
+    private fun readFully(input: InputStream, buffer: ByteArray): Boolean {
+        var read = 0
+        while (read < buffer.size) {
+            val count = input.read(buffer, read, buffer.size - read)
+            if (count < 0) return false
+            read += count
+        }
+        return true
+    }
+}

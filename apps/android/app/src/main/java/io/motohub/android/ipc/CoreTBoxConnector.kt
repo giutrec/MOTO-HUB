@@ -72,12 +72,14 @@ class CoreTBoxConnector(private val context: Context) {
             return false
         }
         ProjectionEventLog.record("IPC_TBOX", "AIDL connect: T-Box link established (${link.label}).")
+        val requestedOverride = ProfileOverride.byKey(profile.profileOverrideKey)
+        ProjectionEventLog.record(
+            "PROFILE",
+            "AIDL connect: resolving protocol profile: modelId=${profile.modelId ?: "none"}, " +
+                "override=${requestedOverride.key}, connectionMode=${profile.connectionMode}."
+        )
         transport.configureProtocolProfile(
-            TBoxModelProfile.resolve(
-                profile.modelId,
-                null,
-                ProfileOverride.byKey(profile.profileOverrideKey)
-            )
+            TBoxModelProfile.resolve(profile.modelId, null, requestedOverride)
         )
         val discovered = transport.discover(link, profile.modelId)
         val host = discovered.getOrElse {

@@ -29,9 +29,12 @@ class ThinkerRideProfileRoutingTest {
     @Test
     fun onlyThinkerRideProfilesRouteToTheThinkerRideTransport() {
         assertEquals(TBoxTransportFamily.THINKERRIDE, TBoxModelProfile.KOVE_800X.transportFamily)
-        // Every EasyConn profile must keep the wire it has always used.
+        // Every EasyConn profile must keep the wire it has always used. KOVE is ThinkerRide and
+        // the X-Cape 1200 is Yunmo; every other profile stays on EasyConn.
         TBoxModelProfile.entries
-            .filterNot { it == TBoxModelProfile.KOVE_800X }
+            .filterNot {
+                it == TBoxModelProfile.KOVE_800X || it == TBoxModelProfile.MORINI_XCAPE_1200
+            }
             .forEach { profile ->
                 assertEquals(
                     "${profile.name} must stay on EasyConn",
