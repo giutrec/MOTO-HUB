@@ -61,4 +61,24 @@ class TBoxWifiDirectConnectorTest {
         assertNull(TBoxWifiDirectConnector.peerNameFromGroupSsid("DIRECT--"))
         assertNull(TBoxWifiDirectConnector.peerNameFromGroupSsid("DIRECT-go-"))
     }
+
+    @Test
+    fun `looks for the peer named inside a group ssid`() {
+        assertEquals(
+            "CFMOTO-EF7198",
+            TBoxWifiDirectConnector.expectedPeerName("DIRECT-go-CFMOTO-EF7198")
+        )
+    }
+
+    @Test
+    fun `treats a non-group ssid as the peer name itself`() {
+        // A rider's Voge: Android's own Wi-Fi Direct screen lists the dash as the device
+        // "VOGE-5G-4474", and that same string is all the rider ever gets to enter. Deriving
+        // nothing from it used to abandon discovery, which left no way in at all - the
+        // credentials join cannot express a name without the DIRECT- prefix.
+        assertEquals("VOGE-5G-4474", TBoxWifiDirectConnector.expectedPeerName("VOGE-5G-4474"))
+        assertEquals("VOGE-5G-4474", TBoxWifiDirectConnector.expectedPeerName(" \"VOGE-5G-4474\" "))
+        // A DIRECT- name that carries no device part is still all we have to search for.
+        assertEquals("DIRECT-ee", TBoxWifiDirectConnector.expectedPeerName("DIRECT-ee"))
+    }
 }

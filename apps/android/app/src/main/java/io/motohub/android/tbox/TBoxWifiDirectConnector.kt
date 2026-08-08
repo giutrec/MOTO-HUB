@@ -356,9 +356,12 @@ class TBoxWifiDirectConnector(
         outcome: CompletableDeferred<Result<TBoxLink.WifiDirect>>,
         footprint: P2pJoinFootprint
     ): WifiP2pDevice? {
-        val expectedName = peerNameFromGroupSsid(profile.ssid) ?: run {
-            log("${profile.ssid} is not a DIRECT-xy-<name> group; joining by credentials.")
-            return null
+        val expectedName = expectedPeerName(profile.ssid)
+        if (expectedName != peerNameFromGroupSsid(profile.ssid)) {
+            log(
+                "${profile.ssid} is not a DIRECT-xy-<name> group; looking for a Wi-Fi Direct " +
+                    "peer named '$expectedName' instead."
+            )
         }
         if (!awaitAction { listener -> manager.discoverPeers(channel, listener) }) {
             footprint.discoveryRefused = true
@@ -410,7 +413,12 @@ class TBoxWifiDirectConnector(
             val config = buildConfig(profile, joinPeer) ?: buildConfig(profile, peer) ?: run {
                 outcome.complete(
                     Result.failure(
-                        IllegalStateException("Wi-Fi Direct join is not possible for ${profile.ssid}.")
+                        IllegalStateException(
+                            "Wi-Fi Direct join is not possible for ${profile.ssid}: the dash did " +
+                                "not answer Wi-Fi Direct discovery, and its name cannot be used " +
+                                "as a group name either. Make sure the dash screen is on and " +
+                                "showing its connection page, then retry."
+                        )
                     )
                 )
                 return
@@ -935,6 +943,21 @@ class TBoxWifiDirectConnector(
             if (separator <= 0 || separator == afterPrefix.lastIndex) return null
             return afterPrefix.substring(separator + 1)
         }
+
+        /**
+         * The P2P device name to look for when joining [ssid].
+         *
+         * Two shapes reach this. A group SSID (`DIRECT-go-CFMOTO-EF7198`) names the peer inside
+         * itself, so the name is recovered from it. Everything else is taken to BE the peer name
+         * already: a rider's Voge pairs under `VOGE-5G-4474`, and Android's own Wi-Fi Direct
+         * screen lists exactly that string as the dash's device name - the official app reaches
+         * it that way, and there is no group SSID anywhere in the picture. Searching for it is
+         * also the only way in, because the credentials join cannot express such a name at all:
+         * `WifiP2pConfig.Builder.setNetworkName` rejects anything not starting with `DIRECT-`,
+         * whereas a peer found by name is joined by its device address, which has no such rule.
+         */
+        internal fun expectedPeerName(ssid: String): String =
+            peerNameFromGroupSsid(ssid) ?: ssid.trim().removeSurrounding("\"")
 
         /**
          * Whether a formed group's network name is the profile's dash. A null/blank name cannot
