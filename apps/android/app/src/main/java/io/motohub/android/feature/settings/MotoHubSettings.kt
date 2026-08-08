@@ -150,6 +150,7 @@ object MotoHubSettings {
     private const val KEY_AUTOSTART_ENABLED = "autostart_enabled"
     private const val KEY_AUTOSTART_SERVICE = "autostart_service"
     private const val KEY_AUTO_RECOVERY = "auto_recovery"
+    private const val KEY_KEEP_WIFI_DIRECT_ON_DISCONNECT = "keep_wifi_direct_on_disconnect"
     private const val KEY_AUTO_RECORD_TRIPS = "auto_record_trips"
     private const val KEY_SHOW_RECORDED_TRACK = "show_recorded_track_on_dashboard"
     private const val KEY_DISTANCE_UNITS = "distance_units"
@@ -292,6 +293,20 @@ object MotoHubSettings {
 
     fun setAutoRecovery(context: Context, enabled: Boolean) {
         preferences(context).edit().putBoolean(KEY_AUTO_RECOVERY, enabled).apply()
+    }
+
+    /**
+     * Skip releasing the Wi-Fi Direct group when disconnecting from a bike that uses it, instead
+     * of the default eager teardown. Off by default: staying associated to the dash's network has
+     * a real cost (no other network usable over that link until the group is actually torn down,
+     * i.e. Wi-Fi off or the app fully exits), so only a rider whose dash needs this should pay it.
+     * See [io.motohub.android.tbox.TBoxLink.WifiDirect].
+     */
+    fun keepWifiDirectAfterDisconnect(context: Context): Boolean =
+        preferences(context).getBoolean(KEY_KEEP_WIFI_DIRECT_ON_DISCONNECT, false)
+
+    fun setKeepWifiDirectAfterDisconnect(context: Context, enabled: Boolean) {
+        preferences(context).edit().putBoolean(KEY_KEEP_WIFI_DIRECT_ON_DISCONNECT, enabled).apply()
     }
 
     /**

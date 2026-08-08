@@ -125,7 +125,19 @@ sealed interface TBoxLink {
         val gatewayIp: Inet4Address,
         private val leaveGroup: () -> Unit,
         private val appContext: Context? = null,
-        val formedElsewhere: Boolean = false
+        val formedElsewhere: Boolean = false,
+        // Some dashes (confirmed on Voge, modelId 37504) appear to forget settings they were
+        // told over PXC - including the clock - when the Wi-Fi Direct LINK itself drops, not
+        // just the PXC session on top of it. The official Carbit Ride app never releases its
+        // P2P group on a user-level disconnect (only at process death), which MOTO-HUB always
+        // did unconditionally; a rider force-stopping Carbit (killing the process, so the group
+        // survives regardless) kept a correctly-synced clock, while an ordinary MOTO-HUB
+        // disconnect - which does call removeGroup - did not. Defaults to the pre-existing
+        // behaviour (release), so this is opt-in via Settings, not a silent change: staying
+        // associated to the dash's network has its own cost (no other network usable over that
+        // link until the group is actually torn down) that only a rider hitting this dash
+        // should pay. See MotoHubSettings.keepWifiDirectAfterDisconnect.
+        private val releaseGroupOnDisconnect: Boolean = true
     ) : TBoxLink {
         override val network: Network? = null
         override val peerHint: Inet4Address = gatewayIp
@@ -218,7 +230,7 @@ sealed interface TBoxLink {
 
         override fun disconnect() {
             groupWatchers.toList().forEach { runCatching { it.close() } }
-            leaveGroup()
+            if (releaseGroupOnDisconnect) leaveGroup()
         }
 
         /** The p2p source address assigned right now — the captured one if still present, else any. */

@@ -1,0 +1,41 @@
+package io.motohub.android.tbox
+
+import java.net.Inet4Address
+import java.net.InetAddress
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class TBoxLinkTest {
+    private val bindIp = InetAddress.getByName("192.168.49.2") as Inet4Address
+    private val gatewayIp = InetAddress.getByName("192.168.49.1") as Inet4Address
+
+    @Test
+    fun `disconnect releases the P2P group by default`() {
+        var released = false
+        val link = TBoxLink.WifiDirect(
+            bindIp = bindIp,
+            gatewayIp = gatewayIp,
+            leaveGroup = { released = true }
+        )
+
+        link.disconnect()
+
+        assertTrue("default behaviour must still release the group", released)
+    }
+
+    @Test
+    fun `disconnect skips releasing the group when told to keep it`() {
+        var released = false
+        val link = TBoxLink.WifiDirect(
+            bindIp = bindIp,
+            gatewayIp = gatewayIp,
+            leaveGroup = { released = true },
+            releaseGroupOnDisconnect = false
+        )
+
+        link.disconnect()
+
+        assertFalse("opted-in riders must keep the P2P link across a disconnect", released)
+    }
+}

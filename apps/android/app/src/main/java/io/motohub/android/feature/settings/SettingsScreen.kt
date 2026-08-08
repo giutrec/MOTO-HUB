@@ -444,6 +444,7 @@ private fun AutomationDetail(onBack: () -> Unit) {
     val context = LocalContext.current
     var autoConnect by remember { mutableStateOf(MotoHubSettings.autoConnect(context)) }
     var autoRecovery by remember { mutableStateOf(MotoHubSettings.autoRecovery(context)) }
+    var keepWifiDirect by remember { mutableStateOf(MotoHubSettings.keepWifiDirectAfterDisconnect(context)) }
     MotoHubDetailScreen(title = motoHubText("Connection & automation"), backLabel = motoHubText("‹ Settings"), onBack = onBack) {
         ToggleRow(
             title = motoHubText("Auto-connect on launch"),
@@ -463,6 +464,21 @@ private fun AutomationDetail(onBack: () -> Unit) {
                 autoRecovery = it
                 MotoHubSettings.setAutoRecovery(context, it)
                 ProjectionEventLog.record("SETTINGS", "Auto-recovery changed to enabled=$it.")
+            }
+        )
+        ToggleRow(
+            title = motoHubText("Stay linked to the bike's Wi-Fi after disconnecting"),
+            description = motoHubText(
+                "Some dashboards forget settings like the clock when the Wi-Fi Direct link " +
+                    "fully drops. Keeps the phone associated to the bike's network until you " +
+                    "leave the app or turn Wi-Fi off. Off by default; only turn on if your " +
+                    "dash loses the time after disconnecting."
+            ),
+            checked = keepWifiDirect,
+            onCheckedChange = {
+                keepWifiDirect = it
+                MotoHubSettings.setKeepWifiDirectAfterDisconnect(context, it)
+                ProjectionEventLog.record("SETTINGS", "Keep Wi-Fi Direct after disconnect changed to enabled=$it.")
             }
         )
     }

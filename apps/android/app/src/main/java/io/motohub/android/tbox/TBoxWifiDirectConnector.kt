@@ -13,6 +13,7 @@ import android.net.wifi.p2p.WifiP2pInfo
 import android.net.wifi.p2p.WifiP2pManager
 import android.os.Build
 import android.os.Looper
+import io.motohub.android.feature.settings.MotoHubSettings
 import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.session.ProjectionEventLog
 import java.net.Inet4Address
@@ -712,7 +713,9 @@ class TBoxWifiDirectConnector(
                             bindIp = bindIp,
                             gatewayIp = gateway,
                             leaveGroup = leaveGroup,
-                            appContext = appContext
+                            appContext = appContext,
+                            releaseGroupOnDisconnect =
+                                !MotoHubSettings.keepWifiDirectAfterDisconnect(appContext)
                         )
                     )
                 )
