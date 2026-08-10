@@ -380,6 +380,18 @@ object YunmoProtocol {
     const val NAL_SPS = 7
     const val NAL_PPS = 8
 
+    /**
+     * Space-separated lowercase hex, truncated with an ellipsis past [max] bytes.
+     *
+     * Control payloads on this wire are short and carry no rider data — they are display states,
+     * canvas sizes and frame ids — so logging them whole is what lets an unrecognised frame be
+     * identified from a field log instead of guessed at.
+     */
+    fun hex(bytes: ByteArray, max: Int = 24): String {
+        val shown = bytes.take(max).joinToString(" ") { "%02x".format(it) }
+        return if (bytes.size > max) "$shown … (${bytes.size}b)" else shown
+    }
+
     /** Short human name for a NAL type, for the session phase log. */
     fun nalName(type: Int): String = when (type) {
         NAL_P -> "P"

@@ -162,6 +162,14 @@ class YunmoProtocolTest {
     }
 
     @Test
+    fun hexRendersControlPayloadsAndTruncatesLongOnes() {
+        // The shape an unrecognised A0 frame is logged in, e.g. the OEM's `a=160 b=8`.
+        assertEquals("08", YunmoProtocol.hex(byteArrayOf(8)))
+        assertEquals("00 04 00 01 d0", YunmoProtocol.hex(byteArrayOf(0, 4, 0, 1, 0xD0.toByte())))
+        assertEquals("00 01 … (3b)", YunmoProtocol.hex(byteArrayOf(0, 1, 2), max = 2))
+    }
+
+    @Test
     fun nalNameLabelsTheTypesThePhaseLogReports() {
         assertEquals("SPS", YunmoProtocol.nalName(YunmoProtocol.NAL_SPS))
         assertEquals("PPS", YunmoProtocol.nalName(YunmoProtocol.NAL_PPS))

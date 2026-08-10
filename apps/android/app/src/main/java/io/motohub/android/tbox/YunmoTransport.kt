@@ -139,7 +139,18 @@ class YunmoTransport(context: Context) : TBoxTransport {
                 created.connect(activeLink, host)
                 created.startReceiving()
 
-                val report = created.handshakeDimensions()
+                // Query, request the mode, THEN wait for the canvas — the order the OEM app uses.
+                // A capture of Ride MO shows the dash answering the size query only after it has
+                // been told which display mode to enter (the reply lands between the mode request
+                // and the follow-up burst), which makes sense if the canvas differs per mode.
+                // Waiting for the size first, as this used to, would spend the whole timeout on a
+                // reply the dash is not going to send yet, then fall back to the profile geometry
+                // and encode a 1024x464 panel at 800x480. A dash that does answer immediately is
+                // unaffected: the reply is collected by the receive loop either way.
+                created.sendDimQuery()
+                created.beginMode()
+                val report = created.awaitDimensions()
+
                 val (canvasW, canvasH) = YunmoProtocol.encodeCanvas(report, fallback.width, fallback.height)
                 created.canvasWidth = canvasW
                 created.canvasHeight = canvasH
@@ -147,13 +158,11 @@ class YunmoTransport(context: Context) : TBoxTransport {
                     "YUNMO",
                     if (report != null) {
                         "Dash canvas reported ${report.reportedWidth}x${report.reportedHeight}; " +
-                            "encoding ${canvasW}x$canvasH (maps x2)."
+                            "encoding ${canvasW}x$canvasH."
                     } else {
                         "No dim response — encoding fallback ${canvasW}x$canvasH."
                     }
                 )
-
-                created.beginMode()
                 mutableEvents.tryEmit(
                     TBoxEvent.VideoArea(canvasW, canvasH, isFallback = report == null)
                 )
@@ -295,9 +304,16 @@ class YunmoTransport(context: Context) : TBoxTransport {
         }
 
         /** Sends the size query and waits up to [DIM_TIMEOUT_MS] for the dash's reply. */
-        fun handshakeDimensions(): YunmoProtocol.DimensionReport? {
+        fun sendDimQuery() {
             write(YunmoProtocol.dimQueryFrame())
             phase("dim-query sent (B0 payload 01 00 01)")
+        }
+
+        /**
+         * Waits for the dash's canvas reply, which is sent AFTER the mode request rather than in
+         * answer to the query alone — see the ordering note on [start].
+         */
+        fun awaitDimensions(): YunmoProtocol.DimensionReport? {
             val deadline = System.currentTimeMillis() + DIM_TIMEOUT_MS
             synchronized(dimLock) {
                 while (running.get() && pendingDim == null) {
@@ -469,6 +485,8 @@ class YunmoTransport(context: Context) : TBoxTransport {
                             pendingDim = dimension
                             phase("dash reported ${dimension.reportedWidth}x${dimension.reportedHeight}")
                             synchronized(dimLock) { dimLock.notifyAll() }
+                        } else {
+                            logUnrecognised(frame, "OK frame that is not a canvas report")
                         }
                     }
                     YunmoProtocol.CMD_DISPLAY -> {
@@ -496,15 +514,37 @@ class YunmoTransport(context: Context) : TBoxTransport {
                             }
                             synchronized(ackLock) { ackLock.notifyAll() }
                         } else {
-                            YunmoProtocol.parseAck(frame.payload)?.let { acked ->
+                            val acked = YunmoProtocol.parseAck(frame.payload)
+                            if (acked != null) {
                                 lastAckedId = acked
                                 unackedSinceAck = 0
                                 phaseOnce("ack") { "first media ack from dash (frameId=$acked)" }
                                 synchronized(ackLock) { ackLock.notifyAll() }
+                            } else {
+                                logUnrecognised(frame, "display frame that is neither a mode nor an ack")
                             }
                         }
                     }
+                    else -> logUnrecognised(frame, "unknown command")
                 }
+            }
+        }
+
+        /**
+         * Records a control frame this implementation does not act on, once per (command, first
+         * byte) shape so a dash that repeats one cannot flood the log.
+         *
+         * This exists because silence here is indistinguishable from the dash saying nothing at
+         * all. A capture of the OEM app shows it receiving `A0` frames whose first payload byte is
+         * `8` — a shape neither this transport nor the reference implementation recognises, both
+         * of which drop it without a trace, and both of which fail to paint. Whatever those frames
+         * are, the next field log should be able to say so rather than leave it to be inferred.
+         */
+        private fun logUnrecognised(frame: YunmoProtocol.SimpleFrame, why: String) {
+            val shape = "unhandled-${frame.command}-${frame.payload.firstOrNull() ?: -1}"
+            phaseOnce(shape) {
+                "dash sent an unhandled frame ($why): cmd=0x${frame.command.toString(16)} " +
+                    "len=${frame.payload.size} payload=[${YunmoProtocol.hex(frame.payload)}]"
             }
         }
 
