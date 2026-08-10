@@ -262,6 +262,14 @@ class MainActivity : ComponentActivity() {
                 // A code that corroborates itself is saved straight away; anything else decoded
                 // cleanly but from a source we cannot vouch for waits for the rider to confirm.
                 fun acceptQrPayload(payload: TBoxQrPayload) {
+                    // A dash that wants the phone to host names itself but no network, so there is
+                    // nothing to save and the rider goes straight to the form to type what the dash
+                    // is showing them. The mode is already selected for them.
+                    if (viewModel.needsPhoneHotspotCredentials(payload)) {
+                        viewModel.prepareQrPhoneHotspotSetup(payload)
+                        showManualPairing = true
+                        return
+                    }
                     if (payload.origin == TBoxQrOrigin.RECOGNISED) {
                         viewModel.applyQrPairing(payload)
                     } else {

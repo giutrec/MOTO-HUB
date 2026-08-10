@@ -184,7 +184,12 @@ class ProjectionSessionService : Service() {
             ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
         )
         val profile = configuration.encoderProfile.copy(
-            bitRate = quality.bitrateFor(configuration.encoderProfile.bitRate),
+            frameRate = modelProfile.encoderFrameRate ?: configuration.encoderProfile.frameRate,
+            // The profile's rate, where it has one, is the base the rider's quality setting scales -
+            // same as the negotiated one, so the setting keeps working on these dashes too.
+            bitRate = quality.bitrateFor(
+                modelProfile.encoderBitRate ?: configuration.encoderProfile.bitRate
+            ),
             keyframeIntervalSeconds = modelProfile.encoderKeyframeIntervalSeconds
         )
         ProjectionEventLog.record("T-BOX", "Handshake completed.")
@@ -279,7 +284,7 @@ class ProjectionSessionService : Service() {
                 "MOTO-HUB capture",
                 profile.width,
                 profile.height,
-                resources.displayMetrics.densityDpi,
+                modelProfile.virtualDisplayDpi ?: resources.displayMetrics.densityDpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 surface,
                 null,

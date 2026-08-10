@@ -172,7 +172,38 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    /**
+     * True when the scanned code identified the dash but carried no network to join, because the
+     * dash expects the phone to host one. There is nothing to save yet: Android will not let an app
+     * create a hotspot with credentials someone else dictates, so the rider has to read the SSID
+     * and password off the dash and type them. Answered here so the caller can send them to the
+     * manual form instead of the "saved, ready to connect" path.
+     */
+    fun needsPhoneHotspotCredentials(payload: TBoxQrPayload): Boolean =
+        payload.ssid.isBlank() && payload.suggestedConnectionMode == TBoxConnectionMode.PHONE_HOTSPOT
+
+    /** Pre-fills the manual form for a phone-hotspot code, which named a dash but no network. */
+    fun prepareQrPhoneHotspotSetup(payload: TBoxQrPayload) {
+        ProjectionEventLog.record(
+            "PAIRING",
+            "QR identified a dash that expects the phone to host the network " +
+                "(mac=${payload.dashMacAddress ?: "not provided"}, " +
+                "modelId=${payload.modelId ?: "not provided"}); asking the rider for the " +
+                "credentials the dash prints on its own screen."
+        )
+        mutableUiState.value = mutableUiState.value.copy(
+            ssid = "",
+            password = "",
+            connectionMode = TBoxConnectionMode.PHONE_HOTSPOT,
+            formError = null
+        )
+    }
+
     fun applyQrPairing(payload: TBoxQrPayload) {
+        if (needsPhoneHotspotCredentials(payload)) {
+            prepareQrPhoneHotspotSetup(payload)
+            return
+        }
         ProjectionEventLog.record(
             "PAIRING",
             "Valid T-Box QR decoded: ssid=${payload.ssid}, modelId=${payload.modelId ?: "not provided"}, " +

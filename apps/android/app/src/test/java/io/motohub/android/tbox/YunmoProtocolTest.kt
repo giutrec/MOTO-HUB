@@ -3,6 +3,7 @@ package io.motohub.android.tbox
 import java.io.ByteArrayInputStream
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -82,14 +83,14 @@ class YunmoProtocolTest {
     }
 
     @Test
-    fun parseOkDimensionReadsBigEndianAndDoublingReachesTheMeasuredPanel() {
-        // Reported 512x232 -> the X-Cape 1200's measured 1024x464 OEM canvas.
-        val payload = byteArrayOf(0, 0, 0, 0, 0x02, 0x00, 0x00, 0xE8.toByte())
+    fun parseOkDimensionReadsTheRealPanelSizeBigEndianWithoutDoubling() {
+        // A dimension reply captured from a real X-Cape 1200. This test used to assert a 512x232
+        // report doubling to the 1024x464 the owner measured on the OEM display; the capture shows
+        // the dash reports that 1024x464 itself, so doubling asked for twice the panel.
+        val payload = byteArrayOf(0, 0, 0, 0, 0x04, 0x00, 0x01, 0xD0.toByte())
         val report = YunmoProtocol.parseOkDimension(payload)!!
-        assertEquals(512, report.reportedWidth)
-        assertEquals(232, report.reportedHeight)
-        assertEquals(1024, report.mapsWidth)
-        assertEquals(464, report.mapsHeight)
+        assertEquals(1024, report.reportedWidth)
+        assertEquals(464, report.reportedHeight)
 
         val (w, h) = YunmoProtocol.encodeCanvas(report, fallbackWidth = 800, fallbackHeight = 480)
         assertEquals(1024, w)
@@ -97,12 +98,13 @@ class YunmoProtocolTest {
     }
 
     @Test
-    fun encodeCanvasRoundsUpToSixteenAndFallsBackWhenTheDashIsSilent() {
-        // 300x150 -> maps 600x300 -> aligned 608x304
-        val report = YunmoProtocol.DimensionReport(300, 150)
+    fun encodeCanvasNeverExceedsWhatTheDashReportedAndFallsBackWhenItIsSilent() {
+        // Odd axes round DOWN: overshooting the panel is the failure being guarded against, so an
+        // odd height loses a line rather than gaining fifteen to reach a multiple of 16.
+        val report = YunmoProtocol.DimensionReport(301, 151)
         val (w, h) = YunmoProtocol.encodeCanvas(report, 800, 480)
-        assertEquals(608, w)
-        assertEquals(304, h)
+        assertEquals(300, w)
+        assertEquals(150, h)
 
         val (fw, fh) = YunmoProtocol.encodeCanvas(null, 800, 480)
         assertEquals(800, fw)
@@ -178,5 +180,28 @@ class YunmoProtocolTest {
 
         assertTrue(YunmoProtocol.annexBContainsNal(keyframe, YunmoProtocol.NAL_IDR))
         assertArrayEquals(idr, YunmoProtocol.stripLeadingSpsPps(keyframe))
+    }
+
+    @Test
+    fun displayOpcodesTellApartMapNavConfirmSimpleNaviAndAnAck() {
+        // cmd=6: the dash is on the full-screen map and will paint what we push.
+        assertTrue(YunmoProtocol.isMapNaviConfirm(byteArrayOf(6)))
+        assertFalse(YunmoProtocol.isSimpleNaviSwitch(byteArrayOf(6)))
+
+        // cmd=5 inbound: the dash draws its own arrows and discards our frames. The same value is
+        // the second half of our outbound teardown pair, so only the direction separates them.
+        assertTrue(YunmoProtocol.isSimpleNaviSwitch(byteArrayOf(5)))
+        assertFalse(YunmoProtocol.isMapNaviConfirm(byteArrayOf(5)))
+        assertEquals(YunmoProtocol.DISP_EXIT_B, YunmoProtocol.DISP_SIMPLE_NAVI)
+
+        // payload[0]==0 is an ack carrying a little-endian frame id, not a mode at all.
+        val ack = byteArrayOf(0, 0x2A, 0, 0, 0)
+        assertFalse(YunmoProtocol.isMapNaviConfirm(ack))
+        assertFalse(YunmoProtocol.isSimpleNaviSwitch(ack))
+        assertEquals(42, YunmoProtocol.parseAck(ack))
+
+        // An empty payload must not be read as any of them.
+        assertFalse(YunmoProtocol.isMapNaviConfirm(ByteArray(0)))
+        assertFalse(YunmoProtocol.isSimpleNaviSwitch(ByteArray(0)))
     }
 }

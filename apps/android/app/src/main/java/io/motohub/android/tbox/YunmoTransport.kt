@@ -28,10 +28,14 @@ import kotlinx.coroutines.withContext
  * happens in [start]: open the socket, ask the dash for its canvas size, tell it to start, and
  * emit the negotiated [TBoxEvent.VideoArea] the session encoder is then configured from.
  *
- * The dash reports HALF its true canvas, so the emitted area is the report doubled (see
- * [YunmoProtocol.encodeCanvas]); when the dash never answers the size query, the profile's
+ * The dash reports its real canvas and the emitted area is that size (see
+ * [YunmoProtocol.encodeCanvas], which documents the doubling this used to do and why it was
+ * wrong); when the dash never answers the size query, the profile's
  * [TBoxModelProfile.fallbackTBoxVideoArea] backstops it. Frame metadata is deliberately kept off
  * the wire ([YunmoProtocol.encodeH264Ex] `omitMeta`), matching the only build known to render.
+ *
+ * [answersOnThisLink] lets the EasyConn path hand a session over when a dash turns out to speak
+ * Yunmo, so reaching this transport does not depend on the rider having found a profile override.
  *
  * See [YunmoProtocol] for the byte format and the memory note `reference-yunmo-8200-protocol`.
  */
@@ -73,6 +77,53 @@ class YunmoTransport(context: Context) : TBoxTransport {
                 TBoxHost(host, YunmoProtocol.DEFAULT_PORT, YUNMO_PACKAGE_TAG)
             }
         }
+
+    /**
+     * Asks whether a dash on [link] speaks Yunmo, for the EasyConn path to call once its own
+     * discovery has come up empty. Returns the host to hand to [start], or null.
+     *
+     * This exists because the profile used to be the only way in: a rider whose dash speaks Yunmo
+     * had to find and pin a profile override by hand, and one who did not simply got "EasyConn
+     * offline" forever. Which protocol a dash speaks is something the dash can be asked, so ask it.
+     *
+     * A bare TCP connect is not enough to answer — plenty of things listen on a port. The dash has
+     * to reply to the canvas query with a well-formed frame, which also means a positive answer
+     * has already proved the socket path works end to end.
+     */
+    suspend fun answersOnThisLink(link: TBoxLink): String? = withContext(Dispatchers.IO) {
+        val host = link.peerHint?.hostAddress ?: YunmoProtocol.DEFAULT_HOST
+        try {
+            link.createSocket().use { socket ->
+                socket.connect(
+                    InetSocketAddress(host, YunmoProtocol.DEFAULT_PORT),
+                    PROBE_CONNECT_TIMEOUT_MS
+                )
+                socket.soTimeout = PROBE_READ_TIMEOUT_MS
+                socket.tcpNoDelay = true
+                val output = BufferedOutputStream(socket.getOutputStream())
+                output.write(YunmoProtocol.dimQueryFrame())
+                output.flush()
+                val reply = YunmoProtocol.readSimpleFrame(BufferedInputStream(socket.getInputStream()))
+                    ?: return@withContext null
+                val known = reply.command == YunmoProtocol.CMD_OK_A ||
+                    reply.command == YunmoProtocol.CMD_OK_B ||
+                    reply.command == YunmoProtocol.CMD_DISPLAY
+                if (!known) return@withContext null
+                ProjectionEventLog.record(
+                    "YUNMO",
+                    "A dash at $host:${YunmoProtocol.DEFAULT_PORT} answered the canvas query " +
+                        "(cmd 0x${reply.command.toString(16)}), so this motorcycle speaks Yunmo."
+                )
+                host
+            }
+        } catch (failure: Throwable) {
+            ProjectionEventLog.debug(
+                "YUNMO",
+                "No Yunmo dash at $host:${YunmoProtocol.DEFAULT_PORT}: ${failure.message}."
+            )
+            null
+        }
+    }
 
     override suspend fun start(host: TBoxHost): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
@@ -171,6 +222,21 @@ class YunmoTransport(context: Context) : TBoxTransport {
         @Volatile
         private var mapNavConfirmed = false
 
+        /**
+         * The dash is showing its own compact arrow guidance, which it renders itself. Frames
+         * pushed in this state are discarded by the dash, so the sender skips them until it
+         * announces map-nav again.
+         */
+        @Volatile
+        private var simpleNaviActive = false
+
+        /**
+         * Cleared whenever the dash restarts its decoder (a SimpleNavi round trip), so the next
+         * access unit carries SPS/PPS again instead of arriving as a picture the dash cannot decode.
+         */
+        @Volatile
+        private var sentParameterSets = false
+
         @Volatile
         var canvasWidth = 0
 
@@ -248,30 +314,37 @@ class YunmoTransport(context: Context) : TBoxTransport {
         }
 
         /**
-         * Enters the negotiated display mode. In map-nav the dash's state-6 echo is a hard gate,
-         * not a hint: an owner's capture of the OEM app (2026-08-07) showed the TFT only paints a
-         * full-screen map when the rider selected that presentation in the dash menu *before*
-         * navigation started, and that neither a live socket, an ack, nor a created display
-         * proves the dash is in that state. Streaming without the echo is how a session ends up
-         * pushing frames into a dash that will never paint them, which is exactly the black-TFT
-         * result earlier implementations reported.
+         * Enters the negotiated display mode.
+         *
+         * The state-6 echo used to be a hard gate here, on the reasoning that neither a live
+         * socket nor an ack proves the dash is actually showing the full-screen map. That reasoning
+         * still holds, but the gate was the wrong lever: the OEM app does not send `A0 cmd=6` at
+         * all on this path and waits for no echo — it goes straight from the size query to
+         * encoding. Blocking on an echo the OEM never asks for meant a dash that behaves exactly
+         * like the OEM expects would time out and the session would abort without ever encoding a
+         * frame. So the request is still sent (harmless, and firmware that does echo confirms
+         * faster), but its absence is now a logged warning, not a failure.
+         *
+         * Whether the TFT actually paints remains the rider's business — see the hint carried in
+         * the no-echo phase line, and [YunmoProtocol.DISP_SIMPLE_NAVI] for the dash telling us
+         * mid-session that it switched away from the map.
          */
         fun beginMode() {
             if (mapNavMode) {
                 write(YunmoProtocol.mapNaviFrame())
                 phase("map-nav requested (A0 cmd=6)")
                 awaitMapNav()
-                if (!mapNavConfirmed) {
-                    error(
-                        "The dashboard did not confirm full-screen map mode. On the motorcycle " +
-                            "TFT menu select the full-screen map navigation view (not the compact " +
-                            "arrow guidance), then connect again. The dash only accepts the map " +
-                            "canvas when that view is selected before the session starts."
-                    )
-                }
                 frameId.set(0)
                 unackedSinceAck = 0
-                phase("map-nav confirmed by dash")
+                if (mapNavConfirmed) {
+                    phase("map-nav confirmed by dash")
+                } else {
+                    phase(
+                        "map-nav not echoed within ${MAP_NAV_TIMEOUT_MS}ms - streaming anyway " +
+                            "(the OEM app does not echo either). If the TFT stays black, select " +
+                            "the full-screen map view in the dash menu before connecting."
+                    )
+                }
             } else {
                 YunmoProtocol.startMirrorFrames().forEach { write(it) }
                 phase("mirror requested (B0/A0 cmd=7)")
@@ -290,9 +363,6 @@ class YunmoTransport(context: Context) : TBoxTransport {
                         break
                     }
                 }
-            }
-            if (!mapNavConfirmed) {
-                phase("map-nav NOT echoed within ${MAP_NAV_TIMEOUT_MS}ms")
             }
         }
 
@@ -315,10 +385,16 @@ class YunmoTransport(context: Context) : TBoxTransport {
         }
 
         private fun sendAccessUnit(avcc: ByteArray) {
+            // The dash paints its own arrows in this state and drops whatever we push. Skipping
+            // here rather than blocking keeps the encoder draining, so the resume is immediate.
+            if (simpleNaviActive) return
+
             val annexB = YunmoProtocol.annexBFromAvcc(avcc)
             val nals = YunmoProtocol.splitAnnexB(annexB)
             val hasIdr = nals.any { it.type == YunmoProtocol.NAL_IDR }
-            if (nals.any { it.type == YunmoProtocol.NAL_SPS || it.type == YunmoProtocol.NAL_PPS }) {
+            val sps = nals.firstOrNull { it.type == YunmoProtocol.NAL_SPS }
+            val pps = nals.firstOrNull { it.type == YunmoProtocol.NAL_PPS }
+            if (sps != null || pps != null) {
                 phaseOnce("codec-config") {
                     "first codec config out (" +
                         nals.joinToString("+") { YunmoProtocol.nalName(it.type) } + ")"
@@ -329,14 +405,17 @@ class YunmoTransport(context: Context) : TBoxTransport {
             // Map-nav's OEM path wants the parameter sets split out ahead of each keyframe:
             // SPS alone, PPS alone, then the bare coded picture — three separate frames.
             if (mapNavMode && hasIdr) {
-                val sps = nals.firstOrNull { it.type == YunmoProtocol.NAL_SPS }
-                val pps = nals.firstOrNull { it.type == YunmoProtocol.NAL_PPS }
                 if (sps != null && pps != null) {
                     sendFrame(YunmoProtocol.toAnnexBFrame(sps))
                     sendFrame(YunmoProtocol.toAnnexBFrame(pps))
                     sendFrame(YunmoProtocol.stripLeadingSpsPps(annexB))
+                    sentParameterSets = true
                     return
                 }
+                // A keyframe with no parameter sets in front of it is undecodable to a dash that
+                // just restarted. Nothing to prepend, so ask the encoder for a fresh configured
+                // keyframe and drop this one rather than sending a picture that cannot be shown.
+                if (!sentParameterSets) return
             }
             sendFrame(annexB)
         }
@@ -388,18 +467,33 @@ class YunmoTransport(context: Context) : TBoxTransport {
                         val dimension = YunmoProtocol.parseOkDimension(frame.payload)
                         if (dimension != null && pendingDim == null) {
                             pendingDim = dimension
-                            phase(
-                                "dash reported ${dimension.reportedWidth}x${dimension.reportedHeight} " +
-                                    "(maps ${dimension.mapsWidth}x${dimension.mapsHeight})"
-                            )
+                            phase("dash reported ${dimension.reportedWidth}x${dimension.reportedHeight}")
                             synchronized(dimLock) { dimLock.notifyAll() }
                         }
                     }
                     YunmoProtocol.CMD_DISPLAY -> {
                         if (YunmoProtocol.isMapNaviConfirm(frame.payload)) {
+                            // Also the way back from SimpleNavi, so re-prime: the dash restarts its
+                            // decoder on the switch and will not paint until it sees a keyframe with
+                            // parameter sets in front of it.
+                            val resuming = simpleNaviActive
+                            simpleNaviActive = false
                             mapNavConfirmed = true
                             frameId.set(0)
                             unackedSinceAck = 0
+                            if (resuming) {
+                                sentParameterSets = false
+                                phase("dash returned to full-screen map - resuming video")
+                            }
+                            synchronized(ackLock) { ackLock.notifyAll() }
+                        } else if (YunmoProtocol.isSimpleNaviSwitch(frame.payload)) {
+                            // The dash draws its own turn arrows in this mode and paints nothing we
+                            // push, so hold the encoder off rather than burning the link on frames
+                            // that are discarded. It sends cmd=6 when the rider switches back.
+                            if (!simpleNaviActive) {
+                                simpleNaviActive = true
+                                phase("dash switched to its own arrow guidance - video paused")
+                            }
                             synchronized(ackLock) { ackLock.notifyAll() }
                         } else {
                             YunmoProtocol.parseAck(frame.payload)?.let { acked ->
@@ -442,6 +536,11 @@ class YunmoTransport(context: Context) : TBoxTransport {
     private companion object {
         const val YUNMO_PACKAGE_TAG = "yunmo"
         const val CONNECT_TIMEOUT_MS = 5_000
+
+        /** Short on purpose: this runs after EasyConn discovery has already spent its budget. */
+        const val PROBE_CONNECT_TIMEOUT_MS = 1_500
+        const val PROBE_READ_TIMEOUT_MS = 1_500
+
         const val DIM_TIMEOUT_MS = 5_000L
         const val MAP_NAV_TIMEOUT_MS = 2_500L
         const val SEND_WINDOW_TIMEOUT_MS = 2_000L

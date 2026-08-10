@@ -27,6 +27,49 @@ enum class TBoxQrOrigin {
     UNVERIFIED
 }
 
+/**
+ * What the Carbit `action` parameter says about how the dash expects to be reached. It is a
+ * bitmask, not an enum: a dash can advertise more than one of these, and several do.
+ *
+ * This matters most for the bit nothing else can tell you. A dash that wants the phone to host the
+ * hotspot advertises no network of its own, so its QR has no SSID and no password — the shape that
+ * used to be rejected outright as unusable. Everything else about that dash looks like any other
+ * Carbit code.
+ *
+ * The other bits pay for themselves by ruling things out: a dash that does not claim Wi-Fi Direct
+ * should not be made to sit through a P2P join attempt that can only time out.
+ */
+@JvmInline
+value class TBoxQrTopology(val bits: Int) {
+    val accessPoint: Boolean get() = bits and (BIT_AP or BIT_AP_INTERNET) != 0
+    val wifiDirect: Boolean get() = bits and BIT_P2P != 0
+    val phoneHostsHotspot: Boolean get() = bits and BIT_PHONE_HOTSPOT != 0
+
+    /** True only when the dash said something and none of it was an access point of its own. */
+    val neverOffersAccessPoint: Boolean get() = bits != 0 && !accessPoint
+
+    /**
+     * The transport this code implies, or null to leave the rider's saved choice alone. Only the
+     * phone-hotspot bit is decisive: a dash advertising an access point, Wi-Fi Direct, or both is
+     * exactly what [TBoxConnectionMode.AUTO] already resolves correctly from the SSID.
+     */
+    fun suggestedConnectionMode(): TBoxConnectionMode? =
+        if (phoneHostsHotspot && !accessPoint && !wifiDirect) TBoxConnectionMode.PHONE_HOTSPOT else null
+
+    companion object {
+        const val BIT_AP = 1
+        const val BIT_AP_INTERNET = 1 shl 1
+        const val BIT_P2P = 1 shl 3
+        const val BIT_PHONE_HOTSPOT = 1 shl 7
+
+        /** Unset, unparseable or absent all mean "the code said nothing", which is not a claim. */
+        val UNSPECIFIED = TBoxQrTopology(0)
+
+        fun of(raw: String?): TBoxQrTopology =
+            TBoxQrTopology(raw?.trim()?.toIntOrNull() ?: 0)
+    }
+}
+
 data class TBoxQrPayload(
     val ssid: String,
     val password: String,
@@ -40,7 +83,14 @@ data class TBoxQrPayload(
      * ThinkerRide code means "pair over BLE, the dash connects to you", which no SSID shape or
      * modelId could re-derive later. Null leaves the saved profile's mode untouched.
      */
-    val suggestedConnectionMode: TBoxConnectionMode? = null
+    val suggestedConnectionMode: TBoxConnectionMode? = null,
+    /** What the `action` bitmask claimed, or [TBoxQrTopology.UNSPECIFIED] when it said nothing. */
+    val topology: TBoxQrTopology = TBoxQrTopology.UNSPECIFIED,
+    /**
+     * The dash's own MAC, from `mac=` or Carbit's `bm=`, lowercase colon form. On a phone-hotspot
+     * code this is the only thing identifying the dash at all.
+     */
+    val dashMacAddress: String? = null
 )
 
 object TBoxQrParser {
@@ -125,22 +175,60 @@ object TBoxQrParser {
                 // and an `SSID=` that reads as absent costs a pairing for a cosmetic difference.
                 decode(keyAndValue[0]).lowercase() to decode(keyAndValue.getOrElse(1) { "" })
             }
+        val host = (uri?.host ?: hostOf(rawValue))?.lowercase()
+        val origin = if (host != null && isKnownProvisioningHost(host)) {
+            TBoxQrOrigin.RECOGNISED
+        } else {
+            TBoxQrOrigin.UNVERIFIED
+        }
+        val topology = TBoxQrTopology.of(parameters["action"])
+        val dashMac = normaliseMac(parameters["mac"] ?: parameters["bm"])
         val ssid = parameters["ssid"].orEmpty().trim()
+
+        // A dash that wants the phone to host carries no network of its own to name, so this code
+        // is complete without an SSID and rejecting it for the missing field would be wrong. The
+        // rider still has to type the credentials the dash prints on its own screen (Android does
+        // not let an app dictate them), but the profile, the transport and the MAC all come from
+        // here instead of from a guess.
+        if (ssid.isEmpty() && topology.phoneHostsHotspot && dashMac != null) {
+            val tail = dashMac.filter { it != ':' }.takeLast(6).uppercase()
+            return TBoxQrPayload(
+                ssid = "",
+                password = "",
+                encryption = null,
+                modelId = parameters["modelid"],
+                displayName = "Phone hotspot ($tail)",
+                origin = origin,
+                suggestedConnectionMode = TBoxConnectionMode.PHONE_HOTSPOT,
+                topology = topology,
+                dashMacAddress = dashMac
+            )
+        }
+
         check(ssid.isNotEmpty()) { describeUnusableCode(rawValue) }
 
-        val host = (uri?.host ?: hostOf(rawValue))?.lowercase()
         return TBoxQrPayload(
             ssid = ssid,
             password = parameters["pwd"].orEmpty(),
             encryption = parameters["auth"],
             modelId = parameters["modelid"],
             displayName = parameters["name"],
-            origin = if (host != null && isKnownProvisioningHost(host)) {
-                TBoxQrOrigin.RECOGNISED
-            } else {
-                TBoxQrOrigin.UNVERIFIED
-            }
+            origin = origin,
+            suggestedConnectionMode = topology.suggestedConnectionMode(),
+            topology = topology,
+            dashMacAddress = dashMac
         )
+    }
+
+    /**
+     * Accepts a MAC in either shape Carbit prints it — colon-separated, or twelve bare hex digits —
+     * and returns the lowercase colon form. Anything else is not a MAC and comes back null rather
+     * than being passed on as one.
+     */
+    private fun normaliseMac(raw: String?): String? {
+        val digits = raw?.trim()?.replace(":", "")?.replace("-", "") ?: return null
+        if (digits.length != 12 || !digits.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) return null
+        return digits.lowercase().chunked(2).joinToString(":")
     }
 
     /**

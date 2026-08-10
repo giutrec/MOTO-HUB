@@ -13,10 +13,10 @@ import java.io.InputStream
  * pre-release (`YunmoFrame` / `YunmoLink`, decompiled 2026-08-07); that source was never published.
  *
  * Two facts drive the whole design and both are re-derived in the tests:
- *  - **The dash reports HALF its real canvas.** The OK/dimension reply carries width/height that
- *    must be doubled (then rounded up to a multiple of 16) to get the encode canvas. A 512x232
- *    report is a 1024x464 panel — exactly the OEM `NaviVirtualDisplay` an X-Cape 1200 owner
- *    measured over ADB, which is the independent confirmation that the doubling is real.
+ *  - **The dash reports its real canvas.** The OK/dimension reply carries the panel size as-is; an
+ *    X-Cape 1200 answers 1024x464, matching the OEM `NaviVirtualDisplay` an owner measured over
+ *    ADB. This file used to double the report — see [encodeCanvas] for how that was inferred and
+ *    what disproved it.
  *  - **The media header carries no frame metadata on the wire.** The shipping build always encodes
  *    with media-type byte `2` and the metadata block (frameId/width/height) left zero. An earlier
  *    build that wrote those fields produced a black TFT, so [encodeH264Ex] defaults to omitting
@@ -44,6 +44,14 @@ object YunmoProtocol {
     const val DISP_EXIT_A = 3
     const val DISP_EXIT_B = 5
 
+    /**
+     * The dash switched to its own compact turn-arrow guidance, which it draws itself — anything
+     * pushed while it is in this state is not painted. **Deliberately the same value as
+     * [DISP_EXIT_B]**: outbound the pair `A0{3}`/`A0{5}` is the teardown, inbound a lone `5` means
+     * SimpleNavi. Direction disambiguates them; nothing else does.
+     */
+    const val DISP_SIMPLE_NAVI = 5
+
     // Media-type byte written at header offset [15]. The shipping build only ever sends LEGACY;
     // the finer types exist in the reference but are dead code there, so the wire always sees 2.
     const val MEDIA_TYPE_LEGACY = 2
@@ -60,11 +68,11 @@ object YunmoProtocol {
     /** Largest number of byte slips the resync will tolerate before giving up on a frame. */
     private const val MAX_RESYNC_SLIP = 4096
 
-    /** The dash's reported canvas; the real panel is [mapsWidth] x [mapsHeight] (double). */
-    data class DimensionReport(val reportedWidth: Int, val reportedHeight: Int) {
-        val mapsWidth: Int get() = reportedWidth * 2
-        val mapsHeight: Int get() = reportedHeight * 2
-    }
+    /**
+     * The dash's reported canvas. The reported size **is** the panel — see [encodeCanvas] for why
+     * this used to be doubled and no longer is.
+     */
+    data class DimensionReport(val reportedWidth: Int, val reportedHeight: Int)
 
     /** One decoded simple frame: its command byte and its raw payload. */
     data class SimpleFrame(val command: Int, val payload: ByteArray) {
@@ -222,6 +230,13 @@ object YunmoProtocol {
         payload.isNotEmpty() && (payload[0].toInt() and 0xFF) == DISP_MAP_NAVI
 
     /**
+     * True when a [CMD_DISPLAY] payload is the dash announcing it moved to its own compact arrow
+     * guidance ([DISP_SIMPLE_NAVI]). Only meaningful on frames read from the dash.
+     */
+    fun isSimpleNaviSwitch(payload: ByteArray): Boolean =
+        payload.isNotEmpty() && (payload[0].toInt() and 0xFF) == DISP_SIMPLE_NAVI
+
+    /**
      * Parses an acked frame id out of a [CMD_DISPLAY] payload (`payload[0]==0`, at least 5 bytes),
      * where bytes [1..4] are the id little-endian; returns null when the payload is not an ack.
      */
@@ -236,15 +251,26 @@ object YunmoProtocol {
     // ---- Canvas sizing -----------------------------------------------------------------------
 
     /**
-     * The encode canvas for a session: the reported size doubled and rounded up to a multiple of
-     * 16 when the dash answered, otherwise the caller's fallback (clamped to a sane floor).
+     * The encode canvas for a session: the size the dash reported, forced even, or the caller's
+     * fallback when the dash never answered.
+     *
+     * **This used to double the report and was wrong.** The doubling came from an X-Cape 1200
+     * owner's ADB capture measuring the OEM `NaviVirtualDisplay` at 1024x464: with no capture of
+     * the dash's own reply to compare against, a 512x232 report was inferred. A dimension reply
+     * captured from a real X-Cape since (`00 00 00 00 04 00 01 d0`) says the dash reports
+     * **1024x464 directly** — the same number, not half of it. Doubling therefore asked for a
+     * 2048x928 canvas on a 1024x464 panel, which is the shape of the "dash acks every frame and
+     * paints black" report.
+     *
+     * Even, not rounded up to 16: overshooting the panel is the failure mode being fixed here, so
+     * a dash reporting an odd axis loses a line rather than gaining fifteen.
      */
     fun encodeCanvas(report: DimensionReport?, fallbackWidth: Int, fallbackHeight: Int): Pair<Int, Int> {
-        if (report != null) return alignTo16(report.mapsWidth) to alignTo16(report.mapsHeight)
+        if (report != null) return evenDown(report.reportedWidth) to evenDown(report.reportedHeight)
         return maxOf(fallbackWidth, 16) to maxOf(fallbackHeight, 16)
     }
 
-    private fun alignTo16(value: Int): Int = (value + 15) and 0xFFF0
+    private fun evenDown(value: Int): Int = maxOf(value and 1.inv(), 16)
 
     // ---- H.264 Annex-B NAL helpers -----------------------------------------------------------
 

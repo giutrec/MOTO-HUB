@@ -23,6 +23,20 @@ class SelectingTBoxTransport(context: Context) : TBoxTransport {
     @Volatile
     private var active: TBoxTransport = easyConn
 
+    /**
+     * The profile a dash gets when it is discovered to speak Yunmo without the rider having pinned
+     * anything. [TBoxModelProfile.MORINI_XCAPE_1200] is the only Yunmo profile there is, and its
+     * settings come from the only Yunmo dash anyone has captured, so it is the best available
+     * guess rather than a claim about which motorcycle this is.
+     *
+     * Note what this does and does not reach: the transport and its map-nav path, yes. The encoder
+     * frame rate, bitrate and virtual-display dpi are resolved separately in
+     * `ProjectionSessionService` from the saved motorcycle's own profile, so a rider who has not
+     * pinned the override still streams at the generic settings. Getting a picture at all is the
+     * point here; tuning it still wants the pin.
+     */
+    private val yunmoSessionProfile = TBoxModelProfile.MORINI_XCAPE_1200
+
     override val events: Flow<TBoxEvent> = merge(easyConn.events, thinkerRide.events, yunmo.events)
 
     override fun configureProtocolProfile(profile: TBoxModelProfile) {
@@ -42,8 +56,25 @@ class SelectingTBoxTransport(context: Context) : TBoxTransport {
         active.configureProtocolProfile(profile)
     }
 
-    override suspend fun discover(link: TBoxLink, expectedModelId: String?): Result<TBoxHost> =
-        active.discover(link, expectedModelId)
+    override suspend fun discover(link: TBoxLink, expectedModelId: String?): Result<TBoxHost> {
+        val first = active.discover(link, expectedModelId)
+        if (first.isSuccess || active !== easyConn) return first
+
+        // EasyConn found nothing. Before giving the rider "T-Box offline", ask whether this dash
+        // speaks Yunmo instead — a question only the dash can answer, and one that used to require
+        // the rider to find and pin a profile override by hand. Nothing else reaches this point:
+        // a dash that answers EasyConn returned above, and a dash that answers neither costs one
+        // extra short connect on a path that has already failed.
+        val yunmoHost = yunmo.answersOnThisLink(link) ?: return first
+        ProjectionEventLog.record(
+            "PROFILE",
+            "EasyConn discovery found nothing but the dash answered Yunmo on " +
+                "$yunmoHost:${YunmoProtocol.DEFAULT_PORT}; switching this session to the Yunmo transport."
+        )
+        active = yunmo
+        yunmo.configureProtocolProfile(yunmoSessionProfile)
+        return yunmo.discover(link, expectedModelId)
+    }
 
     override suspend fun start(host: TBoxHost): Result<Unit> = active.start(host)
 

@@ -51,6 +51,23 @@ enum class TBoxModelProfile(
      * the wire format of a dash that streams fine today.
      */
     val encoderKeyframeIntervalSeconds: Int = 0,
+    /**
+     * Capture frame rate for this dash, or null to keep the negotiated one. Only set it for a dash
+     * whose OEM app is known to run slower — a lower rate is a real quality loss everywhere else.
+     */
+    val encoderFrameRate: Int? = null,
+    /**
+     * Base bitrate for this dash before the rider's quality setting scales it, or null to keep the
+     * negotiated one.
+     */
+    val encoderBitRate: Int? = null,
+    /**
+     * Density for the captured virtual display, or null to use the phone's own. The phone's density
+     * is right whenever the dash shows a mirror of the phone, and wrong whenever the dash drives a
+     * layout of its own at a fixed size: a 1024x464 panel rendered at a modern phone's ~420dpi gets
+     * UI sized for a screen three times its width.
+     */
+    val virtualDisplayDpi: Int? = null,
     /** Which wire protocol the dash speaks; routes the session to the matching transport. */
     val transportFamily: TBoxTransportFamily = TBoxTransportFamily.EASYCONN,
     /**
@@ -263,15 +280,23 @@ enum class TBoxModelProfile(
      * X-Cape 649 / 700 and the Seiemmezzo, which speak EasyConn, so keying this profile off that
      * id would break those bikes. It is reachable only by a manual [ProfileOverride] pin until an
      * owner's CLIENT_INFO (or a distinguishing SSID) can tell the 1200 apart. Geometry is a
-     * fallback only — the Yunmo dim-query normally reports half the canvas and the transport
-     * doubles it to the measured 1024x464 OEM display; 800x480 backstops a dash that never
-     * answers.
+     * fallback only — the Yunmo dim-query reports the panel size directly (an X-Cape answers
+     * 1024x464); 800x480 backstops a dash that never answers.
      *
      * Map-nav is ON here, unlike any other Yunmo dash would default to. An owner's ADB capture of
      * the OEM app (Ride MO 1.0.23, 2026-08-07) showed it never mirrors this dash: the TFT menu
      * offers two *navigation* presentations (compact arrows / full-screen map) and the OEM always
      * drives the navigation path, latching the TFT's chosen mode at navigation startup. A plain
      * mirror is therefore unlikely to be a mode this firmware has at all.
+     *
+     * The frame rate, bitrate and dpi are what that same capture measured the OEM doing. The dpi is
+     * not cosmetic — it is the density of the OEM `NaviVirtualDisplay`, and rendering this canvas
+     * at a modern phone's own density instead sizes the UI for a screen three times as wide.
+     *
+     * The OEM's 2-second GOP is deliberately NOT copied. [YunmoTransport.offerAccessUnit] drops an
+     * access unit when one is already queued behind a slow socket, and a dropped P-frame corrupts
+     * the picture until the next keyframe — the smearing an earlier GOP experiment produced on a
+     * bike. All-intra costs bitrate and nothing else, which at 10 fps this dash can afford.
      */
     MORINI_XCAPE_1200(
         key = "morini_xcape_1200",
@@ -283,6 +308,9 @@ enum class TBoxModelProfile(
         fallbackTBoxVideoArea = TBoxEvent.VideoArea(800, 480),
         requiresSockAuth = false,
         advertisedSupportFunction = 0,
+        encoderFrameRate = 10,
+        encoderBitRate = 2_000_000,
+        virtualDisplayDpi = 187,
         transportFamily = TBoxTransportFamily.YUNMO,
         yunmoMapNavExperiment = true
     );

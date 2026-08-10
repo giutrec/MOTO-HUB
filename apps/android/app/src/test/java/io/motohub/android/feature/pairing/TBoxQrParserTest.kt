@@ -1,6 +1,8 @@
 package io.motohub.android.feature.pairing
 
+import io.motohub.android.session.TBoxConnectionMode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -208,5 +210,66 @@ class TBoxQrParserTest {
 
         assertTrue(failure.isFailure)
         assertTrue(failure.exceptionOrNull()?.message.orEmpty().contains("Scan the dash pairing"))
+    }
+
+    @Test
+    fun aPhoneHotspotCodeCarriesNoNetworkAndStillPairs() {
+        // Carbit's dash-as-client dialect: action bit7, a `bm=` MAC, and deliberately no ssid/pwd
+        // because the dash has no access point to name. This used to be rejected outright.
+        val payload = TBoxQrParser.parse(
+            "http://www.carbit.com.cn/down6/645/644/_ylqxos" +
+                "?modelid=21322&sn=t6J4&action=128&bm=DD%3A0D%3A30%3A24%3A87%3A6D"
+        ).getOrThrow()
+
+        assertEquals("", payload.ssid)
+        assertEquals("", payload.password)
+        assertEquals("21322", payload.modelId)
+        assertEquals("dd:0d:30:24:87:6d", payload.dashMacAddress)
+        assertEquals(TBoxConnectionMode.PHONE_HOTSPOT, payload.suggestedConnectionMode)
+        assertTrue(payload.topology.phoneHostsHotspot)
+        assertFalse(payload.topology.accessPoint)
+        assertFalse(payload.topology.wifiDirect)
+    }
+
+    @Test
+    fun aBareMacIsAcceptedAsWellAsTheColonForm() {
+        val payload = TBoxQrParser.parse(
+            "http://www.carbit.com.cn/x?modelid=21322&action=128&bm=DD0D3024876D"
+        ).getOrThrow()
+        assertEquals("dd:0d:30:24:87:6d", payload.dashMacAddress)
+    }
+
+    @Test
+    fun anActionBitmaskWithNoAccessPointBitMarksTheDashAsNeverOfferingOne() {
+        // action=8 is Wi-Fi Direct only. Knowing that lets a caller skip an access-point attempt
+        // that can only fail, and vice versa - the point of reading the mask at all.
+        val p2pOnly = TBoxQrParser.parse(
+            "http://www.carbit.com.cn/x?ssid=ZT5Gcf3b&pwd=12345678&auth=WPA2&action=8"
+        ).getOrThrow()
+        assertTrue(p2pOnly.topology.wifiDirect)
+        assertFalse(p2pOnly.topology.accessPoint)
+        assertTrue(p2pOnly.topology.neverOffersAccessPoint)
+        // AUTO already resolves an advertised network correctly, so no mode is forced here.
+        assertNull(p2pOnly.suggestedConnectionMode)
+    }
+
+    @Test
+    fun aCodeWithNoActionParameterClaimsNothingAboutTopology() {
+        val payload = TBoxQrParser.parse(
+            "http://www.carbit.com.cn/x?ssid=CFMOTO-1234&pwd=12345678"
+        ).getOrThrow()
+        assertEquals(TBoxQrTopology.UNSPECIFIED, payload.topology)
+        assertFalse(payload.topology.neverOffersAccessPoint)
+        assertNull(payload.suggestedConnectionMode)
+        assertNull(payload.dashMacAddress)
+    }
+
+    @Test
+    fun aCodeWithNoSsidAndNoMacIsStillUnusable() {
+        // The phone-hotspot branch needs the MAC: without it nothing identifies the dash, so this
+        // must keep failing rather than producing an empty profile.
+        assertTrue(
+            TBoxQrParser.parse("http://www.carbit.com.cn/x?modelid=21322&action=128").isFailure
+        )
     }
 }
