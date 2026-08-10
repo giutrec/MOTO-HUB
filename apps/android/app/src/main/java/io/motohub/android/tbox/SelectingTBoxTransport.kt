@@ -29,13 +29,24 @@ class SelectingTBoxTransport(context: Context) : TBoxTransport {
      * settings come from the only Yunmo dash anyone has captured, so it is the best available
      * guess rather than a claim about which motorcycle this is.
      *
-     * Note what this does and does not reach: the transport and its map-nav path, yes. The encoder
-     * frame rate, bitrate and virtual-display dpi are resolved separately in
-     * `ProjectionSessionService` from the saved motorcycle's own profile, so a rider who has not
-     * pinned the override still streams at the generic settings. Getting a picture at all is the
-     * point here; tuning it still wants the pin.
+     * The session services pick this up through [activeProtocolProfile], so the encoder settings
+     * follow the same switch the transport did. They used to re-resolve the profile from the saved
+     * motorcycle instead, which left an auto-detected Yunmo session encoding at generic settings.
      */
     private val yunmoSessionProfile = TBoxModelProfile.MORINI_XCAPE_1200
+
+    /**
+     * What [discover] ended up routing to, for the session services to configure the encoder from.
+     *
+     * Without this the handover was only half a switch: the session spoke Yunmo but still encoded
+     * with the settings of whatever the saved motorcycle resolved to (GENERIC, for a dash nothing
+     * can identify from its QR). On the X-Cape that meant 30 fps all-intra instead of 10 - and
+     * since every all-intra frame is a keyframe, and a keyframe is split into three wire frames,
+     * three times the frames at three times the rate against a three-frame send window.
+     */
+    @Volatile
+    override var activeProtocolProfile: TBoxModelProfile? = null
+        private set
 
     override val events: Flow<TBoxEvent> = merge(easyConn.events, thinkerRide.events, yunmo.events)
 
@@ -45,6 +56,7 @@ class SelectingTBoxTransport(context: Context) : TBoxTransport {
             TBoxTransportFamily.THINKERRIDE -> thinkerRide
             TBoxTransportFamily.YUNMO -> yunmo
         }
+        activeProtocolProfile = null
         // The one line that says which wire this session will speak. A field log without it
         // cannot distinguish "the override never reached routing" from "the transport failed"
         // (X-Cape 1200 log, 2026-08-07: session ran EasyConn NSD with no way to tell why).
@@ -73,6 +85,7 @@ class SelectingTBoxTransport(context: Context) : TBoxTransport {
         )
         active = yunmo
         yunmo.configureProtocolProfile(yunmoSessionProfile)
+        activeProtocolProfile = yunmoSessionProfile
         return yunmo.discover(link, expectedModelId)
     }
 

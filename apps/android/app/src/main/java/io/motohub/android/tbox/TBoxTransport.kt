@@ -48,6 +48,15 @@ sealed interface TBoxTransportStatus {
 interface TBoxTransport {
     /** Selects the profile whose wire-level capabilities will be advertised for the next session. */
     fun configureProtocolProfile(profile: TBoxModelProfile) = Unit
+
+    /**
+     * The profile this transport is actually running, when that is not simply the one the caller
+     * configured. Discovery can change it: a dash that answers Yunmo after EasyConn found nothing
+     * is routed to a different family *and* a different profile than the saved motorcycle resolves
+     * to, and the session's encoder settings have to follow the same switch. Null means "nothing
+     * to correct, use what you resolved".
+     */
+    val activeProtocolProfile: TBoxModelProfile? get() = null
     suspend fun discover(link: TBoxLink, expectedModelId: String? = null): Result<TBoxHost>
     suspend fun start(host: TBoxHost): Result<Unit>
     fun offerAccessUnit(avcc: ByteArray): Boolean

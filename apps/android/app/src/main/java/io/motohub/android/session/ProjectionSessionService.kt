@@ -178,7 +178,9 @@ class ProjectionSessionService : Service() {
         val configuration = configurationResult.getOrThrow()
         val area = configuration.rawArea
         val quality = MotoHubSettings.videoQuality(this)
-        val modelProfile = TBoxModelProfile.resolve(
+        // The transport's own profile wins when discovery changed it - a dash that answered Yunmo
+        // after EasyConn found nothing is not the profile the saved motorcycle resolves to.
+        val modelProfile = handle.transport.activeProtocolProfile ?: TBoxModelProfile.resolve(
             handle.motorcycle.modelId,
             capabilityStore.load(handle.motorcycle)?.capabilities,
             ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)

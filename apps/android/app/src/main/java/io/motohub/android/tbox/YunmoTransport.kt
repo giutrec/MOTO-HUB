@@ -231,6 +231,10 @@ class YunmoTransport(context: Context) : TBoxTransport {
         @Volatile
         private var mapNavConfirmed = false
 
+        /** Media acks received this session; only every [ACK_LOG_INTERVAL]th is logged. */
+        @Volatile
+        private var acksSeen = 0
+
         /**
          * The dash is showing its own compact arrow guidance, which it renders itself. Frames
          * pushed in this state are discarded by the dash, so the sender skips them until it
@@ -422,9 +426,15 @@ class YunmoTransport(context: Context) : TBoxTransport {
             // SPS alone, PPS alone, then the bare coded picture — three separate frames.
             if (mapNavMode && hasIdr) {
                 if (sps != null && pps != null) {
-                    sendFrame(YunmoProtocol.toAnnexBFrame(sps))
-                    sendFrame(YunmoProtocol.toAnnexBFrame(pps))
-                    sendFrame(YunmoProtocol.stripLeadingSpsPps(annexB))
+                    // One picture, one window slot. Reserving per wire frame meant a single
+                    // keyframe filled the three-frame window by itself, so every access unit after
+                    // the first blocked for the full send-window timeout while the encoder kept
+                    // producing - the "T-Box rejected an Android Auto frame" flood in the field log
+                    // of 2026-08-10, 67 rejections in ten seconds with the picture never arriving.
+                    if (!reserveSendSlot() || !running.get()) return
+                    writeFrame(YunmoProtocol.toAnnexBFrame(sps))
+                    writeFrame(YunmoProtocol.toAnnexBFrame(pps))
+                    writeFrame(YunmoProtocol.stripLeadingSpsPps(annexB))
                     sentParameterSets = true
                     return
                 }
@@ -436,12 +446,31 @@ class YunmoTransport(context: Context) : TBoxTransport {
             sendFrame(annexB)
         }
 
+        /** Reserves a window slot, then writes one wire frame. */
         private fun sendFrame(accessUnit: ByteArray) {
-            if (!waitForSendWindow() || !running.get()) return
+            if (!reserveSendSlot() || !running.get()) return
+            writeFrame(accessUnit)
+        }
+
+        /**
+         * Waits for room in the send window and takes one slot, so the window counts *pictures* in
+         * flight rather than wire frames. The split path writes three frames for one picture and
+         * would otherwise fill a three-slot window on its own.
+         */
+        private fun reserveSendSlot(): Boolean {
+            if (!waitForSendWindow()) return false
+            if (mapNavMode) unackedSinceAck++
+            return true
+        }
+
+        /**
+         * Writes one wire frame with no flow control of its own. Callers that emit several frames
+         * for a single picture (the OEM split path) reserve the window once around the set.
+         */
+        private fun writeFrame(accessUnit: ByteArray) {
             val id = frameId.getAndIncrement()
             val frame = YunmoProtocol.encodeH264Ex(accessUnit, canvasWidth, canvasHeight, id)
             write(frame)
-            if (mapNavMode) unackedSinceAck++
         }
 
         /** Blocks until fewer than [YunmoProtocol.SEND_WINDOW] frames are unacked, or 2s passes. */
@@ -519,6 +548,12 @@ class YunmoTransport(context: Context) : TBoxTransport {
                                 lastAckedId = acked
                                 unackedSinceAck = 0
                                 phaseOnce("ack") { "first media ack from dash (frameId=$acked)" }
+                                // Whether acks keep coming is the difference between "the dash is
+                                // consuming video" and "the dash acked once and went quiet", and
+                                // the first-ack line alone cannot tell them apart.
+                                if (++acksSeen % ACK_LOG_INTERVAL == 0) {
+                                    phase("media acks: $acksSeen so far (latest frameId=$acked)")
+                                }
                                 synchronized(ackLock) { ackLock.notifyAll() }
                             } else {
                                 logUnrecognised(frame, "display frame that is neither a mode nor an ack")
@@ -584,5 +619,8 @@ class YunmoTransport(context: Context) : TBoxTransport {
         const val DIM_TIMEOUT_MS = 5_000L
         const val MAP_NAV_TIMEOUT_MS = 2_500L
         const val SEND_WINDOW_TIMEOUT_MS = 2_000L
+
+        /** Roughly every few seconds at this dash's frame rate; enough to show acks still flow. */
+        const val ACK_LOG_INTERVAL = 60
     }
 }

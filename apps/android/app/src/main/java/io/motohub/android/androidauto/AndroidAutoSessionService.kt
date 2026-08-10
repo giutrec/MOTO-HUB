@@ -470,13 +470,23 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
 
         val configuration = configurationResult.getOrThrow()
         val quality = MotoHubSettings.videoQuality(this)
-        val sessionModelProfile = TBoxModelProfile.resolve(
+        // The transport's own profile wins when discovery changed it - a dash that answered Yunmo
+        // after EasyConn found nothing is not the profile the saved motorcycle resolves to.
+        val sessionModelProfile = handle.transport.activeProtocolProfile ?: TBoxModelProfile.resolve(
             handle.motorcycle.modelId,
             capabilityStore.load(handle.motorcycle)?.capabilities,
             ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
         )
         val encoderProfile = configuration.encoderProfile.copy(
-            bitRate = quality.bitrateFor(configuration.encoderProfile.bitRate),
+            // Frame rate and bitrate were previously honoured only on the native mirror path, so a
+            // dash whose profile asks for a slower capture still got Android Auto's negotiated 30
+            // fps here. On a Yunmo dash that is not a quality preference: every all-intra frame is
+            // a keyframe, a keyframe is split into three wire frames, and three times the frames
+            // at three times the rate cannot fit through a three-frame send window.
+            frameRate = sessionModelProfile.encoderFrameRate ?: configuration.encoderProfile.frameRate,
+            bitRate = quality.bitrateFor(
+                sessionModelProfile.encoderBitRate ?: configuration.encoderProfile.bitRate
+            ),
             keyframeIntervalSeconds = sessionModelProfile.encoderKeyframeIntervalSeconds
         )
         val negotiatedArea = configuration.rawArea
