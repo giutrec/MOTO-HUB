@@ -1,24 +1,32 @@
 # Generated dependency record. Update this file whenever hudlib.aar is rebuilt.
 source_repository=https://github.com/vincenzobpt/ridedaemon-lib
-source_commit=859dc8bbc1c9f226ce2bc7bc8db4598b2872fde4
+source_commit=de02c4c6edfbd0662a9b64a2f6ab7497fc22c409
 source_dirty=false
 source_checkout=refs/ridedaemon-lib-motohub
 gomobile_android_api=34
 artifact=apps/android/app/libs/hudlib.aar
-sha256=9b55fe02281ea2933322b9ce933f7cc057e037ba7c8e1d29e36589639522df3a
+sha256=7a5ac3ff3dfb45088fd45dd561a4fbd72b0f5fdb03bc6ea7903108b854dd8c88
 license=GPL-3.0-only
 
-# Rebuilt 2026-08-10: the phone now ANNOUNCES supportSyncCorrectTime in its
-# CLIENT_INFO reply (PhoneConfig). The clock answers themselves already shipped
-# - the 45-byte 0x10601 body and the dateTime field of the 0x10451 reply - but a
-# Carbit dash treats the clock sync as a two-sided capability, so a phone that
-# never announced it may simply never have been asked. That would explain why
-# the 0x10600 ack has never been seen exercised on a real bike.
+# Rebuilt 2026-08-10, second time that day, and the second build REVERSES the
+# first. The morning build made the phone advertise supportSyncCorrectTime in
+# CLIENT_INFO; the reference implementation shipped exactly that claim, then
+# withdrew it hours later reporting that firmware which saw it applied the
+# 0x10601 reply aggressively and drove Zontes and Voge clusters to 00:00 even
+# when their clock was already right. We have testers on both brands, so the
+# claim is gone again and a test now asserts it stays off the wire.
 #
-# Note that grepping
-# the .so for "supportSyncCorrectTime" does NOT prove the new field is present -
-# HUDConfig already carried the identical struct tag on the inbound side and Go
-# deduplicates it. The evidence is the Go test suite passing on the exact tree
-# this artifact was built from. Binding surface diffed against the previous AAR:
-# identical.
-source_note=phone-announces-supportsynccorrecttime
+# The 0x10600 answer itself is unchanged in spirit but smarter in fact: it used
+# to overwrite the 29-byte stamp with phone time every single occasion, which
+# the same reports say still left some clusters at 00:00. It now echoes the
+# dash's own stamp untouched when that stamp is a sane wall clock (year
+# 2020-2099, exact format), and supplies phone time only when the dash sends
+# epoch, zeroes or junk. Never empty - an empty ack is what pushed Morini and
+# Voge to 1970 in the first place. The log line carries mode=echo|phone, which
+# is the whole diagnosis for a wrong-clock report.
+#
+# source_dirty=false: uncommitted in the fork checkout, so source_commit names
+# the parent, not the built tree. Verified in the artifact by grepping the .so
+# for the new timestamp regex - present here, absent in the previous AAR.
+# Binding surface diffed against the previous AAR: identical.
+source_note=clock-ack-echoes-sane-bike-stamp-no-capability-claim
