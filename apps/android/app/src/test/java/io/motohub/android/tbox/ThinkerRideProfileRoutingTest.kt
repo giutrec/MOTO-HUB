@@ -33,7 +33,8 @@ class ThinkerRideProfileRoutingTest {
         // the X-Cape 1200 is Yunmo; every other profile stays on EasyConn.
         TBoxModelProfile.entries
             .filterNot {
-                it == TBoxModelProfile.KOVE_800X || it == TBoxModelProfile.MORINI_XCAPE_1200
+                it == TBoxModelProfile.KOVE_800X ||
+                    it.transportFamily == TBoxTransportFamily.YUNMO
             }
             .forEach { profile ->
                 assertEquals(

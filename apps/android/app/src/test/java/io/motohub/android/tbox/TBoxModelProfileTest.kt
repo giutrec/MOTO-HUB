@@ -275,5 +275,56 @@ class TBoxModelProfileTest {
             ProfileOverride.CFDL16_MOTOPLAY_LANDSCAPE.resolve()
         )
         assertEquals(TBoxModelProfile.CL_C450, ProfileOverride.CL_C450.resolve())
+        assertEquals(
+            TBoxModelProfile.ZONTES_368G_TEST_B,
+            ProfileOverride.ZONTES_368G_TEST_B.resolve()
+        )
+    }
+
+    @Test
+    fun `the two Zontes experiments differ only in the video framing`() {
+        // The point of test B is to move one variable at a time: the tester's 2026-08-11 log
+        // showed the indexed framing of test A killing the session sooner than GENERIC's plain
+        // framing did, so B keeps the 1s GOP and hands the framing choice back to the dash.
+        val a = TBoxModelProfile.ZONTES_368G_TEST
+        val b = TBoxModelProfile.ZONTES_368G_TEST_B
+        assertFalse(a.allowsPlainVideoFraming)
+        assertEquals(true, b.allowsPlainVideoFraming)
+        assertEquals(a.encoderKeyframeIntervalSeconds, b.encoderKeyframeIntervalSeconds)
+        assertEquals(1, b.encoderKeyframeIntervalSeconds)
+        assertEquals(a.fallbackTBoxVideoArea, b.fallbackTBoxVideoArea)
+        assertEquals(a.advertisedSupportFunction, b.advertisedSupportFunction)
+        assertEquals(a.requiresProactivePxcHeartbeat, b.requiresProactivePxcHeartbeat)
+    }
+
+    @Test
+    fun `only unclaimed dashboards and the framing experiment honour the ext byte`() {
+        // Every recognised unit streams today on indexed framing; letting its own
+        // supportExtendProtocol byte change that would break bikes that work.
+        assertEquals(true, TBoxModelProfile.GENERIC.allowsPlainVideoFraming)
+        val opted = TBoxModelProfile.entries.filter { it.allowsPlainVideoFraming }
+        assertEquals(
+            listOf(TBoxModelProfile.ZONTES_368G_TEST_B, TBoxModelProfile.GENERIC),
+            opted
+        )
+    }
+
+    @Test
+    fun `detection never claims either Zontes experiment`() {
+        // Both are manual pins: a JCDZ dash that lands on them by detection would silently
+        // change wire format for riders whose Zontes already streams.
+        val zontes = TBoxCapabilities(
+            versionName = "1.0.1",
+            sdkVersion = "1.1.3.2",
+            supportFunction = 128,
+            socketServerAuth = false,
+            screenTouch = false,
+            mirrorOverlayTouch = true,
+            landscapeAdaptive = true,
+            productType = 3,
+            screenType = 1,
+            channel = "21334"
+        )
+        assertEquals(TBoxModelProfile.GENERIC, TBoxModelProfile.resolve("21334", zontes))
     }
 }
