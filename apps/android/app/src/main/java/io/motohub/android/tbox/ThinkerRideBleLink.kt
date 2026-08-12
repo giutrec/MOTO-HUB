@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothStatusCodes
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
@@ -23,17 +24,26 @@ import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * The BLE side of a ThinkerRide session: finds the dash by its GATT service, opens the link,
  * runs the JSON handshake and keeps the 5s heartbeat alive. TCP stays in [ThinkerRideTransport];
  * nothing here touches sockets.
  *
- * Every command is fire-and-forget on the write characteristic (the protocol uses
- * write-without-response), so ordering is enforced by time: the dash firmware drops packets that
- * arrive back-to-back, hence [ThinkerRideProtocol.BLE_WRITE_SPACING_MS] between every queued
- * write. All Bluetooth calls are wrapped against [SecurityException] because the runtime grant
- * can be revoked mid-session; a revoked permission surfaces as [onLinkLost], never a crash.
+ * Android only allows **one** GATT operation in flight per connection, even for
+ * write-without-response: a second call while the first is outstanding comes straight back as
+ * [BluetoothStatusCodes.ERROR_GATT_WRITE_REQUEST_BUSY] and the payload is never transmitted.
+ * Firing writes on a timer therefore loses packets silently — the CCCD subscribe alone was enough
+ * to swallow `get_pairinfo` on every session ever logged. So every command goes through
+ * [enqueue]: one packet in flight, the next one released only once the stack reports the previous
+ * one done, [ThinkerRideProtocol.BLE_WRITE_SPACING_MS] later because the dash firmware also drops
+ * back-to-back packets. A busy stack is retried rather than dropped, and a completion callback
+ * that never arrives is bounded by [WRITE_CALLBACK_TIMEOUT_MS] so the queue can never wedge.
+ *
+ * All Bluetooth calls are wrapped against [SecurityException] because the runtime grant can be
+ * revoked mid-session; a revoked permission surfaces as [onLinkLost], never a crash.
  */
 @SuppressLint("MissingPermission")
 internal class ThinkerRideBleLink(
@@ -65,10 +75,19 @@ internal class ThinkerRideBleLink(
     private var scanStop: ScheduledFuture<*>? = null
 
     private val closed = AtomicBoolean(false)
+    private val handshakeStarted = AtomicBoolean(false)
     private val ready = CompletableDeferred<Result<String>>()
 
-    /** Set once the dash acknowledges pairing (`send_pairresult` = 1) over notify. */
-    val pairConfirmed = AtomicBoolean(false)
+    /** Guards [writeQueue], [inFlight], [inFlightAttempts], [writeGeneration], [writeWatchdog]. */
+    private val queueLock = Any()
+    private val writeQueue = ArrayDeque<String>()
+    private var inFlight: String? = null
+    private var inFlightAttempts = 0
+    private var writeGeneration = 0L
+    private var writeWatchdog: ScheduledFuture<*>? = null
+
+    /** Completed once the dash acknowledges pairing (`send_pairresult` = 1) over notify. */
+    private val pairConfirmation = CompletableDeferred<Unit>()
 
     /**
      * Scans for the dash, connects, subscribes to notifications, sends the opening handshake and
@@ -109,7 +128,7 @@ internal class ThinkerRideBleLink(
         }
         log("Scanning for the dashboard's Bluetooth service ($serviceUuid).")
 
-        scanStop = scheduler.schedule({
+        scanStop = schedule(timeoutMillis) {
             if (!ready.isCompleted && gatt == null) {
                 stopScan(scanner, scanCallback)
                 completeReady(
@@ -121,7 +140,7 @@ internal class ThinkerRideBleLink(
                     )
                 )
             }
-        }, timeoutMillis, TimeUnit.MILLISECONDS)
+        }
 
         val outcome = ready.await()
         if (outcome.isFailure) {
@@ -131,14 +150,38 @@ internal class ThinkerRideBleLink(
         return outcome
     }
 
+    /**
+     * Suspends until the dash confirms pairing, or [timeoutMillis] elapses. The dash only honours
+     * a mirror-start once its own pairing handshake has landed, so [ThinkerRideTransport] waits on
+     * this before asking for projection.
+     */
+    suspend fun awaitPairConfirmation(timeoutMillis: Long): Boolean {
+        // An already-settled deferred resolves without suspending, so this needs no fast path:
+        // confirmed returns true immediately, a closed link throws and returns false.
+        return withTimeoutOrNull(timeoutMillis) {
+            try {
+                pairConfirmation.await()
+                true
+            } catch (_: IllegalStateException) {
+                false
+            }
+        } == true
+    }
+
     /** Sends the projection start/stop pair; safe to call from any thread. */
     fun sendMirrorStatus(active: Boolean) {
-        ThinkerRideProtocol.bleMirrorStatusPackets(active).forEachIndexed { index, packet ->
-            scheduler.schedule(
-                { writeCommand(packet) },
-                index * ThinkerRideProtocol.BLE_WRITE_SPACING_MS,
-                TimeUnit.MILLISECONDS
-            )
+        ThinkerRideProtocol.bleMirrorStatusPackets(active).forEach { enqueue(it) }
+    }
+
+    /**
+     * Suspends until every queued command has left the phone, so a teardown does not close the
+     * link out from under the mirror-stop packets.
+     */
+    suspend fun awaitWritesDrained(timeoutMillis: Long) {
+        withTimeoutOrNull(timeoutMillis) {
+            while (synchronized(queueLock) { inFlight != null || writeQueue.isNotEmpty() }) {
+                delay(WRITE_DRAIN_POLL_MS)
+            }
         }
     }
 
@@ -148,6 +191,12 @@ internal class ThinkerRideBleLink(
         }
         heartbeat?.cancel(false)
         scanStop?.cancel(false)
+        synchronized(queueLock) {
+            writeQueue.clear()
+            inFlight = null
+            writeWatchdog?.cancel(false)
+            writeWatchdog = null
+        }
         val activeGatt = gatt
         gatt = null
         writeCharacteristic = null
@@ -156,6 +205,7 @@ internal class ThinkerRideBleLink(
             activeGatt?.close()
         }
         scheduler.shutdownNow()
+        pairConfirmation.completeExceptionally(IllegalStateException("Bluetooth link closed."))
         completeReady(Result.failure(IllegalStateException("Bluetooth link closed.")))
     }
 
@@ -197,20 +247,47 @@ internal class ThinkerRideBleLink(
                     return
                 }
                 writeCharacteristic = write
-                service.getCharacteristic(notifyUuid)?.let { notify ->
-                    runCatching {
-                        connectedGatt.setCharacteristicNotification(notify, true)
-                        notify.getDescriptor(cccUuid)?.let { descriptor ->
-                            connectedGatt.writeDescriptor(
-                                descriptor,
-                                BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                            )
-                        }
-                    }
-                }
-                log("Mirroring service ready; sending the Bluetooth handshake.")
-                queueHandshake()
                 completeReady(Result.success(name))
+
+                // Subscribing is itself a GATT write. The handshake has to wait for it to land or
+                // its first packet comes back BUSY and is lost — which is exactly how every
+                // session used to lose get_pairinfo.
+                val subscribing = subscribeToNotifications(connectedGatt, service)
+                if (subscribing) {
+                    log("Mirroring service ready; enabling dashboard notifications.")
+                    schedule(DESCRIPTOR_TIMEOUT_MS) {
+                        if (handshakeStarted.get()) return@schedule
+                        log("Notification subscription did not complete in ${DESCRIPTOR_TIMEOUT_MS}ms; sending the handshake anyway.")
+                        startHandshakeOnce()
+                    }
+                } else {
+                    log("Mirroring service ready; this dash exposes no notify channel.")
+                    startHandshakeOnce()
+                }
+            }
+
+            override fun onDescriptorWrite(
+                connectedGatt: BluetoothGatt,
+                descriptor: BluetoothGattDescriptor,
+                status: Int
+            ) {
+                if (descriptor.uuid != cccUuid) return
+                if (status != BluetoothGatt.GATT_SUCCESS) {
+                    log("Enabling dashboard notifications failed (GATT status $status); continuing without them.")
+                }
+                startHandshakeOnce()
+            }
+
+            override fun onCharacteristicWrite(
+                connectedGatt: BluetoothGatt,
+                characteristic: BluetoothGattCharacteristic,
+                status: Int
+            ) {
+                if (characteristic.uuid != writeUuid) return
+                if (status != BluetoothGatt.GATT_SUCCESS) {
+                    log("The dashboard rejected a Bluetooth command (GATT status $status).")
+                }
+                finishInFlight()
             }
 
             override fun onCharacteristicChanged(
@@ -222,8 +299,9 @@ internal class ThinkerRideBleLink(
                 val text = value.toString(StandardCharsets.UTF_8)
                 log("Dash -> BLE: $text")
                 if (ThinkerRideProtocol.isPairConfirmation(text)) {
-                    pairConfirmed.set(true)
-                    log("Dashboard confirmed Bluetooth pairing (send_pairresult=1).")
+                    if (pairConfirmation.complete(Unit)) {
+                        log("Dashboard confirmed Bluetooth pairing (send_pairresult=1).")
+                    }
                 }
             }
         }
@@ -238,41 +316,133 @@ internal class ThinkerRideBleLink(
         }
     }
 
-    private fun queueHandshake() {
-        val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
-        ThinkerRideProtocol.bleHandshakePackets(timestamp).forEachIndexed { index, packet ->
-            scheduler.schedule(
-                { writeCommand(packet) },
-                index * ThinkerRideProtocol.BLE_WRITE_SPACING_MS,
-                TimeUnit.MILLISECONDS
-            )
-        }
-        heartbeat = scheduler.scheduleWithFixedDelay(
-            { writeCommand(ThinkerRideProtocol.bleHeartbeatPacket()) },
-            ThinkerRideProtocol.BLE_HEARTBEAT_INTERVAL_MS,
-            ThinkerRideProtocol.BLE_HEARTBEAT_INTERVAL_MS,
-            TimeUnit.MILLISECONDS
-        )
+    /** True when a CCCD write was actually submitted, so [onDescriptorWrite] is coming. */
+    private fun subscribeToNotifications(
+        connectedGatt: BluetoothGatt,
+        service: android.bluetooth.BluetoothGattService
+    ): Boolean {
+        val notify = service.getCharacteristic(notifyUuid) ?: return false
+        return runCatching {
+            connectedGatt.setCharacteristicNotification(notify, true)
+            val descriptor = notify.getDescriptor(cccUuid) ?: return@runCatching false
+            connectedGatt.writeDescriptor(
+                descriptor,
+                BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            ) == BluetoothStatusCodes.SUCCESS
+        }.getOrDefault(false)
     }
 
-    private fun writeCommand(json: String) {
-        val activeGatt = gatt ?: return
-        val characteristic = writeCharacteristic ?: return
-        val written = runCatching {
+    private fun startHandshakeOnce() {
+        if (!handshakeStarted.compareAndSet(false, true)) return
+        val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
+        val packets = ThinkerRideProtocol.bleHandshakePackets(timestamp)
+        log("Sending the Bluetooth handshake (${packets.size} packets, queued).")
+        packets.forEach { enqueue(it) }
+        heartbeat = scheduleRepeating(ThinkerRideProtocol.BLE_HEARTBEAT_INTERVAL_MS) { queueHeartbeat() }
+    }
+
+    /** A heartbeat that is still waiting its turn is not worth queueing twice. */
+    private fun queueHeartbeat() {
+        val packet = ThinkerRideProtocol.bleHeartbeatPacket()
+        val alreadyQueued = synchronized(queueLock) { writeQueue.contains(packet) }
+        if (!alreadyQueued) enqueue(packet)
+    }
+
+    // ---- Write queue -----------------------------------------------------------------------
+
+    private fun enqueue(json: String) {
+        synchronized(queueLock) {
+            if (closed.get()) return
+            writeQueue.addLast(json)
+        }
+        schedule(0) { pump() }
+    }
+
+    private fun pump() {
+        val next = synchronized(queueLock) {
+            if (closed.get() || inFlight != null) return
+            val head = writeQueue.removeFirstOrNull() ?: return
+            inFlight = head
+            inFlightAttempts = 0
+            writeGeneration++
+            head
+        }
+        dispatch(next)
+    }
+
+    private fun dispatch(json: String) {
+        val activeGatt = gatt
+        val characteristic = writeCharacteristic
+        if (closed.get() || activeGatt == null || characteristic == null) {
+            finishInFlight()
+            return
+        }
+        val submitted = runCatching {
             activeGatt.writeCharacteristic(
                 characteristic,
                 json.toByteArray(StandardCharsets.UTF_8),
                 BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
             )
         }
-        val failure = written.exceptionOrNull()
+        val failure = submitted.exceptionOrNull()
         when {
             failure is SecurityException -> onLinkLost(missingPermissionFailure().message.orEmpty())
-            failure != null -> log("BLE write failed: ${failure.message}")
-            written.getOrNull() != BluetoothGatt.GATT_SUCCESS ->
-                log("BLE write refused (code ${written.getOrNull()}): $json")
+            failure != null -> retryOrDrop(json, "write threw ${failure.message}")
+            submitted.getOrNull() == BluetoothStatusCodes.SUCCESS -> armWriteWatchdog(json)
+            else -> retryOrDrop(json, "refused (code ${submitted.getOrNull()})")
         }
     }
+
+    /**
+     * A refusal means the radio is busy, not that the dash said no — the packet has not been
+     * transmitted at all, so the only correct answer is to send it again.
+     */
+    private fun retryOrDrop(json: String, reason: String) {
+        val attempts = synchronized(queueLock) {
+            if (inFlight != json) return
+            ++inFlightAttempts
+        }
+        if (attempts >= MAX_WRITE_ATTEMPTS) {
+            log("BLE write dropped after $attempts attempts — $reason: $json")
+            finishInFlight()
+            return
+        }
+        schedule(WRITE_RETRY_DELAY_MS) { dispatch(json) }
+    }
+
+    private fun armWriteWatchdog(json: String) {
+        val generation = synchronized(queueLock) { writeGeneration }
+        val watchdog = schedule(WRITE_CALLBACK_TIMEOUT_MS) {
+            val stalled = synchronized(queueLock) { writeGeneration == generation && inFlight != null }
+            if (stalled) {
+                log("BLE write got no completion callback in ${WRITE_CALLBACK_TIMEOUT_MS}ms; moving on: $json")
+                finishInFlight()
+            }
+        }
+        synchronized(queueLock) {
+            if (writeGeneration == generation) writeWatchdog = watchdog else watchdog?.cancel(false)
+        }
+    }
+
+    private fun finishInFlight() {
+        synchronized(queueLock) {
+            if (inFlight == null) return
+            inFlight = null
+            inFlightAttempts = 0
+            writeGeneration++
+            writeWatchdog?.cancel(false)
+            writeWatchdog = null
+        }
+        schedule(ThinkerRideProtocol.BLE_WRITE_SPACING_MS) { pump() }
+    }
+
+    private fun schedule(delayMillis: Long, action: () -> Unit): ScheduledFuture<*>? =
+        runCatching { scheduler.schedule(action, delayMillis, TimeUnit.MILLISECONDS) }.getOrNull()
+
+    private fun scheduleRepeating(intervalMillis: Long, action: () -> Unit): ScheduledFuture<*>? =
+        runCatching {
+            scheduler.scheduleWithFixedDelay(action, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS)
+        }.getOrNull()
 
     private fun completeReady(outcome: Result<String>) {
         if (!ready.isCompleted) ready.complete(outcome)
@@ -282,4 +452,18 @@ internal class ThinkerRideBleLink(
         "MOTO-HUB does not have the \"Nearby devices\" (Bluetooth) permission, which this " +
             "dashboard needs for pairing. Allow it in the app settings, then connect again."
     )
+
+    private companion object {
+        /** Attempts per packet before it is given up on; a busy radio clears well inside this. */
+        const val MAX_WRITE_ATTEMPTS = 8
+        const val WRITE_RETRY_DELAY_MS = 60L
+
+        /** Upper bound on a missing [BluetoothGattCallback.onCharacteristicWrite]. */
+        const val WRITE_CALLBACK_TIMEOUT_MS = 1_500L
+
+        /** Upper bound on a missing [BluetoothGattCallback.onDescriptorWrite]. */
+        const val DESCRIPTOR_TIMEOUT_MS = 2_000L
+
+        const val WRITE_DRAIN_POLL_MS = 25L
+    }
 }
