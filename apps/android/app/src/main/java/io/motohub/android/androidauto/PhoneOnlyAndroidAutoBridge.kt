@@ -5,6 +5,8 @@ import android.view.Surface
 import io.motohub.android.aa.AaReceiver
 import io.motohub.android.aa.AaSelfMode
 import io.motohub.android.aa.SingleKeyKeyManager
+import io.motohub.android.feature.controls.HandlebarControlStore
+import io.motohub.android.feature.controls.MediaButtonBridge
 import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.session.ProjectionEventLog
 import kotlinx.coroutines.CoroutineScope
@@ -56,6 +58,14 @@ class PhoneOnlyAndroidAutoBridge(private val context: Context) :
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var compositor: AaCompositor? = null
     private var receiver: AaReceiver? = null
+    // Same TARGET_ANDROID_AUTO the real T-Box session's AndroidAutoSessionService uses - the
+    // two never run at once (start() below refuses while AndroidAutoRuntime.isActive()), so
+    // there is only ever one MediaButtonBridge registered under that name. Without this,
+    // "Buttons control Android Auto" / the handlebar mapping wizard had nothing to capture at
+    // all while testing phone-only (field report 2026-08-13: HID presses did nothing here, not
+    // even the leftover-open-VolumeProvider bug affecting the T-Box path — there was no bridge
+    // to receive them in the first place).
+    private var mediaButtonBridge: MediaButtonBridge? = null
     private var selfModeJob: Job? = null
     private var videoWidth = 0
     private var videoHeight = 0
@@ -96,11 +106,26 @@ class PhoneOnlyAndroidAutoBridge(private val context: Context) :
         // callback while compositor is still null and leave the phone preview blank forever.
         AndroidAutoPreviewRuntime.install(this)
 
+        if (mediaButtonBridge == null) {
+            mediaButtonBridge = MediaButtonBridge(
+                context = context,
+                log = { ProjectionEventLog.debug("PHONE_ONLY_AA", it) },
+                targetName = MediaButtonBridge.TARGET_ANDROID_AUTO
+            ).also { it.start() }
+        }
+
         val activeReceiver = AaReceiver(
             context = context,
             encoderSurface = decoderSurface,
             log = { ProjectionEventLog.debug("PHONE_ONLY_AA", it) },
-            onVideoReady = { AndroidAutoRuntime.publish(AndroidAutoRuntimeState.Streaming) },
+            onVideoReady = {
+                AndroidAutoRuntime.publish(AndroidAutoRuntimeState.Streaming)
+                // Same order as AndroidAutoSessionService.prepareEncoder(): capture only turns on
+                // once video is actually flowing, and the re-assert needs the transport up first.
+                val handlebarEnabled = HandlebarControlStore.isEnabled(context)
+                mediaButtonBridge?.setCaptureActive(handlebarEnabled)
+                if (handlebarEnabled) mediaButtonBridge?.reassertCaptureAfterTransportReady()
+            },
             onSessionEnded = { clean, userExit ->
                 AndroidAutoRuntime.publish(
                     AndroidAutoRuntimeState.Stopped(
@@ -204,6 +229,8 @@ class PhoneOnlyAndroidAutoBridge(private val context: Context) :
         compositor?.clearOutput()
         compositor?.release()
         compositor = null
+        mediaButtonBridge?.stop()
+        mediaButtonBridge = null
     }
 
     private companion object {

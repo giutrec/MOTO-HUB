@@ -1280,4 +1280,7 @@
     <string name="legacy_several_manufacturers_ship_the_same_dashboard_so_49305d38">Vários fabricantes usam o mesmo software de painel com a sua própria marca, por isso pode muito bem ser a sua mota. Continue apenas se leu o código no painel da sua mota.</string>
     <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
     <string name="legacy_use_these_details_52f852ac">Usar estes dados</string>
+
+    <!-- Source: feature/controls/HandlebarHidCaptureService.kt -->
+    <string name="handlebar_hid_capture_description">Permite que a MOTO-HUB leia as pressões do D-pad de um comando Bluetooth HID do guiador quando o modo HID está selecionado nas definições de botões do guiador.</string>
 </resources>

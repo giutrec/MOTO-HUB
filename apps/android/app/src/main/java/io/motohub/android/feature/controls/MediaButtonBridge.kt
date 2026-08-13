@@ -313,6 +313,14 @@ class MediaButtonBridge(
      * missed gesture is worse than a held volume.
      */
     private fun volumeGesturesInUse(): Boolean {
+        // HID mode gets real, discrete KEYCODE_VOLUME_UP/DOWN key-down events from
+        // HandlebarHidCaptureService (see onHidKeyEvent) - there is nothing to infer from
+        // watching the media stream drift, and pinning it here would fight the Accessibility
+        // Service for ownership of the same physical press: a rider's "up" button would both
+        // navigate AND visibly move the pinned volume, or worse, the pin's own re-write could
+        // be misread as a second press. AVRCP's pin-and-watch trick is only needed because
+        // AVRCP volume changes never arrive as ordinary key events in the first place.
+        if (HandlebarControlStore.inputMode(context) == HandlebarInputMode.HID) return false
         // An uncalibrated handlebar assumes a rocker, which is right for most dashboards and
         // wrong forever for the ones that never send one. The silence probe settles it without
         // asking the rider (see [scheduleVolumeSilenceProbe]).
@@ -339,7 +347,16 @@ class MediaButtonBridge(
         //
         // Not a check on whether the motorcycle is connected. A dash that is off or out of range
         // will turn up during the ride, and refusing to listen for it would be the worse mistake.
-        if (!BluetoothStatus.canReceiveHandlebarKeys(context)) {
+        //
+        // HID mode is exempt: canReceiveHandlebarKeys() checks BLUETOOTH_CONNECT, which this app
+        // needs to ask the Bluetooth stack "is anything connected" for the AVRCP path - but a HID
+        // remote's key events arrive as ordinary input through HandlebarHidCaptureService's
+        // Accessibility Service, which needs no Bluetooth permission of its own to see them.
+        // Field report 2026-08-13: capture stayed permanently skipped on a phone that had never
+        // granted BLUETOOTH_CONNECT, even though the HID remote's presses were already reaching
+        // the Accessibility Service and being dropped downstream for exactly this reason.
+        val hidMode = HandlebarControlStore.inputMode(context) == HandlebarInputMode.HID
+        if (!hidMode && !BluetoothStatus.canReceiveHandlebarKeys(context)) {
             log(
                 "[BTN] capture skipped: Bluetooth is off or unavailable to this app, so no " +
                     "handlebar press can arrive - leaving the media volume and audio focus alone"
@@ -366,6 +383,14 @@ class MediaButtonBridge(
         } else {
             log("[BTN] volume keys are not delivered by this dashboard; leaving the media volume alone")
         }
+        // installRemoteVolume() matters even more in HID mode than in AVRCP: field trace
+        // 2026-08-13 showed KEYCODE_VOLUME_UP/DOWN from a HID remote never reaching
+        // HandlebarHidCaptureService at all - MediaSessionService's dispatchVolumeKeyEvent
+        // claimed them first and routed them to Android Auto's OWN app (gearhead), which was
+        // holding the relevant session. A VolumeProvider is what lets THIS app win that routing
+        // instead (see onAdjustVolume below); without one, whichever app the system picks gets
+        // the press and this bridge never sees a KeyEvent to filter in the first place. See
+        // onHidVolumeKey for how HID mode's callback differs from AVRCP's (onPhoneVolumeKey).
         installRemoteVolume()
         val granted = requestMediaFocus()
         startSilentTrack()
@@ -505,6 +530,15 @@ class MediaButtonBridge(
                 if (!captureActive) return@postDelayed
                 runCatching {
                     refreshPlayingAppearance(reason = "reclaim")
+                    // A full AUDIOFOCUS_LOSS (not just a duck) means something else - Android
+                    // Auto's own audio/call activity, observed field-side 2026-08-13 - may have
+                    // become the system's volume-key routing target while it held focus.
+                    // refreshPlayingAppearance only re-asserts the MediaSession's playing state;
+                    // it does not re-attach the VolumeProvider, so without this call hardware
+                    // volume presses kept moving the phone's REAL media volume for the next
+                    // 15+ seconds after "handlebar reclaimed" already logged - the session was
+                    // reclaimed, but volume-key ownership specifically was not.
+                    installRemoteVolume()
                     if (usesVolumeGestures) pinVolume()
                     // The pin above just reasserted the reference level (under its own ignore
                     // window), so volume moves are readable as gestures again.
@@ -595,7 +629,18 @@ class MediaButtonBridge(
         val provider = object : VolumeProvider(VOLUME_CONTROL_ABSOLUTE, max, current) {
             override fun onAdjustVolume(direction: Int) {
                 if (direction == 0) return
-                handler.post { onPhoneVolumeKey(direction) }
+                handler.post {
+                    // AVRCP: this is how the PHONE's own hardware volume keys are told apart
+                    // from the dash's absolute-volume writes (see the class doc above). HID:
+                    // there is no separate "dash" signal to protect - a HID remote's volume
+                    // button IS one of these discrete key events, indistinguishable from the
+                    // phone's own buttons, so THIS is the handlebar press (see onHidVolumeKey).
+                    if (HandlebarControlStore.inputMode(context) == HandlebarInputMode.HID) {
+                        onHidVolumeKey(direction)
+                    } else {
+                        onPhoneVolumeKey(direction)
+                    }
+                }
             }
 
             override fun onSetVolumeTo(volume: Int) {
@@ -609,6 +654,23 @@ class MediaButtonBridge(
         } catch (failure: Throwable) {
             log("[BTN] remote volume install failed (${failure.message}); phone volume keys may still register as presses")
         }
+    }
+
+    /**
+     * One HID remote volume press, delivered via [installRemoteVolume]'s VolumeProvider instead
+     * of [HandlebarHidCaptureService]'s Accessibility Service - on at least one real device
+     * (Pixel 8, field trace 2026-08-13) MediaSessionService's dispatchVolumeKeyEvent claimed the
+     * raw KeyEvent for Android Auto's own app before the Accessibility Service ever saw it, so
+     * this is the path that actually fires for volume in practice. A genuine discrete key press
+     * with a direction, not an absolute value to infer a gesture from - reuses the same
+     * tap/double-tap detection [onKeyDown] gives an AVRCP dash's literal key press.
+     */
+    private fun onHidVolumeKey(direction: Int) {
+        if (!captureActive) return
+        val single = if (direction > 0) HandlebarGesture.VOLUME_UP else HandlebarGesture.VOLUME_DOWN
+        val double = if (direction > 0) HandlebarGesture.VOLUME_UP_DOUBLE else HandlebarGesture.VOLUME_DOWN_DOUBLE
+        log("[BTN] HID volume ${if (direction > 0) "up" else "down"} (via VolumeProvider) -> $targetName")
+        detectDoubleTap(single, double, forceDouble = false)
     }
 
     /** One phone volume-key press: step the real listening volume, same stride the OS would use. */
@@ -853,6 +915,54 @@ class MediaButtonBridge(
         }
     }
 
+    /**
+     * Feeds one raw key event captured system-wide by [HandlebarHidCaptureService] (HID mode
+     * only). Two shapes of HID remote are supported:
+     *
+     * - Volume/select/track keycodes ([isVolumeKey]/[isSelectKey]/[isTrackKey]) — the common
+     *   case for a remote whose five buttons mirror AVRCP's (up/down/play/back/forward), just
+     *   delivered as ordinary HID keys instead of over a MediaSession. These route through the
+     *   SAME [onKeyDown]/[onKeyUp] tap/hold/double-tap machinery AVRCP uses, so
+     *   [HandlebarControlStore]'s calibration and the mapping screen apply identically regardless
+     *   of which transport the press arrived over — a HID remote's "up" button IS
+     *   [HandlebarGesture.VOLUME_UP], the same gesture id an AVRCP dash's volume rocker produces.
+     * - D-pad arrow keycodes — for remotes wired as a literal 4-way pad instead. Fixed mapping,
+     *   not run through the calibration wizard: there is no "up press" left to teach when the
+     *   remote already reports which direction was pressed.
+     *
+     * Anything else is logged and left unconsumed, so a rider hitting an unrecognized button can
+     * find the keycode in the diagnostic log and report it instead of the button silently doing
+     * nothing.
+     */
+    fun onHidKeyEvent(keyCode: Int, action: Int, repeatCount: Int): Boolean {
+        if (!captureActive) return false
+        dpadKeyTarget(keyCode)?.let { target ->
+            if (action == KeyEvent.ACTION_DOWN && repeatCount == 0) {
+                log("[BTN] HID D-pad ${KeyEvent.keyCodeToString(keyCode)} -> $targetName")
+                sendKey(target)
+            }
+            return true
+        }
+        if (!isVolumeKey(keyCode) && !isSelectKey(keyCode) && !isTrackKey(keyCode)) {
+            log("[BTN] HID key ${KeyEvent.keyCodeToString(keyCode)} ($keyCode) not recognized; ignored")
+            return false
+        }
+        when (action) {
+            KeyEvent.ACTION_DOWN -> onKeyDown(keyCode, repeatCount)
+            KeyEvent.ACTION_UP -> onKeyUp(keyCode)
+        }
+        return true
+    }
+
+    private fun dpadKeyTarget(keyCode: Int): Int? = when (keyCode) {
+        KeyEvent.KEYCODE_DPAD_UP -> AndroidAutoInputCodes.KEY_UP
+        KeyEvent.KEYCODE_DPAD_DOWN -> AndroidAutoInputCodes.KEY_DOWN
+        KeyEvent.KEYCODE_DPAD_LEFT -> AndroidAutoInputCodes.KEY_LEFT
+        KeyEvent.KEYCODE_DPAD_RIGHT -> AndroidAutoInputCodes.KEY_RIGHT
+        KeyEvent.KEYCODE_DPAD_CENTER -> AndroidAutoInputCodes.KEY_ENTER
+        else -> null
+    }
+
     fun injectSimulatorGesture(gesture: HandlebarGesture) {
         handler.post {
             log("[BTN] simulator injected ${gesture.label}")
@@ -934,7 +1044,18 @@ class MediaButtonBridge(
 
     private fun isSelectKey(keyCode: Int) = keyCode == KeyEvent.KEYCODE_MEDIA_PLAY ||
         keyCode == KeyEvent.KEYCODE_MEDIA_PAUSE ||
-        keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+        keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
+        // HID-only aliases: a remote's "call/select" button commonly reports as one of these
+        // instead of a MEDIA_PLAY* keycode. Harmless to recognize on the AVRCP path too - no
+        // Bluetooth AVRCP peer has ever been observed sending either through onMediaButtonEvent.
+        keyCode == KeyEvent.KEYCODE_HEADSETHOOK ||
+        keyCode == KeyEvent.KEYCODE_ENTER
+
+    /** HID-only: a literal volume keycode, delivered as a discrete press with a real key-up -
+     *  unlike AVRCP's absolute-volume writes, there is nothing to infer here (see
+     *  [volumeGesturesInUse]), so this is handled entirely in [onKeyDown]/[onKeyUp]. */
+    private fun isVolumeKey(keyCode: Int) =
+        keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN
 
     private fun onKeyDown(keyCode: Int, repeatCount: Int = 0) {
         lastKeyAt = SystemClock.elapsedRealtime()
@@ -943,6 +1064,20 @@ class MediaButtonBridge(
             return
         }
         log("[BTN] media key ${KeyEvent.keyCodeToString(keyCode)} down ($keyCode)")
+        if (isVolumeKey(keyCode)) {
+            val single = if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+                HandlebarGesture.VOLUME_UP
+            } else {
+                HandlebarGesture.VOLUME_DOWN
+            }
+            val double = if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+                HandlebarGesture.VOLUME_UP_DOUBLE
+            } else {
+                HandlebarGesture.VOLUME_DOWN_DOUBLE
+            }
+            detectDoubleTap(single, double, forceDouble = false)
+            return
+        }
         when {
             isSelectKey(keyCode) -> if (selectDownAt == 0L) {
                 selectDownAt = SystemClock.elapsedRealtime()
@@ -1224,6 +1359,12 @@ class MediaButtonBridge(
             bridge.injectSimulatorGesture(gesture)
             return true
         }
+
+        /** Routes one HID key event to whichever live bridge is capturing (see
+         *  [HandlebarHidCaptureService]). Returns true once any bridge claims the keycode, so
+         *  the Accessibility Service can consume it and stop it reaching the focused app. */
+        fun dispatchHidKeyEvent(keyCode: Int, action: Int, repeatCount: Int): Boolean =
+            bridges.values.any { it.onHidKeyEvent(keyCode, action, repeatCount) }
 
         /** Calibration changed — every live bridge re-decides whether to hold the volume pin. */
         fun refreshVolumeGestureUse() {

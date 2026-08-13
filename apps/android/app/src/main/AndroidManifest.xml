@@ -94,6 +94,26 @@
             android:exported="true"
             android:foregroundServiceType="connectedDevice" />
 
+        <!--
+            Optional: only acts while Handlebar buttons -> Input protocol is set to HID AND the
+            rider has separately granted Accessibility for MOTO-HUB in system settings (an
+            explicit grant Android requires; see HandlebarHidCaptureService.openAccessibilitySettings).
+            Lets a Bluetooth HID-keyboard handlebar remote's D-pad presses reach the app no matter
+            which app has focus on the TFT — D-pad keycodes are ordinary input events, unlike the
+            AVRCP media keys MediaButtonBridge reads through a MediaSession.
+        -->
+        <service
+            android:name=".feature.controls.HandlebarHidCaptureService"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/handlebar_hid_capture_service" />
+        </service>
+
         <service
             android:name=".ipc.IpcBridgeService"
             android:exported="true"
