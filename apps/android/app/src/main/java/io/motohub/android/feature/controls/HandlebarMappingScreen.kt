@@ -25,10 +25,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -43,7 +45,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import io.motohub.android.androidauto.AndroidAutoRuntime
+import io.motohub.android.androidauto.AndroidAutoRuntimeState
+import io.motohub.android.data.MotorcycleProfileStore
 import io.motohub.android.i18n.motoHubText
+import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.ui.components.MonoLabel
 import io.motohub.android.ui.components.MotoHubDetailScreen
@@ -73,6 +80,22 @@ fun HandlebarMappingScreen(
     var revision by remember { mutableStateOf(0) }
     var editing by remember { mutableStateOf<PhysicalPress?>(null) }
     var calibrating by remember { mutableStateOf(false) }
+    var showTeachPrerequisiteDialog by remember { mutableStateOf(false) }
+    // Set when the prerequisite dialog asked MainActivity to start a session, so the rider
+    // doesn't have to notice it came up and tap "Teach my handlebar" a second time - the whole
+    // point of asking was to get straight into teaching once there is something to capture.
+    var awaitingSessionForTeach by remember { mutableStateOf(false) }
+    val androidAutoState by AndroidAutoRuntime.state.collectAsState()
+    LaunchedEffect(androidAutoState, awaitingSessionForTeach) {
+        if (!awaitingSessionForTeach) return@LaunchedEffect
+        // Streaming specifically, not just Preparing/ReceiverReady: MediaButtonBridge only
+        // flips captureActive once video is actually flowing (see onVideoReady), so opening the
+        // wizard any earlier would just look broken - presses would register nothing yet.
+        if (androidAutoState is AndroidAutoRuntimeState.Streaming) {
+            awaitingSessionForTeach = false
+            calibrating = true
+        }
+    }
     val lastGesture by HandlebarGestureFeed.lastGesture.collectAsState()
     var litGesture by remember { mutableStateOf<HandlebarGesture?>(null) }
     LaunchedEffect(lastGesture?.atElapsedRealtimeMillis) {
@@ -144,7 +167,21 @@ fun HandlebarMappingScreen(
         LiveCaptureBanner(litGesture)
 
         Button(
-            onClick = { calibrating = true },
+            onClick = {
+                // Calibration only ever sees anything through a live capture (MediaButtonBridge
+                // captureActive) - with no Android Auto session at all there is nothing to
+                // teach from, and the wizard would just sit there looking broken. Checked here
+                // rather than inside the wizard so the rider is asked before it opens, not left
+                // to guess why nothing on the motorcycle does anything once it has.
+                val sessionRunning = androidAutoState is AndroidAutoRuntimeState.Streaming ||
+                    androidAutoState is AndroidAutoRuntimeState.ReceiverReady ||
+                    androidAutoState is AndroidAutoRuntimeState.Preparing
+                if (sessionRunning) {
+                    calibrating = true
+                } else {
+                    showTeachPrerequisiteDialog = true
+                }
+            },
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(16.dp)
         ) {
@@ -153,6 +190,32 @@ fun HandlebarMappingScreen(
                     if (HandlebarCalibration.isCalibrated(context)) "Teach again" else "Teach my handlebar"
                 ),
                 fontWeight = FontWeight.Bold
+            )
+        }
+        if (showTeachPrerequisiteDialog) {
+            HandlebarTeachPrerequisiteDialog(
+                motorcycles = remember { MotorcycleProfileStore(context).loadAll() },
+                onConnect = { profile ->
+                    ProjectionEventLog.record(
+                        "CONTROLS",
+                        "Handlebar teach requested a connect to ${profile.ssid} to get a live session."
+                    )
+                    HandlebarTeachPrerequisiteRequest.publish(
+                        HandlebarTeachPrerequisiteRequest.Choice.Connect(profile.id)
+                    )
+                    awaitingSessionForTeach = true
+                    showTeachPrerequisiteDialog = false
+                },
+                onPhoneOnly = {
+                    ProjectionEventLog.record(
+                        "CONTROLS",
+                        "Handlebar teach requested a phone-only Android Auto session."
+                    )
+                    HandlebarTeachPrerequisiteRequest.publish(HandlebarTeachPrerequisiteRequest.Choice.PhoneOnly)
+                    awaitingSessionForTeach = true
+                    showTeachPrerequisiteDialog = false
+                },
+                onDismiss = { showTeachPrerequisiteDialog = false }
             )
         }
 
@@ -175,6 +238,69 @@ fun HandlebarMappingScreen(
             },
             modifier = Modifier.fillMaxWidth()
         ) { Text(motoHubText("Reset actions to defaults")) }
+    }
+}
+
+/**
+ * Asked before opening the teach wizard when no Android Auto session is running - see the
+ * "Teach my handlebar" button above. Offers exactly the two ways this app can get a live
+ * session: connect to a saved motorcycle's T-Box (with a choice of which, if more than one is
+ * saved), or start Android Auto entirely on the phone with no T-Box at all. Neither is done
+ * here directly - this screen has no session-state or permission-launcher access of its own,
+ * so the choice is published for MainActivity to act on (see [HandlebarTeachPrerequisiteRequest]).
+ */
+@Composable
+private fun HandlebarTeachPrerequisiteDialog(
+    motorcycles: List<MotorcycleProfile>,
+    onConnect: (MotorcycleProfile) -> Unit,
+    onPhoneOnly: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    motoHubText("Android Auto isn't running"),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    motoHubText(
+                        "Teaching the handlebar needs a live Android Auto session to capture " +
+                            "presses. Connect to the motorcycle, or start it on this phone " +
+                            "without a T-Box."
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (motorcycles.isNotEmpty()) {
+                    HorizontalDivider()
+                    motorcycles.forEach { profile ->
+                        OutlinedButton(
+                            onClick = { onConnect(profile) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                motoHubText(
+                                    "Connect to %1\$s",
+                                    profile.displayName?.takeIf(String::isNotBlank) ?: profile.ssid
+                                )
+                            )
+                        }
+                    }
+                }
+                HorizontalDivider()
+                Button(onClick = onPhoneOnly, modifier = Modifier.fillMaxWidth()) {
+                    Text(motoHubText("Start on this phone (no T-Box)"), fontWeight = FontWeight.Bold)
+                }
+                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text(motoHubText("Cancel"))
+                }
+            }
+        }
     }
 }
 
@@ -205,13 +331,21 @@ private fun BluetoothStatusCard() {
         ActivityResultContracts.RequestPermission()
     ) { refresh++ }
     val current = status
+    // A2DP/HEADSET "connected device" only means something for an AVRCP dash - a HID remote
+    // pairs as a keyboard and never shows up in that list, so current.describe() would call an
+    // actually-working HID remote "no audio device connected" (field report 2026-08-13). HID
+    // mode has no per-device connection signal to show at all here; "ready" is the same
+    // Bluetooth-on-and-permitted check that actually gates capture (see
+    // BluetoothStatus.canReceiveHandlebarKeys).
+    val hidMode = HandlebarControlStore.inputMode(context) == HandlebarInputMode.HID
     val connected = current?.connected == true
+    val ready = if (hidMode) current?.enabled == true && current.permitted else connected
     val needsPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
         current?.permitted == false
 
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = if (connected) {
+        color = if (ready) {
             MotoHubLive.copy(alpha = 0.12f)
         } else {
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -228,7 +362,7 @@ private fun BluetoothStatusCard() {
             ) {
                 Box(
                     Modifier.size(10.dp).background(
-                        if (connected) MotoHubLive
+                        if (ready) MotoHubLive
                         else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                         CircleShape
                     )
@@ -240,7 +374,20 @@ private fun BluetoothStatusCard() {
                 )
             }
             Text(
-                current?.describe() ?: motoHubText("Checking Bluetooth…"),
+                when {
+                    current == null -> motoHubText("Checking Bluetooth…")
+                    !hidMode -> current.describe()
+                    !current.supported -> motoHubText("This phone has no Bluetooth.")
+                    !current.enabled -> motoHubText("Bluetooth is off — turn it on, then pair the remote as a keyboard.")
+                    !current.permitted -> motoHubText(
+                        "Allow Bluetooth access so the app can read the remote's key presses."
+                    )
+                    else -> motoHubText(
+                        "Bluetooth is on. A HID remote doesn't show up here as a connected " +
+                            "device — if presses still aren't recognized, check it is paired " +
+                            "in system Bluetooth settings and that Accessibility is turned on."
+                    )
+                },
                 style = MaterialTheme.typography.bodyMedium
             )
             if (current != null && current.supported) {
@@ -388,7 +535,48 @@ private fun HandlebarCalibrationScreen(onDone: () -> Unit) {
     // before the screen even opened, which is how a stale feed value once got recorded as
     // "up_press = trackBack" with the rider's hand nowhere near the handlebar.
     var stepStartedAt by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
-    LaunchedEffect(step) { stepStartedAt = SystemClock.elapsedRealtime() }
+    // Feedback for a gesture that arrived but didn't match what this step needs - shown instead
+    // of silently accepting it (see the LaunchedEffect below) or silently ignoring it.
+    var mismatchHint by remember { mutableStateOf<String?>(null) }
+    // Feedback for a step that is skipped automatically because it can never be satisfied (a
+    // volume-mapped button has no hold gesture at all) - shown instead of silently advancing
+    // past it with nothing on screen to explain why (field report 2026-08-13).
+    var skipNotice by remember { mutableStateOf<String?>(null) }
+
+    /** The gesture recorded for this button's PRESS step, taught earlier in the fixed
+     *  press/double/hold order - tells us which family (and so which double/hold siblings, if
+     *  any) this physical button belongs to. */
+    fun baseGestureFor(current: PhysicalPress): HandlebarGesture? = PhysicalPress.entries
+        .firstOrNull { it.button == current.button && it.kind == PressKind.PRESS }
+        ?.let { HandlebarCalibration.gestureFor(context, it) }
+
+    LaunchedEffect(step) {
+        stepStartedAt = SystemClock.elapsedRealtime()
+        mismatchHint = null
+        skipNotice = null
+        val current = press ?: return@LaunchedEffect
+        if (current.kind == PressKind.PRESS) return@LaunchedEffect
+        val baseGesture = baseGestureFor(current)
+        val expected = if (current.kind == PressKind.DOUBLE) {
+            baseGesture?.doubleSibling()
+        } else {
+            baseGesture?.longSibling()
+        }
+        if (baseGesture != null && expected == null) {
+            // Known upfront, before any press arrives: this button's family has no hold gesture
+            // at all (volume never does - see HandlebarGesture.longSibling). Waiting for one
+            // would hang forever, so this is announced and skipped immediately instead of
+            // silently advancing past it on the next unrelated press.
+            skipNotice = "This button has no hold - skipping automatically."
+            ProjectionEventLog.record(
+                "CONTROLS",
+                "Skipped ${current.id}: ${baseGesture.id} has no hold sibling."
+            )
+            learned++
+            delay(SKIP_NOTICE_MILLIS)
+            step++
+        }
+    }
 
     // Gestures are observed, not obeyed, for as long as this screen is up.
     DisposableEffect(Unit) {
@@ -400,6 +588,32 @@ private fun HandlebarCalibrationScreen(onDone: () -> Unit) {
         val event = lastGesture ?: return@LaunchedEffect
         val current = press ?: return@LaunchedEffect
         if (event.atElapsedRealtimeMillis <= stepStartedAt) return@LaunchedEffect
+        // The no-hold-exists case is announced and skipped by the step-change effect above,
+        // before any press arrives - this only validates the shape of an actual incoming gesture.
+        if (skipNotice != null) return@LaunchedEffect
+
+        // The "press" step for this same physical button was always taught first (PhysicalPress
+        // orders press/double/hold together per button) - its recorded gesture is this button's
+        // family, and tells us which gesture id actually PROVES a double or a hold happened,
+        // rather than accepting whatever fires next (field report 2026-08-13: a single tap
+        // during the double/hold step silently overwrote both with the plain press).
+        val baseGesture = baseGestureFor(current)
+        val expected = when (current.kind) {
+            PressKind.PRESS -> null
+            PressKind.DOUBLE -> baseGesture?.doubleSibling()
+            PressKind.HOLD -> baseGesture?.longSibling()
+        }
+
+        if (expected != null && event.gesture != expected) {
+            mismatchHint = when (current.kind) {
+                PressKind.DOUBLE -> "That was a single press - press twice quickly for double."
+                PressKind.HOLD -> "That was a quick tap - press and hold a moment longer."
+                PressKind.PRESS -> null
+            }
+            return@LaunchedEffect
+        }
+
+        mismatchHint = null
         HandlebarCalibration.record(context, current, event.gesture)
         ProjectionEventLog.record("CONTROLS", "Calibrated ${current.id} = ${event.gesture.id}")
         learned++
@@ -452,6 +666,22 @@ private fun HandlebarCalibrationScreen(onDone: () -> Unit) {
                     fontWeight = FontWeight.Bold
                 )
             }
+        }
+        mismatchHint?.let { hint ->
+            Text(
+                motoHubText(hint),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+        skipNotice?.let { notice ->
+            Text(
+                motoHubText(notice),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.error
+            )
         }
         Text(
             motoHubText(
@@ -757,3 +987,6 @@ private fun HandlebarAction.shortLabel(): String = when (this) {
 
 private const val HIGHLIGHT_MILLIS = 1_400L
 private const val CALIBRATION_CONFIRM_MILLIS = 700L
+/** Longer than CALIBRATION_CONFIRM_MILLIS - this is an unrequested notice about a step the
+ *  rider never got a chance to act on, not a confirmation of something they just did. */
+private const val SKIP_NOTICE_MILLIS = 1800L

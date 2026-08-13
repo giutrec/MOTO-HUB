@@ -19,6 +19,29 @@ enum class HandlebarAction(val id: String, val label: String) {
     NAV_3("nav3", "Navigate → place 3")
 }
 
+/**
+ * Which physical protocol the handlebar remote speaks.
+ *
+ * Real dashboards use AVRCP (default): ordinary Bluetooth media-key commands, read by
+ * [MediaButtonBridge] through a MediaSession. Some aftermarket handlebar remotes instead pair as
+ * a Bluetooth HID keyboard and send raw D-pad keycodes — those never reach a MediaSession no
+ * matter what has focus, so HID mode instead relies on [HandlebarHidCaptureService], an
+ * Accessibility Service, to see them system-wide.
+ */
+enum class HandlebarInputMode(val id: String, val label: String, val description: String) {
+    AVRCP(
+        "avrcp",
+        "AVRCP (media keys)",
+        "Default. The dashboard sends Bluetooth media-key commands for play/pause, track and volume."
+    ),
+    HID(
+        "hid",
+        "HID (D-pad)",
+        "For remotes that pair as a Bluetooth keyboard and send D-pad presses. Requires turning " +
+            "on MOTO-HUB's Accessibility Service below."
+    )
+}
+
 enum class HandlebarGesture(
     val id: String,
     val label: String,
@@ -41,7 +64,38 @@ enum class HandlebarGesture(
     TRACK_BACK_LONG("trackBackLong", "Backward hold - Left", "Requires a real Bluetooth key-up", HandlebarAction.NONE),
     TRACK_FORWARD("trackForward", "Forward - Right", "Bluetooth next-track command", HandlebarAction.SCROLL_FORWARD),
     TRACK_FORWARD_DOUBLE("trackForwardDouble", "Forward double tap - Right", "Two next-track presses inside the window", HandlebarAction.BACK),
-    TRACK_FORWARD_LONG("trackForwardLong", "Forward hold - Right", "Requires a real Bluetooth key-up", HandlebarAction.NONE)
+    TRACK_FORWARD_LONG("trackForwardLong", "Forward hold - Right", "Requires a real Bluetooth key-up", HandlebarAction.NONE);
+
+    /**
+     * The double-tap sibling of a base ("press") gesture in the same family, or null for a
+     * gesture that isn't a base press. Lets [HandlebarCalibrationScreen] confirm the rider
+     * actually double-tapped during a "double" teaching step, instead of accepting whatever
+     * gesture fires next regardless of shape (field report 2026-08-13: a single tap during the
+     * double/hold step silently overwrote the binding with the plain press).
+     */
+    fun doubleSibling(): HandlebarGesture? = when (this) {
+        VOLUME_UP -> VOLUME_UP_DOUBLE
+        VOLUME_DOWN -> VOLUME_DOWN_DOUBLE
+        ENTER -> ENTER_DOUBLE
+        TRACK_BACK -> TRACK_BACK_DOUBLE
+        TRACK_FORWARD -> TRACK_FORWARD_DOUBLE
+        else -> null
+    }
+
+    /**
+     * The hold sibling, or null when this family has no hold gesture at all. Volume never does:
+     * AVRCP's absolute-volume stream and a HID remote's discrete volume key both only ever
+     * produce a press or a double (see [io.motohub.android.feature.controls.MediaButtonBridge]'s
+     * interpretVolumeDelta/onHidVolumeKey) - there is nothing a "held" volume press could mean.
+     * The calibration wizard uses this to auto-skip a hold step instead of waiting forever for a
+     * gesture that can never arrive.
+     */
+    fun longSibling(): HandlebarGesture? = when (this) {
+        ENTER -> ENTER_LONG
+        TRACK_BACK -> TRACK_BACK_LONG
+        TRACK_FORWARD -> TRACK_FORWARD_LONG
+        else -> null
+    }
 }
 
 object HandlebarControlStore {
@@ -50,6 +104,7 @@ object HandlebarControlStore {
     private const val MANAGED_BY_COMPANION = "managed_by_companion"
     private const val DASHBOARD_REPORTS_HOLDS = "dashboard_reports_holds"
     private const val CALIBRATION_PREFIX = "calibrated_"
+    private const val INPUT_MODE = "input_mode"
     /** Bumped when [defaultAction] values change — auto-migrates stored overrides. */
     private const val DEFAULTS_VER = 2
     private const val KEY_DEFAULTS_VER = "defaults_ver"
@@ -65,6 +120,17 @@ object HandlebarControlStore {
 
     fun setEnabled(context: Context, enabled: Boolean) {
         MotorcycleScope.putBoolean(preferences(context), context, ENABLED, enabled)
+    }
+
+    /** Scoped per motorcycle, like [isEnabled]: a remote's protocol is a property of that bike's
+     *  handlebar hardware, not of the phone. */
+    fun inputMode(context: Context): HandlebarInputMode {
+        val stored = MotorcycleScope.getString(preferences(context), context, INPUT_MODE, null)
+        return HandlebarInputMode.entries.firstOrNull { it.id == stored } ?: HandlebarInputMode.AVRCP
+    }
+
+    fun setInputMode(context: Context, mode: HandlebarInputMode) {
+        MotorcycleScope.putString(preferences(context), context, INPUT_MODE, mode.id)
     }
 
     /**

@@ -1274,4 +1274,9 @@
     <string name="legacy_several_manufacturers_ship_the_same_dashboard_so_49305d38">Several manufacturers ship the same dashboard software under their own branding, so this may well be your motorcycle. Continue only if you scanned it from your own dashboard.</string>
     <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
     <string name="legacy_use_these_details_52f852ac">Use these details</string>
+
+    <!-- Source: feature/controls/HandlebarHidCaptureService.kt (system Accessibility settings
+         description; rendered outside the app's own Compose runtime, so it is a plain string
+         resource rather than a motoHubText() call). -->
+    <string name="handlebar_hid_capture_description">Lets MOTO-HUB read D-pad presses from a Bluetooth HID handlebar remote while HID mode is selected in Handlebar buttons settings.</string>
 </resources>
