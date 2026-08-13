@@ -8,6 +8,14 @@ import org.junit.Test
 
 class YunmoProfileRoutingTest {
 
+    /** The X-Cape profile and its header-variant experiments; everything else must stay EasyConn. */
+    private val yunmoProfiles = setOf(
+        TBoxModelProfile.MORINI_XCAPE_1200,
+        TBoxModelProfile.MORINI_XCAPE_1200_B,
+        TBoxModelProfile.MORINI_XCAPE_1200_C,
+        TBoxModelProfile.MORINI_XCAPE_1200_D
+    )
+
     @Test
     fun theXCape1200ProfileRoutesToTheYunmoTransport() {
         assertEquals(TBoxTransportFamily.YUNMO, TBoxModelProfile.MORINI_XCAPE_1200.transportFamily)
@@ -16,7 +24,7 @@ class YunmoProfileRoutingTest {
     @Test
     fun onlyTheXCape1200RoutesToYunmoEveryOtherProfileKeepsItsWire() {
         TBoxModelProfile.entries
-            .filterNot { it == TBoxModelProfile.MORINI_XCAPE_1200 }
+            .filterNot { it in yunmoProfiles }
             .forEach { profile ->
                 assertNotEquals(
                     "${profile.name} must not accidentally route to Yunmo",
@@ -24,6 +32,23 @@ class YunmoProfileRoutingTest {
                     profile.transportFamily
                 )
             }
+    }
+
+    @Test
+    fun theHeaderVariantsCoverTheFullTwoByTwoAndDifferOnlyInThoseTwoFields() {
+        val corners = yunmoProfiles.map { it.yunmoTypedMediaHeader to it.yunmoFrameMetadata }.toSet()
+        assertEquals(
+            "the four variants must be the four combinations, with no duplicates",
+            setOf(false to false, true to false, true to true, false to true),
+            corners
+        )
+        // A variant that also changed geometry or rate would not be a controlled experiment.
+        yunmoProfiles.forEach { profile ->
+            assertEquals(10, profile.encoderFrameRate)
+            assertEquals(187, profile.virtualDisplayDpi)
+            assertEquals(TBoxTransportFamily.YUNMO, profile.transportFamily)
+            assertTrue("${profile.name} must drive the OEM map-nav path", profile.yunmoMapNavExperiment)
+        }
     }
 
     @Test
@@ -59,7 +84,7 @@ class YunmoProfileRoutingTest {
     fun mapNavStaysOffForEveryProfileThatIsNotTheXCape() {
         // The flag only ever applies to Yunmo sessions, and only this dash has evidence for it.
         TBoxModelProfile.entries
-            .filterNot { it == TBoxModelProfile.MORINI_XCAPE_1200 }
+            .filterNot { it in yunmoProfiles }
             .forEach { profile ->
                 assertFalse(
                     "${profile.name} must not enable the Yunmo map-nav path",

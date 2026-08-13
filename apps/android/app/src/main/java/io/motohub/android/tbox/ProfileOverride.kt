@@ -25,11 +25,31 @@ enum class ProfileOverride(
     CFDL16_MOTOPLAY_LANDSCAPE("cfdl16_motoplay_landscape", "MotoPlay Landscape (CFDL16)", "modelId 66660742, Wi-Fi Direct, non-touch"),
     CL_C450("cl_c450", "CL-C450", "Near-square panel, 544x512"),
     ZONTES_368G_TEST("zontes_368g_test", "Zontes 368G (test)", "Experiment for JCDZ dashes stuck on the QR page: indexed framing + 1s GOP"),
+    ZONTES_368G_TEST_B(
+        "zontes_368g_test_b",
+        "Zontes 368G (test B)",
+        "Same experiment with plain framing instead: the dash's ext byte decides, plus a 1s GOP"
+    ),
     KOVE_800X("kove_800x", "KOVE 800X (ThinkerRide)", "BLE-paired ThinkerRide dash, 600x1024 portrait"),
     MORINI_XCAPE_1200(
         "morini_xcape_1200",
         "X-Cape 1200 (Yunmo)",
         "Moto Morini X-Cape 1200 SoftAP dash on Yunmo :8200 (not the 649/700/Seiemmezzo)"
+    ),
+    MORINI_XCAPE_1200_B(
+        "morini_xcape_1200_b",
+        "X-Cape 1200 (test B)",
+        "Same dash, but each video frame is tagged with its own type instead of a fixed one"
+    ),
+    MORINI_XCAPE_1200_C(
+        "morini_xcape_1200_c",
+        "X-Cape 1200 (test C)",
+        "Test B plus the frame number and size written into every video frame header"
+    ),
+    MORINI_XCAPE_1200_D(
+        "morini_xcape_1200_d",
+        "X-Cape 1200 (test D)",
+        "Only the frame number and size added; frame tagging left as the standard profile"
     ),
     MOTO_HUB_SIMULATOR("moto_hub_simulator", "MOTO-HUB Simulator", "Development simulator profile");
 
@@ -45,8 +65,12 @@ enum class ProfileOverride(
         CFDL16_MOTOPLAY_LANDSCAPE -> TBoxModelProfile.CFDL16_MOTOPLAY_LANDSCAPE
         CL_C450 -> TBoxModelProfile.CL_C450
         ZONTES_368G_TEST -> TBoxModelProfile.ZONTES_368G_TEST
+        ZONTES_368G_TEST_B -> TBoxModelProfile.ZONTES_368G_TEST_B
         KOVE_800X -> TBoxModelProfile.KOVE_800X
         MORINI_XCAPE_1200 -> TBoxModelProfile.MORINI_XCAPE_1200
+        MORINI_XCAPE_1200_B -> TBoxModelProfile.MORINI_XCAPE_1200_B
+        MORINI_XCAPE_1200_C -> TBoxModelProfile.MORINI_XCAPE_1200_C
+        MORINI_XCAPE_1200_D -> TBoxModelProfile.MORINI_XCAPE_1200_D
         MOTO_HUB_SIMULATOR -> TBoxModelProfile.MOTO_HUB_SIMULATOR
     }
 

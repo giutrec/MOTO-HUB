@@ -133,7 +133,11 @@ class YunmoTransport(context: Context) : TBoxTransport {
             val mapNav = profile?.yunmoMapNavExperiment == true
 
             teardownSession()
-            val created = Session(mapNav)
+            val created = Session(
+                mapNavMode = mapNav,
+                typedMediaHeader = profile?.yunmoTypedMediaHeader == true,
+                frameMetadata = profile?.yunmoFrameMetadata == true
+            )
             synchronized(sessionLock) { session = created }
             try {
                 created.connect(activeLink, host)
@@ -147,6 +151,13 @@ class YunmoTransport(context: Context) : TBoxTransport {
                 // reply the dash is not going to send yet, then fall back to the profile geometry
                 // and encode a 1024x464 panel at 800x480. A dash that does answer immediately is
                 // unaffected: the reply is collected by the receive loop either way.
+                // Names the header variant in the log, so a field report saying "test C painted"
+                // can be matched to the wire settings without trusting anyone's memory.
+                created.phase(
+                    "header variant: media type=" +
+                        (if (created.typedMediaHeader) "derived per frame" else "fixed 2") +
+                        ", frame id/size=" + (if (created.frameMetadata) "written" else "zero")
+                )
                 created.sendDimQuery()
                 created.beginMode()
                 val report = created.awaitDimensions()
@@ -207,7 +218,11 @@ class YunmoTransport(context: Context) : TBoxTransport {
     }
 
     /** Everything owned by one dash connection, torn down as a unit. */
-    private inner class Session(private val mapNavMode: Boolean) {
+    private inner class Session(
+        private val mapNavMode: Boolean,
+        val typedMediaHeader: Boolean,
+        val frameMetadata: Boolean
+    ) {
         val fatalReported = AtomicBoolean(false)
         private val running = AtomicBoolean(false)
 
@@ -469,7 +484,19 @@ class YunmoTransport(context: Context) : TBoxTransport {
          */
         private fun writeFrame(accessUnit: ByteArray) {
             val id = frameId.getAndIncrement()
-            val frame = YunmoProtocol.encodeH264Ex(accessUnit, canvasWidth, canvasHeight, id)
+            val mediaType = if (typedMediaHeader) {
+                YunmoProtocol.mediaTypeFor(accessUnit)
+            } else {
+                YunmoProtocol.MEDIA_TYPE_LEGACY
+            }
+            val frame = YunmoProtocol.encodeH264Ex(
+                accessUnit,
+                canvasWidth,
+                canvasHeight,
+                id,
+                mediaType = mediaType,
+                omitMeta = !frameMetadata
+            )
             write(frame)
         }
 
@@ -514,6 +541,17 @@ class YunmoTransport(context: Context) : TBoxTransport {
                             pendingDim = dimension
                             phase("dash reported ${dimension.reportedWidth}x${dimension.reportedHeight}")
                             synchronized(dimLock) { dimLock.notifyAll() }
+                        } else if (frame.payload.isEmpty()) {
+                            // The OEM's `CTRL_RX a=51 b=0`, confirmed on our own wire: an empty OK
+                            // right after the canvas report. In the OEM capture this is what the
+                            // app answers with its 0xA1..0xAA control burst before the TFT paints.
+                            // We do not send that burst - its payloads have never been captured -
+                            // so this is recorded as the point where our flow and the OEM's part.
+                            phaseOnce("state-confirm") {
+                                "dash sent the empty OK state confirmation (0x33) - the point where " +
+                                    "the OEM app answers with its 0xA1..0xAA control burst, which we " +
+                                    "do not reproduce"
+                            }
                         } else {
                             logUnrecognised(frame, "OK frame that is not a canvas report")
                         }

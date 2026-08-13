@@ -52,9 +52,16 @@ object YunmoProtocol {
      */
     const val DISP_SIMPLE_NAVI = 5
 
-    // Media-type byte written at header offset [15]. The shipping build only ever sends LEGACY;
-    // the finer types exist in the reference but are dead code there, so the wire always sees 2.
+    // Media-type byte written at header offset [15].
+    //
+    // The reference implementation defines all four and derives them from the access unit's NAL
+    // type, then hardcodes LEGACY at its only call site — and that implementation has never been
+    // seen to paint a dash. Deriving the type is therefore a live hypothesis for the black TFT,
+    // not a refinement: see [mediaTypeFor] and TBoxModelProfile.yunmoTypedMediaHeader.
     const val MEDIA_TYPE_LEGACY = 2
+    const val MEDIA_TYPE_P = 1
+    const val MEDIA_TYPE_IDR = 5
+    const val MEDIA_TYPE_CODEC_CONFIG = 15
 
     /** Payload of the size query sent (with [CMD_DISPLAY_ALT]) before anything else. */
     val DIM_QUERY_PAYLOAD = byteArrayOf(1, 0, 1)
@@ -390,6 +397,21 @@ object YunmoProtocol {
     fun hex(bytes: ByteArray, max: Int = 24): String {
         val shown = bytes.take(max).joinToString(" ") { "%02x".format(it) }
         return if (bytes.size > max) "$shown … (${bytes.size}b)" else shown
+    }
+
+    /**
+     * The media type an access unit would be tagged with when the header is typed rather than
+     * fixed: codec config for parameter sets, IDR for a keyframe, P for a predicted picture, and
+     * LEGACY for anything else. Mirrors the reference implementation's own derivation.
+     */
+    fun mediaTypeFor(annexB: ByteArray): Int {
+        val nals = splitAnnexB(annexB)
+        if (nals.any { it.type == NAL_IDR }) return MEDIA_TYPE_IDR
+        return when (nals.firstOrNull { it.type != 0 }?.type) {
+            NAL_SPS, NAL_PPS -> MEDIA_TYPE_CODEC_CONFIG
+            NAL_P -> MEDIA_TYPE_P
+            else -> MEDIA_TYPE_LEGACY
+        }
     }
 
     /** Short human name for a NAL type, for the session phase log. */

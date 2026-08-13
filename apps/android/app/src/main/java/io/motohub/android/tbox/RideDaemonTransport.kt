@@ -170,10 +170,11 @@ class RideDaemonTransport(
             ).apply {
                 setSupportFunction(profile.advertisedSupportFunction.toLong())
                 setProactivePxcHeartbeatEnabled(profile.requiresProactivePxcHeartbeat)
-                // Only a dashboard that no profile claims is allowed to renegotiate the
-                // video frame format from its own supportExtendProtocol byte. Every
-                // recognised unit keeps the indexed framing it already displays.
-                setPlainVideoFramingAllowed(profile == TBoxModelProfile.GENERIC)
+                // Only a dashboard that no profile claims - or a framing experiment the rider
+                // pinned by hand - is allowed to renegotiate the video frame format from its
+                // own supportExtendProtocol byte. Every recognised unit keeps the indexed
+                // framing it already displays.
+                setPlainVideoFramingAllowed(profile.allowsPlainVideoFraming)
                 // The dash asks for wall-clock time over PXC and the daemon answers it,
                 // but only Android knows the zone: Go's local location on a device is
                 // UTC and carries no usable name. The id alone was not enough - it only
@@ -209,7 +210,7 @@ class RideDaemonTransport(
                     "package=${host.packageName}; profile=${profile.key}; " +
                     "supportFunction=${profile.advertisedSupportFunction}; " +
                     "proactivePxcHeartbeat=${profile.requiresProactivePxcHeartbeat}; " +
-                    "plainVideoFramingAllowed=${profile == TBoxModelProfile.GENERIC}; " +
+                    "plainVideoFramingAllowed=${profile.allowsPlainVideoFraming}; " +
                     "timeZone=${java.util.TimeZone.getDefault().id}."
             )
             host

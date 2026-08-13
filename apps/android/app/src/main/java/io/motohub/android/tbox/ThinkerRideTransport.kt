@@ -20,7 +20,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -109,6 +108,16 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
                     ThinkerRideProtocol.DEFAULT_VIDEO_WIDTH,
                     ThinkerRideProtocol.DEFAULT_VIDEO_HEIGHT
                 )
+            // The dash only acts on a mirror-start once its own pairing handshake has landed, so
+            // never fire one into a half-finished BLE session — that is what the AA retry path
+            // used to do, 8 ms after re-opening the link.
+            if (!active.ble.awaitPairConfirmation(PAIR_CONFIRM_TIMEOUT_MS)) {
+                ProjectionEventLog.record(
+                    "THINKERRIDE",
+                    "The dashboard has not confirmed Bluetooth pairing after " +
+                        "${PAIR_CONFIRM_TIMEOUT_MS}ms; sending mirror-start anyway."
+                )
+            }
             active.ble.sendMirrorStatus(true)
             ProjectionEventLog.record(
                 "THINKERRIDE",
@@ -134,10 +143,10 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
 
     override suspend fun stop() {
         val active = session ?: return
-        // Tell the dash the mirror ended so its UI returns to the stock dashboard, and give the
-        // two spaced BLE writes time to leave before the link is torn down under them.
+        // Tell the dash the mirror ended so its UI returns to the stock dashboard, and let the
+        // write queue actually drain before the link is torn down under it.
         runCatching { active.ble.sendMirrorStatus(false) }
-        delay(2 * ThinkerRideProtocol.BLE_WRITE_SPACING_MS + 100)
+        runCatching { active.ble.awaitWritesDrained(BLE_DRAIN_TIMEOUT_MS) }
         teardownSession()
         mutableEvents.tryEmit(TBoxEvent.Stopped)
     }
@@ -385,5 +394,11 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
         const val BLE_SCAN_TIMEOUT_MS = 20_000L
         const val CONTROL_CONNECT_TIMEOUT_MS = 20_000L
         const val VIDEO_CONNECT_TIMEOUT_MS = 15_000L
+
+        /** How long [start] waits for `send_pairresult` before going ahead regardless. */
+        const val PAIR_CONFIRM_TIMEOUT_MS = 6_000L
+
+        /** How long [stop] gives the mirror-stop packets to leave the phone. */
+        const val BLE_DRAIN_TIMEOUT_MS = 1_500L
     }
 }

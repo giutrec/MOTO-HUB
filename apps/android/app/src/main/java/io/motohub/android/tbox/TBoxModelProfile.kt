@@ -40,6 +40,14 @@ enum class TBoxModelProfile(
     /** Capability bitmask returned by the MediaCtrlScreenConf response. */
     val advertisedSupportFunction: Int = 0,
     /**
+     * Whether the dash's own `supportExtendProtocol` byte may pick the video frame format
+     * (RideDaemonTransport's `plainVideoFramingAllowed`): ext=0 drops the 4-byte frame index,
+     * ext=1 keeps it. Every recognised unit streams fine on the indexed framing it already
+     * displays, so this stays off for all of them; only [GENERIC] — which by definition claims
+     * nothing about the dash — and a framing experiment may hand the choice to the firmware.
+     */
+    val allowsPlainVideoFraming: Boolean = false,
+    /**
      * Firmware closes EasyConn unless both reverse PXC channel sockets receive traffic. Defaults
      * to false only so that a profile written for a dash known not to need it can stay silent;
      * anything unidentified goes through [GENERIC], which turns it on.
@@ -76,7 +84,28 @@ enum class TBoxModelProfile(
      * still-unconfirmed compatibility experiment for the X-Cape 1200, so it stays off unless a
      * profile opts in — a plain mirror is the safe default for any Yunmo dash.
      */
-    val yunmoMapNavExperiment: Boolean = false
+    val yunmoMapNavExperiment: Boolean = false,
+    /**
+     * Yunmo only: tag each video frame's header with the media type derived from its NAL content
+     * (codec config / IDR / P) instead of the fixed `2` every build so far has sent.
+     *
+     * Both settings this flag chooses between were inherited from a reference implementation that
+     * has never been seen to paint a dash, and neither has ever been observed on one that does.
+     * The reference defines all four media types and derives them, then hardcodes the fixed value
+     * at its only call site — so "fixed" is a guess, not a measurement. A field session on
+     * 2026-08-11 had the dash in the right mode, drawing its own overlay, acknowledging every
+     * frame and painting none of them, which is what a decoder does with frames it will not decode.
+     */
+    val yunmoTypedMediaHeader: Boolean = false,
+    /**
+     * Yunmo only: fill the header's frame id, width and height instead of leaving them zero.
+     *
+     * Same standing as [yunmoTypedMediaHeader]: the reference omits them, and the note that an
+     * older build filling them produced a black TFT came from an era when that build also asked
+     * for a canvas twice the panel's size, so the black screen has a simpler explanation and this
+     * field was probably never the cause.
+     */
+    val yunmoFrameMetadata: Boolean = false
 ) {
     MOTO_HUB_SIMULATOR(
         key = "moto_hub_simulator",
@@ -220,6 +249,31 @@ enum class TBoxModelProfile(
         encoderKeyframeIntervalSeconds = 1
     ),
     /**
+     * Second half of the same experiment, after the tester ran [ZONTES_368G_TEST] on the bike
+     * (field log 2026-08-11, app 1.1.58). That profile moved two things at once and the log says
+     * one of them is wrong: with the frame index kept, the dash — which reports
+     * `supportExtendProtocol=0` — closed the video socket itself after 6s (94 frames) and 17s
+     * (321 frames), where plain framing had held the full 30s of the dash's own no-video
+     * timeout. So the index is not what this firmware wants, and the 1s GOP is the only delta
+     * left untested. This profile is [GENERIC]'s wire format — the ext byte decides the framing —
+     * with the 1s GOP on top, so the two experiments can be compared one variable apart.
+     * Manual selection only, like its sibling: [score] never claims it.
+     */
+    ZONTES_368G_TEST_B(
+        key = "zontes_368g_test_b",
+        displayName = "Zontes 368G (test B)",
+        modelIds = emptySet(),
+        mapTilesRequireCellular = true,
+        supportsScreenTouch = false,
+        defaultAndroidAutoPreset = AndroidAutoVideoPreset.LANDSCAPE_1280X720,
+        fallbackTBoxVideoArea = TBoxEvent.VideoArea(1280, 535),
+        requiresSockAuth = false,
+        advertisedSupportFunction = 0,
+        allowsPlainVideoFraming = true,
+        requiresProactivePxcHeartbeat = true,
+        encoderKeyframeIntervalSeconds = 1
+    ),
+    /**
      * KOVE 800X (and, until they earn their own profiles, other ThinkerRide-family dashes): a
      * 600x1024 portrait TFT paired over BLE, reached through [TBoxTransportFamily.THINKERRIDE].
      * The ThinkerRide protocol never reports a panel size — the phone declares the stream
@@ -270,7 +324,10 @@ enum class TBoxModelProfile(
         // documents why: some firmware never initiates heartbeats and then drops the idle PXC
         // socket. Sending a keepalive to a dash that does not need one is harmless; not
         // sending one to a dash that does costs the whole session.
-        requiresProactivePxcHeartbeat = true
+        requiresProactivePxcHeartbeat = true,
+        // A dash no profile claims is the only one whose supportExtendProtocol byte we trust
+        // over our own default; see [allowsPlainVideoFraming].
+        allowsPlainVideoFraming = true
     ),
     /**
      * Moto Morini X-Cape 1200 — the one dash known to speak Yunmo over its `ML*` SoftAP at
@@ -313,6 +370,69 @@ enum class TBoxModelProfile(
         virtualDisplayDpi = 187,
         transportFamily = TBoxTransportFamily.YUNMO,
         yunmoMapNavExperiment = true
+    ),
+    /**
+     * X-Cape 1200, variant B: the video header carries the media type derived from each frame's
+     * NAL content instead of the fixed value [MORINI_XCAPE_1200] sends.
+     *
+     * B, C and D exist because the two header fields nobody has ever validated form a 2x2, and a
+     * dash that acknowledges every frame without painting cannot tell us which corner is right.
+     * Selecting between them from the Garage answers in one ride what a byte-level capture of the
+     * OEM app would answer in one line - whichever arrives first.
+     */
+    MORINI_XCAPE_1200_B(
+        key = "morini_xcape_1200_b",
+        displayName = "Moto Morini X-Cape 1200 (test B)",
+        modelIds = emptySet(),
+        mapTilesRequireCellular = true,
+        supportsScreenTouch = false,
+        defaultAndroidAutoPreset = AndroidAutoVideoPreset.LANDSCAPE_800X480,
+        fallbackTBoxVideoArea = TBoxEvent.VideoArea(800, 480),
+        requiresSockAuth = false,
+        advertisedSupportFunction = 0,
+        encoderFrameRate = 10,
+        encoderBitRate = 2_000_000,
+        virtualDisplayDpi = 187,
+        transportFamily = TBoxTransportFamily.YUNMO,
+        yunmoMapNavExperiment = true,
+        yunmoTypedMediaHeader = true
+    ),
+    /** X-Cape 1200, variant C: typed media header *and* frame id / width / height filled in. */
+    MORINI_XCAPE_1200_C(
+        key = "morini_xcape_1200_c",
+        displayName = "Moto Morini X-Cape 1200 (test C)",
+        modelIds = emptySet(),
+        mapTilesRequireCellular = true,
+        supportsScreenTouch = false,
+        defaultAndroidAutoPreset = AndroidAutoVideoPreset.LANDSCAPE_800X480,
+        fallbackTBoxVideoArea = TBoxEvent.VideoArea(800, 480),
+        requiresSockAuth = false,
+        advertisedSupportFunction = 0,
+        encoderFrameRate = 10,
+        encoderBitRate = 2_000_000,
+        virtualDisplayDpi = 187,
+        transportFamily = TBoxTransportFamily.YUNMO,
+        yunmoMapNavExperiment = true,
+        yunmoTypedMediaHeader = true,
+        yunmoFrameMetadata = true
+    ),
+    /** X-Cape 1200, variant D: the fixed media type kept, but frame id / width / height filled in. */
+    MORINI_XCAPE_1200_D(
+        key = "morini_xcape_1200_d",
+        displayName = "Moto Morini X-Cape 1200 (test D)",
+        modelIds = emptySet(),
+        mapTilesRequireCellular = true,
+        supportsScreenTouch = false,
+        defaultAndroidAutoPreset = AndroidAutoVideoPreset.LANDSCAPE_800X480,
+        fallbackTBoxVideoArea = TBoxEvent.VideoArea(800, 480),
+        requiresSockAuth = false,
+        advertisedSupportFunction = 0,
+        encoderFrameRate = 10,
+        encoderBitRate = 2_000_000,
+        virtualDisplayDpi = 187,
+        transportFamily = TBoxTransportFamily.YUNMO,
+        yunmoMapNavExperiment = true,
+        yunmoFrameMetadata = true
     );
 
     companion object {
@@ -481,16 +601,17 @@ enum class TBoxModelProfile(
                     if (identity.contains("moto-hub") || identity.contains("moto hub")) points += 4
                     points
                 }
-                // Manual-selection experiment: detection must never claim it, or the riders whose
-                // Zontes dashes already stream fine would silently change wire format.
+                // Manual-selection experiments: detection must never claim them, or the riders
+                // whose Zontes dashes already stream fine would silently change wire format.
                 ZONTES_368G_TEST -> 0
+                ZONTES_368G_TEST_B -> 0
                 // ThinkerRide dashes never produce CLIENT_INFO (an EasyConn concept), so scoring
                 // has nothing to say; they resolve by the QR's pseudo modelId or a manual pin.
                 KOVE_800X -> 0
                 // Yunmo dashes never produce CLIENT_INFO either, and the X-Cape 1200 shares its
                 // QR ProductID with EasyConn Morinis, so detection must never claim it: it is a
                 // manual pin only.
-                MORINI_XCAPE_1200 -> 0
+                MORINI_XCAPE_1200, MORINI_XCAPE_1200_B, MORINI_XCAPE_1200_C, MORINI_XCAPE_1200_D -> 0
                 GENERIC -> 0
             }
         }
