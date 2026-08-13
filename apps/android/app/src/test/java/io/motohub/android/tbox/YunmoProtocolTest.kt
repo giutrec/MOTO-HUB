@@ -35,8 +35,9 @@ class YunmoProtocolTest {
         assertEquals(7, start[0][8].toInt())
         assertEquals(YunmoProtocol.CMD_DISPLAY, start[1][4].toInt() and 0xFF)
         assertEquals(7, start[1][8].toInt())
+        // The OEM app's sendExitDisplay writes A0{2} then A0{5}; an earlier guess used 3 here.
         val stop = YunmoProtocol.stopFrames()
-        assertEquals(3, stop[0][8].toInt())
+        assertEquals(2, stop[0][8].toInt())
         assertEquals(5, stop[1][8].toInt())
         assertEquals(6, YunmoProtocol.mapNaviFrame()[8].toInt())
     }

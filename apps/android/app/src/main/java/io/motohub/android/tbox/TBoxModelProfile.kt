@@ -84,28 +84,7 @@ enum class TBoxModelProfile(
      * still-unconfirmed compatibility experiment for the X-Cape 1200, so it stays off unless a
      * profile opts in — a plain mirror is the safe default for any Yunmo dash.
      */
-    val yunmoMapNavExperiment: Boolean = false,
-    /**
-     * Yunmo only: tag each video frame's header with the media type derived from its NAL content
-     * (codec config / IDR / P) instead of the fixed `2` every build so far has sent.
-     *
-     * Both settings this flag chooses between were inherited from a reference implementation that
-     * has never been seen to paint a dash, and neither has ever been observed on one that does.
-     * The reference defines all four media types and derives them, then hardcodes the fixed value
-     * at its only call site — so "fixed" is a guess, not a measurement. A field session on
-     * 2026-08-11 had the dash in the right mode, drawing its own overlay, acknowledging every
-     * frame and painting none of them, which is what a decoder does with frames it will not decode.
-     */
-    val yunmoTypedMediaHeader: Boolean = false,
-    /**
-     * Yunmo only: fill the header's frame id, width and height instead of leaving them zero.
-     *
-     * Same standing as [yunmoTypedMediaHeader]: the reference omits them, and the note that an
-     * older build filling them produced a black TFT came from an era when that build also asked
-     * for a canvas twice the panel's size, so the black screen has a simpler explanation and this
-     * field was probably never the cause.
-     */
-    val yunmoFrameMetadata: Boolean = false
+    val yunmoMapNavExperiment: Boolean = false
 ) {
     MOTO_HUB_SIMULATOR(
         key = "moto_hub_simulator",
@@ -335,25 +314,22 @@ enum class TBoxModelProfile(
      *
      * [modelIds] is deliberately empty: the pairing QR's `ProductID=00297` is shared with the
      * X-Cape 649 / 700 and the Seiemmezzo, which speak EasyConn, so keying this profile off that
-     * id would break those bikes. It is reachable only by a manual [ProfileOverride] pin until an
-     * owner's CLIENT_INFO (or a distinguishing SSID) can tell the 1200 apart. Geometry is a
-     * fallback only — the Yunmo dim-query reports the panel size directly (an X-Cape answers
-     * 1024x464); 800x480 backstops a dash that never answers.
+     * id would break those bikes. It is reachable by a manual [ProfileOverride] pin, or by the
+     * Yunmo probe in SelectingTBoxTransport when EasyConn discovery finds nothing.
      *
-     * Map-nav is ON here, unlike any other Yunmo dash would default to. An owner's ADB capture of
-     * the OEM app (Ride MO 1.0.23, 2026-08-07) showed it never mirrors this dash: the TFT menu
-     * offers two *navigation* presentations (compact arrows / full-screen map) and the OEM always
-     * drives the navigation path, latching the TFT's chosen mode at navigation startup. A plain
-     * mirror is therefore unlikely to be a mode this firmware has at all.
+     * Every value here is now read from the OEM app rather than inferred. Ride MO 1.0.23's
+     * GoogleMediaCodecH264LiveThread - the class its European build actually runs, decompiled
+     * 2026-08-12 - encodes at 10 fps, 2 Mbps, with a **2-second GOP**, and its Trans_Ins_Ex writes
+     * a media header whose only non-zero field is the fixed type byte.
      *
-     * The frame rate, bitrate and dpi are what that same capture measured the OEM doing. The dpi is
-     * not cosmetic — it is the density of the OEM `NaviVirtualDisplay`, and rendering this canvas
-     * at a modern phone's own density instead sizes the UI for a screen three times as wide.
+     * The GOP is the correction that matters. This profile was all-intra on the reasoning that a
+     * dropped P-frame corrupts the picture until the next keyframe; but all-intra makes every
+     * frame a keyframe, and every keyframe is split into three wire frames, so the dash was being
+     * sent roughly three times the traffic in a shape the OEM never produces. Field sessions with
+     * that stream had the dash acknowledging every frame and painting none of them.
      *
-     * The OEM's 2-second GOP is deliberately NOT copied. [YunmoTransport.offerAccessUnit] drops an
-     * access unit when one is already queued behind a slow socket, and a dropped P-frame corrupts
-     * the picture until the next keyframe — the smearing an earlier GOP experiment produced on a
-     * bike. All-intra costs bitrate and nothing else, which at 10 fps this dash can afford.
+     * The dpi is not cosmetic: it is the density of the OEM `NaviVirtualDisplay`, and rendering
+     * this canvas at a modern phone's own density sizes the UI for a screen three times as wide.
      */
     MORINI_XCAPE_1200(
         key = "morini_xcape_1200",
@@ -365,74 +341,12 @@ enum class TBoxModelProfile(
         fallbackTBoxVideoArea = TBoxEvent.VideoArea(800, 480),
         requiresSockAuth = false,
         advertisedSupportFunction = 0,
+        encoderKeyframeIntervalSeconds = 2,
         encoderFrameRate = 10,
         encoderBitRate = 2_000_000,
         virtualDisplayDpi = 187,
         transportFamily = TBoxTransportFamily.YUNMO,
         yunmoMapNavExperiment = true
-    ),
-    /**
-     * X-Cape 1200, variant B: the video header carries the media type derived from each frame's
-     * NAL content instead of the fixed value [MORINI_XCAPE_1200] sends.
-     *
-     * B, C and D exist because the two header fields nobody has ever validated form a 2x2, and a
-     * dash that acknowledges every frame without painting cannot tell us which corner is right.
-     * Selecting between them from the Garage answers in one ride what a byte-level capture of the
-     * OEM app would answer in one line - whichever arrives first.
-     */
-    MORINI_XCAPE_1200_B(
-        key = "morini_xcape_1200_b",
-        displayName = "Moto Morini X-Cape 1200 (test B)",
-        modelIds = emptySet(),
-        mapTilesRequireCellular = true,
-        supportsScreenTouch = false,
-        defaultAndroidAutoPreset = AndroidAutoVideoPreset.LANDSCAPE_800X480,
-        fallbackTBoxVideoArea = TBoxEvent.VideoArea(800, 480),
-        requiresSockAuth = false,
-        advertisedSupportFunction = 0,
-        encoderFrameRate = 10,
-        encoderBitRate = 2_000_000,
-        virtualDisplayDpi = 187,
-        transportFamily = TBoxTransportFamily.YUNMO,
-        yunmoMapNavExperiment = true,
-        yunmoTypedMediaHeader = true
-    ),
-    /** X-Cape 1200, variant C: typed media header *and* frame id / width / height filled in. */
-    MORINI_XCAPE_1200_C(
-        key = "morini_xcape_1200_c",
-        displayName = "Moto Morini X-Cape 1200 (test C)",
-        modelIds = emptySet(),
-        mapTilesRequireCellular = true,
-        supportsScreenTouch = false,
-        defaultAndroidAutoPreset = AndroidAutoVideoPreset.LANDSCAPE_800X480,
-        fallbackTBoxVideoArea = TBoxEvent.VideoArea(800, 480),
-        requiresSockAuth = false,
-        advertisedSupportFunction = 0,
-        encoderFrameRate = 10,
-        encoderBitRate = 2_000_000,
-        virtualDisplayDpi = 187,
-        transportFamily = TBoxTransportFamily.YUNMO,
-        yunmoMapNavExperiment = true,
-        yunmoTypedMediaHeader = true,
-        yunmoFrameMetadata = true
-    ),
-    /** X-Cape 1200, variant D: the fixed media type kept, but frame id / width / height filled in. */
-    MORINI_XCAPE_1200_D(
-        key = "morini_xcape_1200_d",
-        displayName = "Moto Morini X-Cape 1200 (test D)",
-        modelIds = emptySet(),
-        mapTilesRequireCellular = true,
-        supportsScreenTouch = false,
-        defaultAndroidAutoPreset = AndroidAutoVideoPreset.LANDSCAPE_800X480,
-        fallbackTBoxVideoArea = TBoxEvent.VideoArea(800, 480),
-        requiresSockAuth = false,
-        advertisedSupportFunction = 0,
-        encoderFrameRate = 10,
-        encoderBitRate = 2_000_000,
-        virtualDisplayDpi = 187,
-        transportFamily = TBoxTransportFamily.YUNMO,
-        yunmoMapNavExperiment = true,
-        yunmoFrameMetadata = true
     );
 
     companion object {
@@ -611,7 +525,7 @@ enum class TBoxModelProfile(
                 // Yunmo dashes never produce CLIENT_INFO either, and the X-Cape 1200 shares its
                 // QR ProductID with EasyConn Morinis, so detection must never claim it: it is a
                 // manual pin only.
-                MORINI_XCAPE_1200, MORINI_XCAPE_1200_B, MORINI_XCAPE_1200_C, MORINI_XCAPE_1200_D -> 0
+                MORINI_XCAPE_1200 -> 0
                 GENERIC -> 0
             }
         }

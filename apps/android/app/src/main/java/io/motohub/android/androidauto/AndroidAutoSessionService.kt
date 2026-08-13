@@ -38,6 +38,7 @@ import io.motohub.android.tbox.ProfileOverride
 import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxNetworkEvent
 import io.motohub.android.tbox.TBoxModelProfile
+import io.motohub.android.tbox.TBoxTransportFamily
 import io.motohub.android.tbox.TBoxSessionHandle
 import io.motohub.android.tbox.TBoxSessionRegistry
 import io.motohub.android.tbox.TBoxStreamingLocks
@@ -487,7 +488,11 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
             bitRate = quality.bitrateFor(
                 sessionModelProfile.encoderBitRate ?: configuration.encoderProfile.bitRate
             ),
-            keyframeIntervalSeconds = sessionModelProfile.encoderKeyframeIntervalSeconds
+            keyframeIntervalSeconds = sessionModelProfile.encoderKeyframeIntervalSeconds,
+            // Yunmo's split framing needs real keyframes to split; intra refresh would make them
+            // rare. No other family sets this, so every EasyConn dash keeps intra refresh.
+            plainGopWithoutIntraRefresh =
+                sessionModelProfile.transportFamily == TBoxTransportFamily.YUNMO
         )
         val negotiatedArea = configuration.rawArea
         val actualGeometry = DisplayGeometry(encoderProfile.width, encoderProfile.height)

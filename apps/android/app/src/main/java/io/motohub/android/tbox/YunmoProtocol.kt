@@ -38,30 +38,26 @@ object YunmoProtocol {
     const val CMD_DISPLAY = 0xA0
     const val CMD_DISPLAY_ALT = 0xB0
 
-    // DISPLAY payload opcodes (a single byte).
+    // DISPLAY payload opcodes (a single byte). The teardown pair is `A0{2}` then `A0{5}`, matching
+    // the OEM Ride MO app's sendExitDisplay (MediaCodecH264SplitLiveThread), not the `A0{3}` an
+    // earlier reverse-engineering guess used.
     const val DISP_START_MIRROR = 7
     const val DISP_MAP_NAVI = 6
-    const val DISP_EXIT_A = 3
+    const val DISP_EXIT_A = 2
     const val DISP_EXIT_B = 5
 
     /**
      * The dash switched to its own compact turn-arrow guidance, which it draws itself — anything
-     * pushed while it is in this state is not painted. **Deliberately the same value as
-     * [DISP_EXIT_B]**: outbound the pair `A0{3}`/`A0{5}` is the teardown, inbound a lone `5` means
-     * SimpleNavi. Direction disambiguates them; nothing else does.
+     * pushed while it is in this state is not painted. Same value as [DISP_EXIT_B]; direction
+     * disambiguates them (outbound in the teardown pair, inbound it means SimpleNavi).
      */
     const val DISP_SIMPLE_NAVI = 5
 
-    // Media-type byte written at header offset [15].
-    //
-    // The reference implementation defines all four and derives them from the access unit's NAL
-    // type, then hardcodes LEGACY at its only call site — and that implementation has never been
-    // seen to paint a dash. Deriving the type is therefore a live hypothesis for the black TFT,
-    // not a refinement: see [mediaTypeFor] and TBoxModelProfile.yunmoTypedMediaHeader.
+    // Media-type byte written at header offset [15]. Always 2. The OEM app's own Trans_Ins_Ex only
+    // ever writes 2 here (CommunicationService, decompiled 2026-08-12), and a field experiment that
+    // derived a per-frame type instead made the dash stop acking frames entirely (1.1.59 variants
+    // B/C). So this is measured now, not inherited: the byte is fixed.
     const val MEDIA_TYPE_LEGACY = 2
-    const val MEDIA_TYPE_P = 1
-    const val MEDIA_TYPE_IDR = 5
-    const val MEDIA_TYPE_CODEC_CONFIG = 15
 
     /** Payload of the size query sent (with [CMD_DISPLAY_ALT]) before anything else. */
     val DIM_QUERY_PAYLOAD = byteArrayOf(1, 0, 1)
@@ -397,21 +393,6 @@ object YunmoProtocol {
     fun hex(bytes: ByteArray, max: Int = 24): String {
         val shown = bytes.take(max).joinToString(" ") { "%02x".format(it) }
         return if (bytes.size > max) "$shown … (${bytes.size}b)" else shown
-    }
-
-    /**
-     * The media type an access unit would be tagged with when the header is typed rather than
-     * fixed: codec config for parameter sets, IDR for a keyframe, P for a predicted picture, and
-     * LEGACY for anything else. Mirrors the reference implementation's own derivation.
-     */
-    fun mediaTypeFor(annexB: ByteArray): Int {
-        val nals = splitAnnexB(annexB)
-        if (nals.any { it.type == NAL_IDR }) return MEDIA_TYPE_IDR
-        return when (nals.firstOrNull { it.type != 0 }?.type) {
-            NAL_SPS, NAL_PPS -> MEDIA_TYPE_CODEC_CONFIG
-            NAL_P -> MEDIA_TYPE_P
-            else -> MEDIA_TYPE_LEGACY
-        }
     }
 
     /** Short human name for a NAL type, for the session phase log. */

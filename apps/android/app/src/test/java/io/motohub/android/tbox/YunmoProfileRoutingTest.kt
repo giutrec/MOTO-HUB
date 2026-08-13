@@ -9,12 +9,7 @@ import org.junit.Test
 class YunmoProfileRoutingTest {
 
     /** The X-Cape profile and its header-variant experiments; everything else must stay EasyConn. */
-    private val yunmoProfiles = setOf(
-        TBoxModelProfile.MORINI_XCAPE_1200,
-        TBoxModelProfile.MORINI_XCAPE_1200_B,
-        TBoxModelProfile.MORINI_XCAPE_1200_C,
-        TBoxModelProfile.MORINI_XCAPE_1200_D
-    )
+    private val yunmoProfiles = setOf(TBoxModelProfile.MORINI_XCAPE_1200)
 
     @Test
     fun theXCape1200ProfileRoutesToTheYunmoTransport() {
@@ -35,20 +30,14 @@ class YunmoProfileRoutingTest {
     }
 
     @Test
-    fun theHeaderVariantsCoverTheFullTwoByTwoAndDifferOnlyInThoseTwoFields() {
-        val corners = yunmoProfiles.map { it.yunmoTypedMediaHeader to it.yunmoFrameMetadata }.toSet()
-        assertEquals(
-            "the four variants must be the four combinations, with no duplicates",
-            setOf(false to false, true to false, true to true, false to true),
-            corners
-        )
-        // A variant that also changed geometry or rate would not be a controlled experiment.
-        yunmoProfiles.forEach { profile ->
-            assertEquals(10, profile.encoderFrameRate)
-            assertEquals(187, profile.virtualDisplayDpi)
-            assertEquals(TBoxTransportFamily.YUNMO, profile.transportFamily)
-            assertTrue("${profile.name} must drive the OEM map-nav path", profile.yunmoMapNavExperiment)
-        }
+    fun theProfileMatchesTheOemEncoderSettings() {
+        // Read from Ride MO 1.0.23's GoogleMediaCodecH264LiveThread, not inferred.
+        val profile = TBoxModelProfile.MORINI_XCAPE_1200
+        assertEquals(10, profile.encoderFrameRate)
+        assertEquals(2_000_000, profile.encoderBitRate)
+        assertEquals("the OEM encodes a 2-second GOP, not all-intra", 2, profile.encoderKeyframeIntervalSeconds)
+        assertEquals(187, profile.virtualDisplayDpi)
+        assertTrue(profile.yunmoMapNavExperiment)
     }
 
     @Test

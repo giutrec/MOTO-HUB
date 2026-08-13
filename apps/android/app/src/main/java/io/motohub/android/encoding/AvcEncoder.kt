@@ -20,7 +20,13 @@ data class EncoderProfile(
      *  A positive value enables a GOP of that many seconds; P-frames then carry most of the
      *  stream, so the input surface must be paced upstream because P-frames cannot be
      *  dropped mid-GOP without corrupting the decode until the next keyframe. */
-    val keyframeIntervalSeconds: Int = 0
+    val keyframeIntervalSeconds: Int = 0,
+    /** Keeps a GOP stream on plain periodic IDRs instead of the intra-refresh this encoder
+     *  normally prefers. Only a transport whose own framing depends on seeing real keyframes
+     *  should set it: Yunmo splits each keyframe into standalone SPS / PPS / picture frames, and
+     *  intra refresh makes full keyframes rare enough that the split path would seldom run. The
+     *  dash it targets is also known to receive a plain 2-second GOP from its OEM app. */
+    val plainGopWithoutIntraRefresh: Boolean = false
 ) {
     companion object {
         fun forTBoxArea(width: Int, height: Int): EncoderProfile = EncoderProfile(
@@ -96,11 +102,13 @@ class AvcEncoder(
             // refresh removes the burst entirely: intra macroblocks are spread over a full
             // refresh cycle, every frame stays route-sized, and a lost frame heals itself
             // progressively within one cycle without any recovery signaling.
-            val useIntraRefresh = profile.keyframeIntervalSeconds > 0 && runCatching {
-                capabilities?.isFeatureSupported(
-                    MediaCodecInfo.CodecCapabilities.FEATURE_IntraRefresh
-                )
-            }.getOrNull() == true
+            val useIntraRefresh = profile.keyframeIntervalSeconds > 0 &&
+                !profile.plainGopWithoutIntraRefresh &&
+                runCatching {
+                    capabilities?.isFeatureSupported(
+                        MediaCodecInfo.CodecCapabilities.FEATURE_IntraRefresh
+                    )
+                }.getOrNull() == true
             if (profile.keyframeIntervalSeconds > 0) {
                 ProjectionEventLog.record(
                     "ENCODER",

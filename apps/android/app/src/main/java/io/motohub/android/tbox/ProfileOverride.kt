@@ -36,21 +36,6 @@ enum class ProfileOverride(
         "X-Cape 1200 (Yunmo)",
         "Moto Morini X-Cape 1200 SoftAP dash on Yunmo :8200 (not the 649/700/Seiemmezzo)"
     ),
-    MORINI_XCAPE_1200_B(
-        "morini_xcape_1200_b",
-        "X-Cape 1200 (test B)",
-        "Same dash, but each video frame is tagged with its own type instead of a fixed one"
-    ),
-    MORINI_XCAPE_1200_C(
-        "morini_xcape_1200_c",
-        "X-Cape 1200 (test C)",
-        "Test B plus the frame number and size written into every video frame header"
-    ),
-    MORINI_XCAPE_1200_D(
-        "morini_xcape_1200_d",
-        "X-Cape 1200 (test D)",
-        "Only the frame number and size added; frame tagging left as the standard profile"
-    ),
     MOTO_HUB_SIMULATOR("moto_hub_simulator", "MOTO-HUB Simulator", "Development simulator profile");
 
     fun resolve(): TBoxModelProfile? = when (this) {
@@ -68,9 +53,6 @@ enum class ProfileOverride(
         ZONTES_368G_TEST_B -> TBoxModelProfile.ZONTES_368G_TEST_B
         KOVE_800X -> TBoxModelProfile.KOVE_800X
         MORINI_XCAPE_1200 -> TBoxModelProfile.MORINI_XCAPE_1200
-        MORINI_XCAPE_1200_B -> TBoxModelProfile.MORINI_XCAPE_1200_B
-        MORINI_XCAPE_1200_C -> TBoxModelProfile.MORINI_XCAPE_1200_C
-        MORINI_XCAPE_1200_D -> TBoxModelProfile.MORINI_XCAPE_1200_D
         MOTO_HUB_SIMULATOR -> TBoxModelProfile.MOTO_HUB_SIMULATOR
     }
 

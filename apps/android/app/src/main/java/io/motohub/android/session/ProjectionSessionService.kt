@@ -28,6 +28,7 @@ import io.motohub.android.feature.settings.MotoHubSettings
 import io.motohub.android.tbox.TBoxEvent
 import io.motohub.android.tbox.TBoxLinkResolver
 import io.motohub.android.tbox.TBoxModelProfile
+import io.motohub.android.tbox.TBoxTransportFamily
 import io.motohub.android.tbox.ProfileOverride
 import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxNetworkEvent
@@ -192,7 +193,11 @@ class ProjectionSessionService : Service() {
             bitRate = quality.bitrateFor(
                 modelProfile.encoderBitRate ?: configuration.encoderProfile.bitRate
             ),
-            keyframeIntervalSeconds = modelProfile.encoderKeyframeIntervalSeconds
+            keyframeIntervalSeconds = modelProfile.encoderKeyframeIntervalSeconds,
+            // Yunmo's split framing needs real keyframes to split; intra refresh would make them
+            // rare. No other family sets this, so every EasyConn dash keeps intra refresh.
+            plainGopWithoutIntraRefresh =
+                modelProfile.transportFamily == TBoxTransportFamily.YUNMO
         )
         ProjectionEventLog.record("T-BOX", "Handshake completed.")
         if (configuration.source == TBoxVideoAreaSource.LIVE) {
