@@ -1,0 +1,1536 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Locale: fr-FR. Translated from the en-US catalogue, which stays the source of truth. -->
+    <!-- Application identity -->
+    <string name="app_name">MOTO-HUB</string>
+
+    <!-- Settings > General > Language. Names are kept in their native form. -->
+    <string name="language_system_default">Paramètre du système</string>
+    <string name="language_english">English</string>
+    <string name="language_italian">Italiano</string>
+    <string name="language_portuguese">Português</string>
+    <string name="language_korean">한국어 (대한민국)</string>
+    <string name="language_french">Français</string>
+    <string name="language_title">Langue</string>
+    <string name="language_description">Choisissez la langue utilisée par MOTO-HUB</string>
+    <string name="language_detail_description">MOTO-HUB suit la langue du téléphone par défaut. Choisissez une langue ci-dessous pour la remplacer dans cette application.</string>
+
+    <!-- Settings main page -->
+    <string name="settings_configuration">CONFIGURATION</string>
+    <string name="settings_title">Réglages</string>
+    <string name="settings_general">Général</string>
+    <string name="settings_general_description">Langue, reprise transparente et comportement de l\'application</string>
+
+    <!-- Settings > General -->
+    <string name="settings_general_title">Général</string>
+    <string name="settings_check_updates_on_launch">Vérifier les mises à jour au démarrage</string>
+    <string name="settings_check_updates_on_launch_description">Vérifier automatiquement les versions GitHub, au plus une fois toutes les 24 heures</string>
+    <string name="settings_enable_seamless_resume">Activer la reprise transparente</string>
+    <string name="settings_seamless_resume_enabled_description">Android Auto peut reprendre après une longue interruption du T-Box, écran éteint</string>
+    <string name="settings_seamless_resume_disabled_description">Autoriser Android Auto à reprendre en arrière-plan quand la moto revient ; autorisation demandée à la première activation</string>
+
+    <!-- Settings option labels. These are also used by the route and projection pickers. -->
+    <string name="video_quality_smoother">Plus fluide</string>
+    <string name="video_quality_smoother_description">Débit plus faible, moins de chaleur et de charge réseau.</string>
+    <string name="video_quality_balanced">Équilibré</string>
+    <string name="video_quality_balanced_description">Qualité MOTO-HUB actuelle, valeur recommandée.</string>
+    <string name="video_quality_sharper">Plus net</string>
+    <string name="video_quality_sharper_description">Débit plus élevé pour des cartes et un texte plus nets.</string>
+    <string name="video_power_auto">Auto</string>
+    <string name="video_power_auto_description">Adapter le débit et la fréquence d\'images à la température du téléphone et à la qualité du Wi-Fi.</string>
+    <string name="video_power_smooth">Fluide</string>
+    <string name="video_power_smooth_description">30 IPS avec la qualité vidéo sélectionnée.</string>
+    <string name="video_power_balanced">Équilibré</string>
+    <string name="video_power_balanced_description">24 IPS stables avec la qualité vidéo sélectionnée.</string>
+    <string name="video_power_saver">Économe</string>
+    <string name="video_power_saver_description">20 IPS pour réduire la chaleur et la consommation.</string>
+    <string name="android_auto_resolution_auto">Auto</string>
+    <string name="android_auto_resolution_auto_description">Conserver l\'orientation automatique de MOTO-HUB d\'après la géométrie apprise du T-Box.</string>
+    <string name="android_auto_resolution_landscape_sd">Paysage 800 x 480</string>
+    <string name="android_auto_resolution_landscape_sd_description">Source Android Auto paysage standard.</string>
+    <string name="android_auto_resolution_landscape_hd">Paysage 1280 x 720</string>
+    <string name="android_auto_resolution_landscape_hd_description">Source paysage HD plus nette, avec une charge plus élevée pour le téléphone.</string>
+    <string name="android_auto_resolution_portrait_sd">Portrait 720 x 1280</string>
+    <string name="android_auto_resolution_portrait_sd_description">Source Android Auto portrait standard.</string>
+    <string name="android_auto_resolution_portrait_hd">Portrait 1080 x 1920</string>
+    <string name="android_auto_resolution_portrait_hd_description">Source portrait HD plus nette, avec une charge plus élevée pour le téléphone.</string>
+    <string name="android_auto_insets_auto">Auto</string>
+    <string name="android_auto_insets_auto_description">Utiliser toute la source Android Auto ; la zone de projection du T-Box n\'ajoute aucune marge AA.</string>
+    <string name="android_auto_insets_manual">Manuel</string>
+    <string name="android_auto_insets_manual_description">Annoncer à Android Auto les marges de sécurité TFT propres à la moto.</string>
+    <string name="distance_units_kilometers">Kilomètres</string>
+    <string name="distance_units_kilometers_description">Distances et vitesses en km et km/h.</string>
+    <string name="distance_units_miles">Miles</string>
+    <string name="distance_units_miles_description">Distances et vitesses en mi et mph.</string>
+    <string name="route_preference_fastest">Le plus rapide</string>
+    <string name="route_preference_fastest_description">Itinéraire le plus rapide, autoroutes autorisées.</string>
+    <string name="route_preference_scenic">Panoramique</string>
+    <string name="route_preference_scenic_description">Privilégie les petites routes et évite les autoroutes.</string>
+
+    <!-- Core/Pro bridge notification -->
+    <string name="core_bridge_channel_name">Passerelle MOTO-HUB Core</string>
+    <string name="core_bridge_channel_description">Maintient la connexion au T-Box tant que MOTO-HUB Pro l\'utilise</string>
+    <string name="core_bridge_notification_title">MOTO-HUB Core est actif</string>
+    <string name="core_bridge_notification_text">Au service de MOTO-HUB Pro.</string>
+
+    <!-- Projection notifications -->
+    <string name="projection_channel_name">Projection MOTO-HUB</string>
+    <string name="projection_channel_description">État de la diffusion vers l\'écran de la moto</string>
+    <string name="projection_notification_title">MOTO-HUB est actif</string>
+    <string name="projection_notification_text">La projection d\'écran est active.</string>
+    <string name="projection_notification_dimmed_text">Projection active, écran du téléphone atténué.</string>
+    <string name="stop_projection">Arrêter</string>
+    <string name="dim_phone_display">Atténuer l\'écran</string>
+    <string name="restore_phone_display">Rétablir l\'écran</string>
+
+    <!-- Android Auto notifications -->
+    <string name="android_auto_channel_name">MOTO-HUB Android Auto</string>
+    <string name="android_auto_notification_title">Session MOTO-HUB Android Auto</string>
+    <string name="android_auto_notification_text">Session active. Ouvrez MOTO-HUB pour l\'état de projection en direct.</string>
+    <string name="stop_android_auto">Arrêter Android Auto</string>
+
+    <!-- Ride Dashboard notifications -->
+    <string name="ride_dashboard_channel_name">MOTO-HUB Ride Dashboard</string>
+    <string name="ride_dashboard_channel_description">État de la diffusion des données de roulage</string>
+    <string name="ride_dashboard_notification_title">MOTO-HUB Ride Dashboard</string>
+    <string name="ride_dashboard_notification_text">La télémétrie GPS et la diffusion du tableau de bord sont actives.</string>
+    <string name="stop_ride_dashboard">Arrêter le tableau de bord</string>
+    <!-- Source: MainActivity.kt -->
+    <string name="legacy_moto_hub_diagnostics_ba6420b1">Diagnostics MOTO-HUB</string>
+    <!-- Source: feature/about/AboutScreen.kt -->
+    <string name="legacy_about_the_project_2feef1f7">À PROPOS DU PROJET</string>
+    <!-- Source: feature/about/AboutScreen.kt -->
+    <string name="legacy_check_for_updates_66a2b53b">Vérifier les mises à jour</string>
+    <!-- Source: feature/about/AboutScreen.kt -->
+    <string name="legacy_close_3e2edd8">Fermer</string>
+    <!-- Source: feature/about/AboutScreen.kt -->
+    <string name="legacy_experimental_software_e22071df">LOGICIEL EXPÉRIMENTAL</string>
+    <!-- Source: feature/about/AboutScreen.kt -->
+    <string name="legacy_open_github_repository_80f9bf71">Ouvrir le dépôt GitHub</string>
+    <!-- Source: feature/about/AboutScreen.kt -->
+    <string name="legacy_platform_9e635873">PLATEFORME</string>
+    <!-- Source: feature/about/AboutScreen.kt -->
+    <string name="legacy_source_support_aa797bf0">SOURCE ET SUPPORT</string>
+    <!-- Source: feature/about/AboutScreen.kt -->
+    <string name="legacy_version_3fc0a8b8">VERSION</string>
+    <!-- Source: feature/androidauto/AndroidAutoPreviewScreen.kt -->
+    <string name="legacy_fullscreen_7d6157db">Plein écran</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_address_or_coordinates_9e7a90a">Adresse ou coordonnées</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_back_1f7907">Retour</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_controls_e20faad6">Commandes</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_cycle_panels_c623ab89">Faire défiler les panneaux</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_everything_on_this_page_controls_the_projection__88534bf1">Tout ce qui se trouve sur cette page pilote la projection actuellement affichée sur la moto.</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_exit_fullscreen_b7c93dd">Quitter le plein écran</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_fullscreen_map_bafc2397">Carte plein écran</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_handlebar_controls_cf2abe6b">Commandes au guidon</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_home_2268ff">Accueil</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_open_glove_friendly_fullscreen_controller_2d746356">Ouvrir le contrôleur plein écran adapté aux gants</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_reset_default_mapping_bd7464fe">Réinitialiser l\'attribution par défaut</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_scroll_ebe1cfb8">Défilement +</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_scroll_ebe1f19f">Défilement −</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_the_value_is_restored_when_handlebar_capture_is__ea95c499">La valeur est rétablie lorsque la capture au guidon est désactivée.</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_timing_9551dc6a">Délais</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_use_the_motorcycle_buttons_without_looking_down__1b06094c">Utilisez les touches de la moto sans baisser les yeux. La projection active reçoit les commandes en premier.</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_voice_4eff112">Voix</string>
+    <!-- Source: feature/controls/MediaButtonBridge.kt -->
+    <string name="legacy_motorcycle_buttons_control_targetname_c5bca78f">Les touches de la moto commandent $targetName</string>
+    <!-- Source: feature/diagnostics/ApplicationLogScreen.kt -->
+    <string name="legacy_application_logs_ca54c69f">Journaux de l\'application</string>
+    <!-- Source: feature/diagnostics/ApplicationLogScreen.kt -->
+    <string name="legacy_clear_3e2c62d">Effacer</string>
+    <!-- Source: feature/diagnostics/ApplicationLogScreen.kt -->
+    <string name="legacy_copy_log_e59a8039">Copier le journal</string>
+    <!-- Source: feature/diagnostics/ApplicationLogScreen.kt -->
+    <string name="legacy_no_diagnostic_events_have_been_recorded_290567d5">Aucun événement de diagnostic n\'a été enregistré.</string>
+    <!-- Source: feature/diagnostics/ApplicationLogScreen.kt -->
+    <string name="legacy_persistent_events_from_wi_fi_t_box_mirroring_enc_679d01c0">Événements persistants du Wi-Fi, du T-Box, de la recopie d\'écran, de l\'encodeur et d\'Android Auto.</string>
+    <!-- Source: feature/diagnostics/ApplicationLogScreen.kt -->
+    <string name="legacy_share_4c25fbf">Partager</string>
+    <!-- Source: feature/diagnostics/ApplicationLogScreen.kt -->
+    <string name="legacy_troubleshooting_f6bb8e3a">DÉPANNAGE</string>
+    <!-- Source: feature/diagnostics/NetworkDiagnosticsScreen.kt -->
+    <string name="legacy_check_t_box_and_cellular_routes_without_starting_7ae11348">Vérifier les routes T-Box et mobile sans lancer de VPN ni changer le réseau par défaut.</string>
+    <!-- Source: feature/diagnostics/NetworkDiagnosticsScreen.kt -->
+    <string name="legacy_network_diagnostics_a4fc929a">Diagnostics réseau</string>
+    <!-- Source: feature/diagnostics/NetworkDiagnosticsScreen.kt -->
+    <string name="legacy_no_network_snapshot_available_5baf5bb0">Aucun instantané réseau disponible.</string>
+    <!-- Source: feature/diagnostics/NetworkDiagnosticsScreen.kt -->
+    <string name="legacy_result_8fe0bc1d">RÉSULTAT</string>
+    <!-- Source: feature/diagnostics/NetworkDiagnosticsScreen.kt -->
+    <string name="legacy_system_lab_433267fc">LABORATOIRE SYSTÈME</string>
+    <!-- Source: feature/diagnostics/NetworkDiagnosticsScreen.kt -->
+    <string name="legacy_start_a_projection_to_populate_the_log_23fff8de">Lancez une projection pour remplir le journal.</string>
+    <!-- Source: feature/garage/GarageScreen.kt -->
+    <string name="legacy_add_a_motorcycle_by_scanning_its_t_box_qr_code_a77ba91f">Ajoutez une moto en scannant le QR code de son T-Box.</string>
+    <!-- Source: feature/garage/GarageScreen.kt -->
+    <string name="legacy_add_motorcycle_397b0e90">Ajouter une moto</string>
+    <!-- Source: feature/garage/GarageScreen.kt -->
+    <string name="legacy_edit_20e22a">Modifier</string>
+    <!-- Source: feature/garage/GarageScreen.kt -->
+    <string name="legacy_motorcycles_2c9478e2">Motos</string>
+    <!-- Source: feature/garage/GarageScreen.kt -->
+    <string name="legacy_no_qr_connect_manually_8ad804ea">Pas de QR ? Connexion manuelle</string>
+    <!-- Source: feature/garage/GarageScreen.kt -->
+    <string name="legacy_options_18bf1e7e">Options</string>
+    <!-- Source: feature/garage/GarageScreen.kt -->
+    <string name="legacy_saved_motorcycles_181a24a9">MOTOS ENREGISTRÉES</string>
+    <!-- Source: feature/garage/GarageScreen.kt -->
+    <string name="legacy_scan_a_qr_code_5a21ea0a">Scanner un QR code</string>
+    <!-- Source: feature/garage/GarageScreen.kt -->
+    <string name="legacy_use_this_motorcycle_1204179a">Utiliser cette moto</string>
+    <!-- Source: feature/garage/GarageScreen.kt -->
+    <string name="legacy_your_garage_c0aeffb4">VOTRE GARAGE</string>
+    <!-- Source: feature/garage/GarageScreen.kt -->
+    <string name="legacy_your_garage_is_empty_f25b99e3">Votre garage est vide</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_connection_eeae6ade">CONNEXION</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_cancel_77df1a9a">Annuler</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_changes_are_saved_immediately_3ab73352">Les modifications sont enregistrées immédiatement.</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_choose_how_the_complete_android_auto_image_is_fi_cb149112">Choisissez comment l\'image complète d\'Android Auto s\'ajuste au TFT.</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_display_name_6697cf49">Nom affiché</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_exclude_pixels_occupied_by_the_motorcycle_ui_the_c5210089">Exclure les pixels occupés par l\'interface de la moto. Ces valeurs sont enregistrées pour ce</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_for_example_300_1aa3b7a">Par exemple : 300</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_for_example_mt700_adventure_4c1ae7c7">Par exemple : MT700 Adventure</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_fuel_2195d6">Carburant</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_full_tank_range_on_a_fill_up_powers_the_fuel_ran_68a667ae">Autonomie avec un plein. Alimente l\'alerte d\'autonomie en navigation.</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_identity_fbc2d4de">Identité</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_motorcycle_profile_bd90ddfa">PROFIL DE LA MOTO</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_make_it_yours_9dfd813d">Personnalisez-la</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_override_the_automatic_profile_detection_for_thi_dcc5245b">Remplacer la détection automatique de profil pour cette moto. À n\'utiliser que si le</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_remove_91afe4a4">Supprimer</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_remove_motorcycle_c0498b52">Supprimer la moto ?</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_remove_photo_7fa92bb6">Supprimer la photo</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_remove_this_motorcycle_f21e94d7">Supprimer cette moto</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_reset_margins_ff05a94">Réinitialiser les marges</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_t_box_identifier_modelid_2c1c9ebd">Identifiant T-Box : $modelId</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_tank_range_km_f16147b8">Autonomie du réservoir (km)</string>
+    <!-- Garage tank-range field label when the rider selects miles. -->
+    <string name="legacy_tank_range_mi_f1614ebe">Autonomie du réservoir (mi)</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_the_wi_fi_password_is_stored_securely_on_this_ph_b6fb6382">Le mot de passe Wi-Fi est stocké de façon sécurisée sur ce téléphone.</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_the_name_is_only_used_inside_moto_hub_10a5f3a4">Le nom n\'est utilisé qu\'à l\'intérieur de MOTO-HUB.</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_the_saved_connection_profile_and_its_photo_will__c6d581e2">Le profil de connexion enregistré et sa photo seront supprimés de MOTO-HUB.</string>
+    <!-- Source: feature/garage/TBoxCapabilityScreen.kt -->
+    <string name="legacy_could_not_derive_a_peer_ip_this_network_may_not__3fa3f2d0">Impossible de déduire une IP de pair - ce réseau n\'a peut-être pas encore de route utilisable.</string>
+    <!-- Source: feature/garage/TBoxCapabilityScreen.kt -->
+    <string name="legacy_if_easyconn_discovery_keeps_failing_briefly_reco_ced96e0d">Si la découverte EasyConn continue d\'échouer, reconnectez-vous brièvement à ce T-Box et sondez</string>
+    <!-- Source: feature/garage/TBoxCapabilityScreen.kt -->
+    <string name="legacy_scan_common_easyconn_ports_835f5172">Sonder les ports EasyConn courants</string>
+    <!-- Source: feature/garage/TBoxCapabilityScreen.kt -->
+    <string name="legacy_t_box_capability_inspector_937ec87d">INSPECTEUR DE CAPACITÉS T-BOX</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_another_easyconn_app_can_keep_the_t_box_link_occ_fd2f2f53">Une autre application EasyConn peut occuper la liaison T-Box même après être passée en arrière-plan.</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_connection_failed_3b5c2fbf">ÉCHEC DE LA CONNEXION</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_choose_what_the_ride_dashboard_shows_for_navigat_793eeb07">Choisissez ce que le Ride Dashboard affiche pour la navigation.</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_connect_your_motorcycle_2e5794e6">Connectez votre moto.</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_connecting_48965ad8">Connexion</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_dashboard_map_5dae1b0">Carte du tableau de bord</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_disconnect_966f34bc">Déconnecter</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_first_time_setup_d929eaa7">PREMIÈRE CONFIGURATION</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_session_actions_bc6aa933">ACTIONS DE SESSION</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_scan_the_t_box_qr_code_to_save_the_network_crede_67df5b62">Scannez le QR code du T-Box pour enregistrer automatiquement les identifiants réseau.</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_setting_up_network_and_t_box_7769a762">Configuration du réseau et du T-Box</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_what_to_show_122be0b9">Qu\'afficher ?</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_back_fe3a848e">‹ Retour</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_arrived_ff08704d">ARRIVÉ</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_calculating_your_route_86fbe56d">Calcul de votre itinéraire…</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_done_2097a2">Terminé</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_exact_destination_pin_used_for_routing_tap_the_m_10786cc">Repère de destination exact utilisé pour l\'itinéraire. Touchez la carte pour le changer.</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_guidance_to_your_destination_will_end_27d69f">Le guidage vers votre destination va s\'arrêter.</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_info_225cae">INFO</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_keep_going_6d8f25bf">Continuer</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_live_navigation_70ce19c8">NAVIGATION EN DIRECT</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_map_location_9df6ea19">EMPLACEMENT SUR LA CARTE</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_navigation_needs_attention_7f3ab90f">LA NAVIGATION DEMANDE VOTRE ATTENTION</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_no_9c1">NON</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_name_24eeab">Nom</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_navigation_will_start_either_way_open_the_ride_d_b34bca11">La navigation démarrera dans tous les cas. Ouvrir le Ride Dashboard sur le TFT de la moto ?</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_no_favorites_yet_save_one_from_a_route_preview_o_b8e45fac">Aucun favori pour l\'instant. Enregistrez-en un depuis un aperçu d\'itinéraire ou un écran d\'arrivée.</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_no_matches_e3c700ba">Aucune correspondance.</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_not_every_address_number_is_mapped_in_openstreet_cf7708fe">Tous les numéros de rue ne sont pas encore cartographiés dans OpenStreetMap, donc le repère</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_off_route_recalculating_1f5a422b">Hors itinéraire – recalcul…</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_open_ride_dashboard_202629d">Ouvrir le Ride Dashboard ?</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_optional_label_267da254">Libellé facultatif</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_route_type_519caed1">TYPE D\'ITINÉRAIRE</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_reroute_a49323d6">Recalculer</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_save_27359d">Enregistrer</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_save_a_destination_as_a_favorite_from_a_route_pr_5669fe67">Enregistrez une destination en favori depuis un aperçu d\'itinéraire.</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_save_favorite_85e74bf">Enregistrer en favori</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_save_this_route_d63094aa">Enregistrer cet itinéraire</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_search_address_or_paste_coordinates_daf446f5">Rechercher une adresse ou coller des coordonnées</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_start_navigation_2d34b0b2">Démarrer la navigation</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_stop_277c22">Arrêter</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_stop_navigation_8a243dad">Arrêter la navigation ?</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_tap_to_dismiss_d17702a2">Touchez pour masquer</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_work_293b31">Travail</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_yes_156c7">OUI</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_you_have_arrived_e0a68436">Vous êtes arrivé</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_e_g_sunday_loop_1dd6a810">ex. : boucle du dimanche</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_label_27143b17">‹ $label</string>
+    <!-- Source: feature/navigation/RouteMap.kt -->
+    <string name="legacy_clear_all_5a4e690e">TOUT EFFACER</string>
+    <!-- Source: feature/navigation/RouteMap.kt -->
+    <string name="legacy_dest_2072c2">Dest</string>
+    <!-- Source: feature/navigation/RouteMap.kt -->
+    <string name="legacy_fit_113f1">Ajuster</string>
+    <!-- Source: feature/navigation/RouteMap.kt -->
+    <string name="legacy_full_screen_22a47efd">Plein écran</string>
+    <!-- Source: feature/navigation/RouteMap.kt -->
+    <string name="legacy_select_all_ba2cd45d">TOUT SÉLECTIONNER</string>
+    <!-- Source: feature/navigation/RouteMap.kt -->
+    <string name="legacy_openstreetmap_contributors_692ada40">© OpenStreetMap contributors</string>
+    <!-- Source: feature/pairing/ManualPairingScreen.kt -->
+    <string name="legacy_auto_detects_direct_networks_choose_wi_fi_direct_a24126ac">Auto détecte les réseaux DIRECT-. Choisissez Wi-Fi Direct pour un tableau de bord qui est propriétaire de groupe P2P.</string>
+    <!-- Source: feature/pairing/ManualPairingScreen.kt -->
+    <string name="legacy_connect_without_a_qr_code_bd61ac9f">Se connecter sans QR code</string>
+    <!-- Source: feature/pairing/ManualPairingScreen.kt -->
+    <string name="legacy_manual_setup_176cc583">CONFIGURATION MANUELLE</string>
+    <!-- Source: feature/pairing/ManualPairingScreen.kt -->
+    <string name="legacy_some_motorcycles_don_t_show_a_pairing_qr_code_on_c3361949">Certaines motos n\'affichent pas de QR code d\'appairage sur le tableau de bord. Si vous connaissez déjà</string>
+    <!-- Source: feature/pairing/ManualPairingScreen.kt -->
+    <string name="legacy_t_box_wi_fi_transport_2b8fdfb9">Transport Wi-Fi du T-Box</string>
+    <!-- Source: feature/pairing/ManualPairingScreen.kt -->
+    <string name="legacy_wi_fi_network_name_ssid_4e8cc3a7">Nom du réseau Wi-Fi (SSID)</string>
+    <!-- Source: feature/pairing/ManualPairingScreen.kt -->
+    <string name="legacy_wi_fi_password_aa1722dd">Mot de passe Wi-Fi</string>
+    <!-- Source: feature/pairing/TBoxQrScannerScreen.kt -->
+    <string name="legacy_t_box_scan_eb4ea12b">SCAN T-BOX</string>
+    <!-- Source: feature/ridedashboard/RideDashboardPreviewScreen.kt -->
+    <string name="legacy_uses_this_phone_s_gps_no_t_box_needed_same_rende_58537da7">Utilise le GPS de ce téléphone - aucun T-Box nécessaire. Même rendu et même cap/zoom</string>
+    <!-- Source: feature/ridedashboard/widget/AltitudeWidget.kt -->
+    <string name="legacy_elevation_last_hour_10deed1a">ALTITUDE / DERNIÈRE HEURE</string>
+    <!-- Source: feature/ridedashboard/widget/AltitudeWidget.kt -->
+    <string name="legacy_now_12eb6">MAINTENANT</string>
+    <!-- Source: feature/ridedashboard/widget/AltitudeWidget.kt -->
+    <string name="legacy_waiting_for_gnss_elevation_f069100e">EN ATTENTE DE L\'ALTITUDE GNSS</string>
+    <!-- Source: feature/ridedashboard/widget/BatteryWidget.kt -->
+    <string name="legacy_battery_7593afdc">$battery%</string>
+    <!-- Source: feature/ridedashboard/widget/BatteryWidget.kt -->
+    <string name="legacy_g_force_fca415c5">FORCE G</string>
+    <!-- Source: feature/ridedashboard/widget/BatteryWidget.kt -->
+    <string name="legacy_motion_sensors_b224e96f">CAPTEURS DE MOUVEMENT</string>
+    <!-- Source: feature/ridedashboard/widget/BatteryWidget.kt -->
+    <string name="legacy_phone_system_b2b20c1d">TÉLÉPHONE // SYSTÈME</string>
+    <!-- Source: feature/ridedashboard/widget/BatteryWidget.kt -->
+    <string name="legacy_turn_rate_9cfa82a3">VITESSE DE ROTATION</string>
+    <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
+    <string name="legacy_ahead_3b5bda1">DEVANT</string>
+    <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
+    <string name="legacy_compass_sun_45d9eeda">BOUSSOLE // SOLEIL</string>
+    <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
+    <string name="legacy_left_239807">GAUCHE</string>
+    <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
+    <string name="legacy_right_4a5c9fc">DROITE</string>
+    <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
+    <string name="legacy_sun_horizon_6a3f3196">SOLEIL / HORIZON</string>
+    <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
+    <string name="legacy_sun_behind_2679a1ae">SOLEIL DERRIÈRE</string>
+    <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
+    <string name="legacy_waiting_for_position_heading_75ece8e0">EN ATTENTE DE POSITION + CAP</string>
+    <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
+    <string name="legacy_dashboard_customization_b85f9307">PERSONNALISATION DU TABLEAU DE BORD</string>
+    <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
+    <string name="legacy_grant_41dd0fc">Autoriser</string>
+    <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
+    <string name="legacy_live_layout_cdba0cde">DISPOSITION EN DIRECT</string>
+    <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
+    <string name="legacy_map_1293c">CARTE</string>
+    <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
+    <string name="legacy_map_stays_in_the_centre_f108a4fb">La carte reste au centre</string>
+    <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
+    <string name="legacy_needs_notification_access_44d40c16">Nécessite l\'accès aux notifications</string>
+    <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
+    <string name="legacy_reset_defaults_6000a23">Rétablir les valeurs par défaut</string>
+    <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
+    <string name="legacy_swap_2785b3">Permuter</string>
+    <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
+    <string name="legacy_tap_to_assign_d1b41d7">TOUCHER POUR ASSIGNER</string>
+    <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
+    <string name="legacy_widget_library_cb7316bf">BIBLIOTHÈQUE DE WIDGETS</string>
+    <!-- Source: feature/ridedashboard/widget/NavigationWidget.kt -->
+    <string name="legacy_current_location_5f369a9c">POSITION ACTUELLE</string>
+    <!-- Source: feature/ridedashboard/widget/NavigationWidget.kt -->
+    <string name="legacy_eta_10d72">ARRIVÉE PRÉVUE</string>
+    <!-- Source: feature/ridedashboard/widget/NavigationWidget.kt -->
+    <string name="legacy_nav_route_20ffc4db">NAV / ITINÉRAIRE</string>
+    <!-- Source: feature/ridedashboard/widget/NavigationWidget.kt -->
+    <string name="legacy_off_route_recalculating_7a9dcf5c">HORS ITINÉRAIRE — RECALCUL</string>
+    <!-- Source: feature/ridedashboard/widget/NavigationWidget.kt -->
+    <string name="legacy_remaining_d9f0bdd6">RESTANT</string>
+    <!-- Source: feature/ridedashboard/widget/NavigationWidget.kt -->
+    <string name="legacy_rise_2662c9">LEVER</string>
+    <!-- Source: feature/ridedashboard/widget/NavigationWidget.kt -->
+    <string name="legacy_set_14042">COUCHER</string>
+    <!-- Source: feature/ridedashboard/widget/NavigationWidget.kt -->
+    <string name="legacy_sun_1422c">SOLEIL</string>
+    <!-- Source: feature/ridedashboard/widget/NowPlayingWidget.kt -->
+    <string name="legacy_no_media_session_5cbc8365">-- AUCUNE SESSION MÉDIA --</string>
+    <!-- Source: feature/ridedashboard/widget/NowPlayingWidget.kt -->
+    <string name="legacy_no_artwork_2acf3875">AUCUNE POCHETTE</string>
+    <!-- Source: feature/ridedashboard/widget/NowPlayingWidget.kt -->
+    <string name="legacy_now_playing_media_session_45191bd6">LECTURE EN COURS // SESSION MÉDIA</string>
+    <!-- Source: feature/ridedashboard/widget/SatelliteWidget.kt -->
+    <string name="legacy_signal_coverage_fef46060">COUVERTURE DU SIGNAL</string>
+    <!-- Source: feature/ridedashboard/widget/SpeedGaugeWidget.kt -->
+    <string name="legacy_ground_speed_gps_c8f77ac7">VITESSE SOL / GPS</string>
+    <!-- Source: feature/ridedashboard/widget/SpeedGaugeWidget.kt -->
+    <string name="legacy_km_h_233edb">KM/H</string>
+    <!-- Speed-unit label when the rider selects miles in Settings. -->
+    <string name="legacy_mph_12b05">MPH</string>
+    <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
+    <string name="legacy_average_km_h_d2517b1e">MOYENNE KM/H</string>
+    <!-- Trip-metrics average-speed label when the rider selects miles. -->
+    <string name="legacy_average_mph_6c8da62">MOYENNE MPH</string>
+    <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
+    <string name="legacy_recent_8fd93a5b">RÉCENT</string>
+    <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
+    <string name="legacy_speed_profile_2c1ba290">PROFIL DE VITESSE</string>
+    <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
+    <string name="legacy_trip_performance_8c26f32b">SORTIE // PERFORMANCE</string>
+    <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
+    <string name="legacy_waiting_for_speed_data_91032a2d">EN ATTENTE DES DONNÉES DE VITESSE</string>
+    <!-- Source: feature/ridedashboard/widget/WeatherWidget.kt -->
+    <string name="legacy_check_cellular_data_b94ccb68">VÉRIFIEZ LES DONNÉES MOBILES</string>
+    <!-- Source: feature/ridedashboard/widget/WeatherWidget.kt -->
+    <string name="legacy_live_23a8ec">EN DIRECT</string>
+    <!-- Source: feature/ridedashboard/widget/WeatherWidget.kt -->
+    <string name="legacy_loading_3edc6d1c">CHARGEMENT</string>
+    <!-- Source: feature/ridedashboard/widget/WeatherWidget.kt -->
+    <string name="legacy_open_meteo_gps_2cc3134f">OPEN-METEO • GPS</string>
+    <!-- Source: feature/ridedashboard/widget/WeatherWidget.kt -->
+    <string name="legacy_rain_probability_9ad3fd28">PLUIE $probability%</string>
+    <!-- Source: feature/ridedashboard/widget/WeatherWidget.kt -->
+    <string name="legacy_retrying_every_15s_e5e3f7a4">NOUVEL ESSAI TOUTES LES 15 S</string>
+    <!-- Source: feature/safety/SafetyDisclaimerDialog.kt -->
+    <string name="legacy_i_understand_and_continue_7ea73adb">J\'ai compris et je continue</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_android_auto_content_insets_7046c7dd">MARGES DE CONTENU ANDROID AUTO</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_choose_image_detail_and_how_moto_hub_balances_sm_577123e1">Choisissez le niveau de détail de l\'image et la façon dont MOTO-HUB équilibre fluidité, chaleur, batterie et charge Wi-Fi.</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_default_route_type_b528b630">TYPE D\'ITINÉRAIRE PAR DÉFAUT</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_motorcycle_features_1ef519ec">FONCTIONS DE LA MOTO</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_power_mode_357a57fe">MODE D\'ALIMENTATION</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_resolution_bd8b64ac">RÉSOLUTION</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_turn_by_turn_routing_uses_your_own_stadia_maps_a_76117a71">La navigation virage par virage utilise votre propre clé API Stadia Maps, jamais une</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_units_4d25f4f">UNITÉS</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_delete_79cb71cb">Supprimer</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_delete_this_trip_b2d7ee2d">Supprimer cette sortie ?</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_delete_trip_1d14595a">Supprimer la sortie</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_discard_c6d7a07e">Abandonner</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_export_gpx_83319643">Exporter en GPX</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_finish_save_39e52944">Terminer et enregistrer</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_gps_logging_works_with_the_phone_locked_37383170">L\'enregistrement GPS fonctionne téléphone verrouillé</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_not_saved_d22da6ba">NON ENREGISTRÉE</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_name_this_ride_9a657605">Nommez cette sortie</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_opening_the_saved_trip_now_c583b843">Ouverture de la sortie enregistrée.</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_recorded_rides_823a26eb">SORTIES ENREGISTRÉES</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_recording_unavailable_9bbb7461">ENREGISTREMENT INDISPONIBLE</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_ride_archive_c06bf17a">ARCHIVES DES SORTIES</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_record_a_ride_ce0c4be6">Enregistrer une sortie</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_recording_was_too_short_to_keep_6761ae14">L\'enregistrement était trop court pour être conservé</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_rename_trip_584eaba7">Renommer la sortie</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_ride_recordings_need_at_least_100_m_15_s_of_move_260f0993">Un enregistrement de sortie demande au moins 100 m, 15 s de déplacement et deux points GPS.</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_saved_4b07667">ENREGISTRÉE</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_start_new_recording_36e83013">Démarrer un nouvel enregistrement</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_start_recording_836b8b93">Démarrer l\'enregistrement</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_track_details_6b05b82d">DÉTAILS DE LA TRACE</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_the_gps_trace_and_all_recorded_statistics_will_b_6d59f1b7">La trace GPS et toutes les statistiques enregistrées seront définitivement supprimées.</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_trip_name_5c3de586">Nom de la sortie</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_trip_saved_to_recorded_rides_31c5533c">Sortie enregistrée dans Sorties enregistrées</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_trips_4d520ce">Sorties</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_try_again_25aeb09b">Réessayer</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_view_2832a5">VOIR</string>
+    <!-- Source: feature/trips/TripsScreen.kt -->
+    <string name="legacy_trips_ca1b8627">‹ Sorties</string>
+    <!-- Source: feature/update/GithubUpdateDialog.kt -->
+    <string name="legacy_allow_apk_installation_a3116df5">Autoriser l\'installation d\'APK</string>
+    <!-- Source: feature/update/GithubUpdateDialog.kt -->
+    <string name="legacy_checking_github_releases_7e509ccb">Vérification des versions GitHub...</string>
+    <!-- Source: feature/update/GithubUpdateDialog.kt -->
+    <string name="legacy_moto_hub_updates_c98ab24f">Mises à jour MOTO-HUB</string>
+    <!-- Source: feature/update/GithubUpdateDialog.kt -->
+    <string name="legacy_no_apk_asset_attached_to_this_release_7a89904d">Aucun APK n\'est attaché à cette version.</string>
+    <!-- Source: feature/update/GithubUpdateDialog.kt -->
+    <string name="legacy_no_newer_version_is_available_b79316a1">Aucune version plus récente n\'est disponible.</string>
+    <!-- Source: feature/update/GithubUpdateDialog.kt -->
+    <string name="legacy_pre_release_6bd19a9d">PRÉ-VERSION</string>
+    <!-- Source: feature/update/GithubUpdateDialog.kt -->
+    <string name="legacy_retry_4b33288">Réessayer</string>
+    <!-- Source: feature/update/GithubUpdateDialog.kt -->
+    <string name="legacy_skip_this_version_c2d1da37">Ignorer cette version</string>
+    <!-- Source: session/ProjectionForegroundService.kt -->
+    <string name="legacy_projection_is_running_8c249b1a">La projection est en cours</string>
+    <!-- Source: androidauto/AndroidAutoDisplayProfile.kt -->
+    <string name="legacy_fill_and_crop_8b8b5d16">Remplir et rogner</string>
+    <!-- Source: androidauto/AndroidAutoDisplayProfile.kt -->
+    <string name="legacy_preserve_aspect_ratio_b340e377">Conserver les proportions</string>
+    <!-- Source: androidauto/AndroidAutoDisplayProfile.kt -->
+    <string name="legacy_show_the_complete_image_with_black_side_bars_whe_90d880eb">Afficher l\'image complète avec des bandes noires latérales si nécessaire.</string>
+    <!-- Source: androidauto/AndroidAutoDisplayProfile.kt -->
+    <string name="legacy_stretch_display_45b17e87">Étirer l\'affichage</string>
+    <!-- Source: androidauto/AndroidAutoDisplayProfile.kt -->
+    <string name="legacy_use_the_whole_tft_and_keep_all_content_visible_w_6c1c6337">Utiliser tout le TFT en gardant tout le contenu visible, avec un léger étirement.</string>
+    <!-- Source: androidauto/AndroidAutoDisplayProfile.kt -->
+    <string name="legacy_use_the_whole_tft_without_stretching_crop_the_ed_8f0ac706">Utiliser tout le TFT sans étirement ; rogner les bords quand les proportions diffèrent.</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_adjust_the_phone_media_level_while_handlebar_cap_a55dd55a">Régler le volume multimédia du téléphone pendant que la capture au guidon est active.</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_advanced_handlebar_mapping_d94a5a3b">Attribution avancée du guidon</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_choose_the_day_night_style_used_by_android_auto_c4b5df26">Choisissez le style jour/nuit utilisé par Android Auto.</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_customize_double_taps_holds_and_android_auto_com_59078421">Personnalisez les doubles appuis, les appuis longs et les commandes Android Auto.</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_destinations_available_to_one_press_handlebar_na_19306aee">Destinations accessibles à la navigation d\'une pression au guidon.</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_double_tap_a52552f4">Double appui</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_map_appearance_b4c189c8">Apparence de la carte</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_media_volume_142f4af6">Volume multimédia</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_saved_places_f8158025">Lieux enregistrés</string>
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_select_hold_6cc41543">Appui long sur Select</string>
+    <!-- Source: feature/diagnostics/NetworkDiagnosticsScreen.kt -->
+    <string name="legacy_detected_networks_fa8527c3">Réseaux détectés</string>
+    <!-- Source: feature/diagnostics/NetworkDiagnosticsScreen.kt -->
+    <string name="legacy_session_events_1a7f9e03">Événements de session</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_android_auto_display_56c75982">Écran Android Auto</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_choose_widgets_for_each_side_panel_c04b42c9">Choisir les widgets de chaque panneau latéral</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_customize_dashboard_3d094ab7">Personnaliser le tableau de bord</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_endpoint_geometry_protocol_and_feature_flags_7f197859">Point de terminaison, géométrie, protocole et options</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_exclude_pixels_occupied_by_the_motorcycle_ui_c69e3740">Exclure les pixels occupés par l\'interface de la moto</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_how_the_complete_android_auto_image_fits_the_tft_11c8bbf2">Comment l\'image complète d\'Android Auto s\'ajuste au TFT</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_override_automatic_profile_detection_b102be5">Remplacer la détection automatique de profil</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_t_box_capability_inspector_e5159c9d">Inspecteur de capacités T-Box</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_t_box_profile_override_f6f6b251">Remplacement du profil T-Box</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_tft_safe_margins_d1e86e30">Marges de sécurité TFT</string>
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_motorcycle_15a347f8">‹ Moto</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_customize_d780ac23">Personnaliser</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_dim_phone_display_4f190e58">Atténuer l\'écran du téléphone</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_draw_recorded_points_on_the_dashboard_map_d0764c05">Tracer les points enregistrés sur la carte du tableau de bord.</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_keep_the_tft_active_while_reducing_phone_distrac_f9df0d5a">Garder le TFT actif tout en réduisant la distraction du téléphone.</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_open_the_on_screen_android_auto_controls_55f559a3">Ouvrir les commandes Android Auto à l\'écran.</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_preview_50417ba8">Aperçu</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_preview_touch_c103ae4d">Aperçu et tactile</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_show_gps_track_2ed7fcf2">Afficher la trace GPS</string>
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_view_android_auto_and_interact_from_your_phone_1e4d3a53">Voir Android Auto et interagir depuis votre téléphone.</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_review_your_route_before_starting_guidance_48917adb">Vérifiez votre itinéraire avant de lancer le guidage.</string>
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_take_me_home_bb1e43ee">Rentrer à la maison</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_about_moto_hub_6966e1f8">À propos de MOTO-HUB</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_android_auto_cb210d00">Android Auto</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_announce_upcoming_maneuvers_while_navigating_7c1d9f50">Annoncer les manœuvres à venir pendant la navigation</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_auto_connect_on_launch_9e7cd0e0">Connexion automatique au lancement</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_auto_connect_recovery_trip_recording_1bf7551f">Connexion automatique, reprise, enregistrement des sorties</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_auto_record_rides_3d1b712a">Enregistrer les sorties automatiquement</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_auto_recover_stalled_android_auto_and_ride_dashb_5da6ea2d">Reprendre seul les flux Android Auto et Ride Dashboard bloqués</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_bluetooth_capture_and_mapping_3e23fd19">Capture Bluetooth et attribution</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_connect_and_discover_t_box_when_app_opens_fe05f1ea">Se connecter et rechercher le T-Box à l\'ouverture de l\'application</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_connection_automation_93f3bb33">Connexion et automatisation</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_diagnostics_3748418c">Diagnostics</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_disable_touchscreen_4f636f13">Désactiver l\'écran tactile</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_draw_detected_curved_segments_in_a_distinct_colo_906c94c">Tracer les portions sinueuses détectées dans une couleur distincte sur la carte TFT</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_enable_logging_e57825e2">Activer la journalisation</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_encoder_detail_and_power_mode_for_all_streams_9c18fdcf">Détail de l\'encodeur et mode d\'alimentation pour tous les flux</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_fuel_range_warning_e301d2ef">Alerte d\'autonomie carburant</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_full_client_info_every_candidate_profile_s_score_fb2a321f">CLIENT_INFO complet, score de chaque profil candidat, commande inconnue</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_golden_hour_hint_26c00b9f">Indice d\'heure dorée</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_highlight_curvy_roads_6d7866a">Mettre en évidence les routes sinueuses</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_master_switch_for_the_diagnostic_log_off_means_n_1d7e2b81">Interrupteur général du journal de diagnostic. Désactivé, rien n\'est enregistré</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_navigation_e5d7e634">Navigation</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_network_tests_and_application_logs_6064f99">Tests réseau et journaux de l\'application</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_preview_ride_dashboard_cf294e4">Aperçu du Ride Dashboard</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_recovery_watchdog_eb0fb218">Chien de garde de reprise</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_resolution_and_display_mode_70f7a2be">Résolution et mode d\'affichage</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_review_copy_share_or_clear_events_fa00934b">Consulter, copier, partager ou effacer les événements</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_routes_through_fossgis_s_free_public_valhalla_se_5f3fb227">Passe par le serveur Valhalla public et gratuit de FOSSGIS au lieu de</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_see_the_tft_render_on_this_phone_using_its_own_g_d21ea9ba">Voir le rendu du TFT sur ce téléphone, avec son propre GPS - aucun T-Box nécessaire</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_show_forecast_conditions_at_your_destination_in__d467471f">Afficher les prévisions à destination dans l\'aperçu de l\'itinéraire</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_show_minutes_to_the_nearest_sunrise_sunset_golde_840f15d">Afficher les minutes jusqu\'à l\'heure dorée du lever ou du coucher le plus proche</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_start_gps_logging_with_projection_sessions_1c3d9c89">Démarrer l\'enregistrement GPS avec les sessions de projection</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_t_box_discovery_wi_fi_binding_cellular_routes_32d84d5f">Découverte du T-Box, liaison Wi-Fi, routes mobiles</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_try_without_a_key_demo_server_74e379d4">Essayer sans clé (serveur de démonstration)</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_use_focus_and_handlebar_controls_even_when_the_t_d1be0479">Utiliser le focus et les commandes au guidon même quand le T-Box annonce un écran tactile</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_verbose_t_box_logging_ee12f7b3">Journalisation T-Box détaillée</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_video_quality_3ed2f63a">Qualité vidéo</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_voice_guidance_a2d4eea6">Guidage vocal</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_warn_when_a_route_would_exceed_your_motorcycle_s_c31a0f09">Avertir quand un itinéraire dépasserait l\'autonomie du réservoir de votre moto (réglée dans le Garage)</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_weather_at_arrival_44ffc4d8">Météo à l\'arrivée</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_your_own_routing_api_key_for_turn_by_turn_94d8b202">Votre propre clé API d\'itinéraires pour le virage par virage</string>
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_settings_7469104a">‹ Réglages</string>
+    <!-- Source: feature/trips/TripRecordingService.kt -->
+    <string name="legacy_gps_ride_recording_and_trip_statistics_28992d34">Enregistrement GPS des sorties et statistiques</string>
+    <!-- Source: session/PhoneDisplayDimmer.kt -->
+    <string name="legacy_moto_hub_display_dimmer_57b6244b">Atténuateur d\'écran MOTO-HUB</string>
+    <!-- Dynamic UI templates. Keep positional placeholders unchanged. -->
+    <string name="legacy_filter_1_d_497daa14">FILTRE %1$d</string>
+    <string name="legacy_recording_1_s_b01f3573">ENREGISTREMENT · %1$s</string>
+    <string name="legacy_1_d_optimized_gps_points_de88df06">%1$d points GPS optimisés</string>
+    <string name="legacy_place_1_d_name_6bdc57c6">Nom du lieu %1$d</string>
+    <string name="legacy_save_place_1_d_39c7a048">Enregistrer le lieu %1$d</string>
+    <string name="legacy_t_box_identifier_1_s_531e2638">Identifiant T-Box : %1$s</string>
+    <string name="legacy_1_s_fe2c9a02">‹ %1$s</string>
+    <string name="legacy_motorcycle_buttons_control_1_s_6e2f90ac">Les touches de la moto commandent %1$s</string>
+    <string name="legacy_rain_1_d_84b55e18">PLUIE %1$d%%</string>
+    <string name="legacy_1_d_c_41e7b8ff">%1$d°C</string>
+    <string name="legacy_1_d_km_h_6ce8c40f">%1$d KM/H</string>
+    <!-- Weather forecast wind speed when the rider selects miles. -->
+    <string name="legacy_1_d_mph_669c2f51">%1$d MPH</string>
+    <string name="legacy_moto_hub_258caaa5">MOTO-HUB</string>
+    <string name="legacy_recording_this_ride_1aceedab">Enregistrement de cette sortie</string>
+    <string name="legacy_moto_hub_controls_f72ba5d1">Commandes MOTO-HUB</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_1_d_available_e7e32615">%1$d disponibles</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_1_s_remaining_e0c291">%1$s restants</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_1_s_2_s_a1c6054a">%1$s · %2$s</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_1000_mt_x_cfdl26_a07555df">1000 MT-X (CFDL26)</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_200_ms_snappier_singles_bddf5c9a">200 ms - appuis simples plus vifs</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_300_ms_balanced_17f78a68">300 ms - équilibré</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_450_ms_forgiving_doubles_3234effd">450 ms - doubles plus tolérants</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_500_ms_quicker_hold_a1cbda27">500 ms - appui long plus rapide</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_600_ms_balanced_9f5246b">600 ms - équilibré</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_800_ms_deliberate_hold_32e73399">800 ms - appui long marqué</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_800mt_cfdl26_9a9a6453">800MT (CFDL26)</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_800nk_advanced_cfdl26_8796cfe5">800NK Advanced (CFDL26)</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_active_profile_dcb9be6f">PROFIL ACTIF</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_android_auto_4d461ce0">ANDROID AUTO</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_atms_1ed139">Distributeurs</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_avg_feb2">MOY</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_avg_speed_7231cd39">VITESSE MOY</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_access_point_2a7fd7f4">Point d\'accès</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_airports_db81a128">Aéroports</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_album_cover_current_track_and_progress_5704cf2c">Pochette d\'album, morceau en cours et progression</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_altitude_7d3daec2">Altitude</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_android_auto_map_9e2be3c">Carte Android Auto</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_arc_speedometer_bearing_and_gnss_lock_status_a1dab290">Compteur à arc, cap et état du signal GNSS</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_assistant_ccab92be">Assistant</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_attractions_ab6135cc">Sites touristiques</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_auto_1f51cf">Auto</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_auto_day_night_808f223b">Auto (jour/nuit)</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_backward_left_7f90d6f7">Arrière - Gauche</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_backward_double_tap_left_bf920c29">Double appui arrière - Gauche</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_bakery_7628ee00">Boulangerie</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_banks_3cfd197">Banques</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_bars_pubs_8301b610">Bars et pubs</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_battery_phone_fc45d1a1">Batterie et téléphone</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_battery_charging_connectivity_temperature_and_mo_59cfa2d5">Batterie, charge, connectivité, température et capteurs de mouvement</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_bicycle_rental_cee64385">Location de vélos</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_bluetooth_absolute_volume_change_3096ab72">Changement de volume absolu Bluetooth</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_bluetooth_next_track_command_7a7046ee">Commande Bluetooth piste suivante</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_bluetooth_play_pause_command_a9252e58">Commande Bluetooth lecture/pause</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_bluetooth_previous_track_command_d68a66f2">Commande Bluetooth piste précédente</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_cfdl16_450sr_style_non_touch_b3fdf770">CFDL16 / non tactile façon 450SR</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_cfdl16_legacy_b0fd3b8a">CFDL16 / héritage</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_cfdl26_motoplay_landscape_touch_a52d575c">CFDL26 MotoPlay paysage tactile</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_cfdl26_motoplay_portrait_handlebar_primary_c724cad9">CFDL26 MotoPlay portrait, guidon prioritaire</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_cfmoto_800nk_97f23a55">CFMOTO 800NK</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_cl_c450_5c8b3190">CL-C450</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_crcp_sdk_0_9_23_x_non_touch_5621c1f8">CRCP / sdk 0.9.23.x non tactile</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_campsites_75e7180b">Campings</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_car_service_917649">Garages auto</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_charging_5973c691">En charge</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_choose_a_widget_for_1_s_26345a66">Choisissez un widget pour %1$s</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_compass_9bdfd4f2">Boussole</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_current_conditions_wind_humidity_via_open_meteo_4e58c8f3">Conditions actuelles, vent, humidité via Open-Meteo</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_d_pad_down_1de05778">Pavé directionnel bas</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_d_pad_left_1de3d2dd">Pavé directionnel gauche</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_d_pad_right_9eecea06">Pavé directionnel droite</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_d_pad_up_a8ebfef1">Pavé directionnel haut</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_d_pad_6049d29c">Pavé ▲</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_d_pad_6049d2a0">Pavé ▶</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_d_pad_6049d2a6">Pavé ▼</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_d_pad_6049d2aa">Pavé ◀</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_dist_2005a6">DIST</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_distance_3fd77bf5">DISTANCE</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_day_light_2f4e1b57">Jour (clair)</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_detect_from_the_motorcycle_recommended_9fd07c6f">Détecter depuis la moto (recommandé)</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_development_simulator_profile_45f9bdc8">Profil du simulateur de développement</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_do_nothing_a83eb158">Ne rien faire</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_down_double_press_c52a55d2">Double appui bas</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_down_press_6ec23765">Appui bas</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_down_double_f6f5f8f8">Bas · double</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_down_single_1037016f">Bas · simple</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_drinking_water_6ae0dde1">Eau potable</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_elapsed_c777dd5c">ÉCOULÉ</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_elevation_857ea708">DÉNIVELÉ +</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_editing_1_s_a5399c23">Modification de %1$s</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_elevation_profile_climb_rate_and_gps_accuracy_d7b5d893">Profil altimétrique, vitesse ascensionnelle et précision GPS</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_favorites_3baf7a37">FAVORIS</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_favorite_427c2dbc">Favori</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_fire_stations_e5a3dc49">Casernes de pompiers</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_food_21807e">Restauration</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_forward_right_ed1ba1ce">Avant - Droite</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_forward_double_tap_right_50824858">Double appui avant - Droite</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_gnss_satellite_visibility_and_fix_status_55616e56">Visibilité des satellites GNSS et état du point</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_gps_search_f2175dfe">RECHERCHE GPS</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_gps_1_d_m_85cd2614">GPS ±%1$d m</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_guiding_to_destination_1328e050">Guidage vers la destination</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_heading_sun_altitude_and_rider_relative_sun_posi_8620d321">Cap, hauteur du soleil et position du soleil par rapport au pilote</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_hospitals_466ae959">Hôpitaux</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_hotels_stays_e91bd2ff">Hôtels et hébergements</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_in_use_1_s_9a0bc66d">UTILISÉ • %1$s</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_key_configured_d2c8ebf">CLÉ CONFIGURÉE</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_large_glove_friendly_actions_for_the_active_dash_ae3e3599">Actions grandes et adaptées aux gants pour le tableau de bord actif.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_larger_absolute_volume_change_c11a1729">Changement de volume absolu plus large</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_left_panel_9dcb38cb">Panneau de gauche</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_left_double_f4a67f33">Gauche · double</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_left_single_de787aa">Gauche · simple</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_log_copied_to_clipboard_a7cbe711">Journal copié dans le presse-papiers</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_max_12944">MAX</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_max_speed_6338424b">VITESSE MAXI</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_mode_2431a3">MODE</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_moto_hub_simulator_72ee829">Simulateur MOTO-HUB</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_moving_87e69c4e">EN MOUVEMENT</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_manage_88ef8985">Gérer</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_manage_guidance_search_a_new_destination_or_resu_7899102a">Gérez le guidage, cherchez une nouvelle destination ou reprenez votre itinéraire.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_manual_recording_73634e37">Enregistrement manuel</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_mirroring_8b513fa3">Recopie d\'écran</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_mirrors_android_auto_s_own_map_5091f0fa">Reprend la carte d\'Android Auto</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_motoplay_landscape_cfdl16_47ddf145">MotoPlay paysage (CFDL16)</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_motorcycle_service_4f005f46">Garages moto</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_navigation_8beff614">NAVIGATION</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_no_key_set_25cc0b82">AUCUNE CLÉ DÉFINIE</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_native_turn_by_turn_navigation_rendered_on_the_t_96caa565">Navigation virage par virage native rendue sur le TFT</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_nav_place_1_9c6fda12">Nav · lieu 1</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_nav_place_2_9c6fda13">Nav · lieu 2</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_nav_place_3_9c6fda14">Nav · lieu 3</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_navigate_place_1_8cdacefb">Naviguer → lieu 1</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_navigate_place_2_8cdacefc">Naviguer → lieu 2</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_navigate_place_3_8cdacefd">Naviguer → lieu 3</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_near_square_panel_544x512_7dfae4b9">Panneau presque carré, 544x512</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_near_square_touch_panel_720x712_644c47fc">Panneau tactile presque carré, 720x712</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_next_turn_eta_sun_position_daylight_remaining_48ea2589">Prochain virage, arrivée prévue, position du soleil, lumière restante</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_night_dark_e807e573">Nuit (sombre)</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_none_252358">Aucun</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_now_playing_774920a4">Lecture en cours</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_ok_select_85c307d1">OK / sélectionner</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_off_1354f">Désactivé</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_openstreetmap_12cdd70f">OpenStreetMap</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_phone_489454e">TÉLÉPHONE</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_pad_fullscreen_screen_stays_on_tap_exit_to_leave_fed4fb3e">Plein écran de la tablette — l\'écran reste allumé. Touchez Quitter pour sortir.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_parking_33f14b98">Stationnement</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_pharmacies_3d1e90b1">Pharmacies</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_picnic_8e7a005e">Pique-nique</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_police_8ed2913e">Police</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_post_offices_828381d7">Bureaux de poste</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_quick_controls_b6d227a9">Commandes rapides</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_recent_destinations_4acda7ca">DESTINATIONS RÉCENTES</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_recorded_route_823d22b9">ITINÉRAIRE ENREGISTRÉ</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_ride_dashboard_7a0ca94c">RIDE DASHBOARD</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_rides_4a5be5b">SORTIES</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_route_options_30bc2f87">OPTIONS D\'ITINÉRAIRE</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_route_preview_683e8cb1">APERÇU DE L\'ITINÉRAIRE</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_requires_a_real_bluetooth_key_up_e9aa900c">Nécessite un vrai relâchement de touche Bluetooth</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_rest_areas_9d275e5a">Aires de repos</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_ride_dashboard_ae928d6c">Ride Dashboard</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_right_panel_f3a982e0">Panneau de droite</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_right_double_8bb580fe">Droite · double</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_right_single_a4f68975">Droite · simple</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_rotary_back_875f5656">Molette arrière</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_rotary_forward_5bd716f6">Molette avant</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_saved_routes_18cdcb23">ITINÉRAIRES ENREGISTRÉS</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_search_results_3469955e">RÉSULTATS DE RECHERCHE</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_selected_for_1_s_49f82b77">SÉLECTIONNÉ POUR %1$s</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_satellites_110a3ab8">Satellites</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_save_route_5f739206">Enregistrer l\'itinéraire</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_search_a_destination_pick_a_favorite_or_start_fr_a4048c1b">Cherchez une destination, choisissez un favori ou partez d\'un itinéraire enregistré.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_select_ok_6ca8fff1">Sélectionner / OK</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_select_double_tap_enter_star_8a562c06">Double appui Select - Entrée / Étoile</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_select_hold_enter_star_217fe7bb">Appui long Select - Entrée / Étoile</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_select_tap_enter_star_b26a1adf">Appui Select - Entrée / Étoile</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_select_double_44fd35de">Select · double</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_select_hold_ce87ce0c">Select · long</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_select_tap_2ff408b6">Select · appui</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_send_navigation_and_selection_commands_to_androi_887e42f0">Envoyer les commandes de navigation et de sélection à Android Auto.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_speed_gauge_85be8ba0">Compteur de vitesse</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_start_android_auto_to_enable_the_controller_2a5eb409">Lancez Android Auto pour activer le contrôleur.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_start_the_dashboard_to_enable_these_actions_1fe53fdf">Lancez le tableau de bord pour activer ces actions.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_supermarkets_5e8b87fc">Supermarchés</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_t_box_connected_35a5911b">T-Box connecté</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_time_274acd">TEMPS</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_total_4c4e324">TOTAL</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_toilets_1eefa3e6">Toilettes</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_touch_controller_53c8733d">Contrôleur tactile</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_trip_metrics_7c88c7c8">Données de sortie</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_trip_distance_duration_average_speed_and_speed_p_97ed123f">Distance, durée, vitesse moyenne et profil de vitesse de la sortie</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_two_next_track_presses_inside_the_window_7db072f9">Deux appuis piste suivante dans la fenêtre</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_two_presses_inside_the_double_tap_window_cc11c279">Deux appuis dans la fenêtre de double appui</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_unable_to_create_log_file_9dac9184">Impossible de créer le fichier journal</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_unable_to_save_the_motorcycle_photo_d9e617d">Impossible d\'enregistrer la photo de la moto</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_up_double_press_5e63a079">Double appui haut</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_up_press_df788a9e">Appui haut</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_up_double_6854af1f">Haut · double</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_up_single_8195b796">Haut · simple</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_viewpoints_390623e8">Points de vue</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_weather_ac24cfd4">Météo</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_where_are_you_going_f697966b">Où allez-vous ?</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_wi_fi_direct_p2p_5247f7ce">Wi-Fi Direct (P2P)</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_your_route_is_live_e56afe3e">Votre itinéraire est actif</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_modelid_66660742_wi_fi_direct_non_touch_f23f0c0b">modelId 66660742, Wi-Fi Direct, non tactile</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_absolute_volume_change_53b165a0">changement de volume absolu</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_play_pause_command_31202f86">commande lecture/pause</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_previous_track_command_f9a52120">commande piste précédente</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_next_track_command_26b481c">commande piste suivante</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_both_1f3381">LES DEUX</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_android_auto_live_564f882c">ANDROID AUTO EN DIRECT</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_android_auto_standby_9525974d">ANDROID AUTO EN VEILLE</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_phone_preview_live_290cbf6">APERÇU TÉLÉPHONE EN DIRECT</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_starting_7d22d040">DÉMARRAGE</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_live_on_tft_d375f015">EN DIRECT SUR LE TFT</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_preparing_69cf13e4">PRÉPARATION</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_recording_route_df2cfb1a">ENREGISTREMENT DE L\'ITINÉRAIRE</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_1_s_is_ready_to_connect_6b95609b">%1$s est prêt à se connecter.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_allow_moto_hub_notifications_to_keep_streaming_v_4700fc1e">Autorisez les notifications MOTO-HUB pour garder la diffusion visible et contrôlable.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_allow_nearby_devices_and_location_to_detect_the__a4c1fa2c">Autorisez Appareils à proximité et Position pour détecter le réseau Wi-Fi du T-Box.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_android_is_requesting_a_connection_to_1_s_ffe67969">Android demande une connexion à %1$s.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_camera_permission_is_required_to_read_the_t_box__4e87d105">L\'autorisation caméra est nécessaire pour lire le QR code du T-Box.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_connection_cancelled_you_can_try_again_at_any_ti_19906357">Connexion annulée. Vous pouvez réessayer à tout moment.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_disconnected_372b4933">Déconnecté.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_motorcycle_8dd33db1">Moto</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_network_connected_searching_for_the_easyconn_ser_851763f6">Réseau connecté. Recherche du service EasyConn.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_no_known_phone_location_yet_move_outdoors_and_re_47df6139">Aucune position connue pour l\'instant ; sortez à l\'extérieur et réessayez.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_pair_a_motorcycle_in_garage_before_starting_navi_76f923b3">Appairez une moto dans le Garage avant de lancer la navigation.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_permission_granted_starting_the_capture_session_4805d845">Autorisation accordée. Démarrage de la session de capture.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_profile_saved_connect_to_the_t_box_network_and_s_a9069261">Profil enregistré. Connectez-vous au réseau du T-Box et lancez la découverte.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_qr_code_scanned_but_the_profile_was_not_saved_1__e3b6164f">QR code scanné, mais le profil n\'a pas été enregistré : %1$s</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_ride_dashboard_streaming_is_active_on_the_motorc_3729a921">La diffusion du Ride Dashboard est active sur le TFT de la moto.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_set_up_the_motorcycle_network_to_get_started_32bb831">Configurez le réseau de la moto pour commencer.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_sharing_cancelled_by_the_user_72c1171e">Partage annulé par l\'utilisateur.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_something_went_wrong_try_again_b634c6cc">Une erreur est survenue. Réessayez.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_starting_the_ride_dashboard_pipeline_f27c3ca7">Démarrage de la chaîne Ride Dashboard.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_starting_the_native_ride_dashboard_d28cae88">Démarrage du Ride Dashboard natif.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_starting_the_projection_pipeline_bcc6994a">Démarrage de la chaîne de projection.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_stop_the_current_mirroring_or_android_auto_sessi_5390e262">Arrêtez la recopie d\'écran ou la session Android Auto en cours avant d\'ouvrir le Ride Dashboard depuis ici.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_streaming_active_to_the_motorcycle_tft_b881d9a3">Diffusion active vers le TFT de la moto.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_t_box_qr_code_scanned_and_saved_1_s_is_ready_to__d28dd75d">QR code du T-Box scanné et enregistré. %1$s est prêt à se connecter.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_t_box_connection_lost_reconnect_to_the_motorcycl_cb4aa98e">Connexion au T-Box perdue. Reconnectez-vous au réseau de la moto.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_t_box_found_you_can_now_choose_an_app_or_screen__163f7c13">T-Box trouvé. Vous pouvez maintenant choisir une application ou un écran à partager.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_t_box_not_found_1_s_656efb68">T-Box introuvable : %1$s</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_that_search_is_too_long_try_a_shorter_search_e54badba">Cette recherche est trop longue. Essayez une recherche plus courte.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_1_d_curved_segments_detected_af1abc2b">%1$d portions sinueuses détectées</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_1_d_entries_newest_first_7c18f089">%1$d entrées  /  les plus récentes d\'abord</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_1_d_km_remaining_after_this_route_1b9e2ebf">%1$d km d\'autonomie restante après cet itinéraire</string>
+    <!-- Fuel-range warning when the rider selects miles. -->
+    <string name="legacy_1_d_mi_remaining_after_this_route_aaf9da45">%1$d mi d\'autonomie restante après cet itinéraire</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_1_s_2_s_3_s_4fcb415a">%1$s  %2$s : %3$s</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_1_s_2_d_c_4859b80e">%1$s · %2$d°C</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_connect_a_motorcycle_before_customizing_its_dash_cc281859">Connectez une moto avant de personnaliser son tableau de bord.</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_curvy_roads_ahead_15524f7">Routes sinueuses devant</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_golden_hour_in_1_d_min_5c769914">Heure dorée dans %1$d min</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_golden_hour_now_ab52d7b1">Heure dorée maintenant</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_installed_version_1_s_2_d_29cd3201">Version installée : %1$s (%2$d)</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_location_and_notifications_are_required_while_re_4f6ceb2b">La position et les notifications sont nécessaires pendant l\'enregistrement d\'une sortie</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_opening_in_1_d_s_42389c34">Ouverture dans %1$d s…</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_peer_1_s_2_s_521b5084">Pair %1$s -&gt; %2$s</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_port_1_d_b6522e8b">Port %1$d</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_unable_to_open_github_8bdb9881">Impossible d\'ouvrir GitHub</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_unable_to_open_wi_fi_settings_537aaf03">Impossible d\'ouvrir les réglages Wi-Fi</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_unable_to_open_official_cfmoto_app_settings_ec49e64b">Impossible d\'ouvrir les réglages de l\'application officielle CFMOTO</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_no_open_ports_found_8533cd9d">aucun port ouvert trouvé</string>
+    <!-- Source: localized UI literal / enum label -->
+    <string name="legacy_open_1_s_e55a596b">ouverts : %1$s</string>
+    <!-- Android Auto pre-flight: the official MotoPlay client is installed, but may not be active. -->
+    <string name="legacy_cfmoto_motoplay_detected_ca887791">CFMOTO MotoPlay détecté</string>
+    <string name="legacy_moto_hub_starts_google_android_auto_not_motoplay_1ab1d3e9">MOTO-HUB lance Google Android Auto, pas MotoPlay.</string>
+    <string name="legacy_the_official_cfmoto_motoplay_easyconn_app_can_st_7e0ae938">L\'application officielle CFMOTO MotoPlay/EasyConn peut encore prendre le contrôle de la connexion T-Box tant qu\'elle est en arrière-plan. Pour une projection fiable, forcez son arrêt dans les réglages Android avant de continuer.</string>
+    <string name="legacy_continue_with_android_auto_f6c7ef01">Continuer avec Android Auto</string>
+    <string name="legacy_open_motoplay_settings_99bbfe9c">Ouvrir les réglages MotoPlay</string>
+    <string name="legacy_do_not_show_this_warning_again_d3abf59b">Ne plus afficher cet avertissement</string>
+    <!-- Source: tbox/ProfileOverride.kt -->
+    <string name="legacy_generic_dashboard_53d1376b">Tableau de bord générique</string>
+    <!-- Source: tbox/ProfileOverride.kt -->
+    <string name="legacy_neutral_defaults_for_a_dashboard_that_is_not_rec_8d299cf0">Valeurs neutres par défaut pour un tableau de bord non reconnu</string>
+    <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
+    <string name="legacy_unfamiliar_pairing_code_714f8ce7">Code d\'appairage inhabituel</string>
+    <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
+    <string name="legacy_this_code_carries_wi_fi_details_for_1_s_but_it_w_422a5994">Ce code contient les informations Wi-Fi de %1$s, mais il n\'a pas été émis par une adresse Carbit comme les tableaux de bord que MOTO-HUB connaît.</string>
+    <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
+    <string name="legacy_several_manufacturers_ship_the_same_dashboard_so_49305d38">Plusieurs constructeurs livrent le même logiciel de tableau de bord sous leur propre marque, il peut donc très bien s\'agir de votre moto. Ne continuez que si vous l\'avez scanné depuis votre propre tableau de bord.</string>
+    <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
+    <string name="legacy_use_these_details_52f852ac">Utiliser ces informations</string>
+
+    <!-- ==================================================================
+         Catalogue sweep, 2026-08-13: strings this worktree draws but had
+         no identifier for. Values come from the pro-poc catalogues, where
+         the same source strings are already translated.
+         ================================================================== -->
+
+    <!-- Source: MainActivity.kt -->
+    <string name="legacy_unable_to_open_discord_50e2e02e">Impossible d\'ouvrir Discord</string>
+
+    <!-- Source: feature/about/AboutScreen.kt -->
+    <string name="legacy_d_taps_away_from_the_prototype_779bf960">%d appuis avant le prototype</string>
+    <string name="legacy_community_source_fe28bfcc">COMMUNAUTÉ ET SOURCE</string>
+    <string name="legacy_discord_c6d7d50c">Discord</string>
+    <string name="legacy_github_7f258fe3">GitHub</string>
+    <string name="legacy_map_rendering_by_maplibre_native_bsd_2_clause_ve_cb6afe3f">Rendu de la carte par MapLibre Native (BSD-2-Clause). Tuiles vectorielles d\'OpenFreeMap, au schéma OpenMapTiles ; tuiles raster de CARTO. Recherche d\'adresses par Photon. Calcul d\'itinéraires par Valhalla, hébergé par Stadia Maps ou le serveur de démonstration FOSSGIS. Lieux par Overpass. Météo par Open-Meteo. Prix des carburants publiés en données ouvertes par le Ministerio para la Transición Ecológica espagnol, la DGEG portugaise, le Ministère de l\'Économie français et le MIMIT italien. Les données de la DGEG ne peuvent pas être utilisées à des fins commerciales.</string>
+    <string name="legacy_maps_data_b256210d">CARTES ET DONNÉES</string>
+    <string name="legacy_maps_addresses_and_routes_are_built_on_data_by_o_f0b02b91">Les cartes, les adresses et les itinéraires reposent sur les données de © OpenStreetMap contributors, sous licence ODbL.</string>
+    <string name="legacy_prototype_unlocked_856a4841">Prototype débloqué</string>
+
+    <!-- Source: feature/androidauto/AndroidAutoHelpScreen.kt -->
+    <string name="legacy_a_notification_confirms_the_server_is_running_le_eacf82e">Une notification confirme que le serveur tourne. Laissez-le tourner : il reste actif jusqu\'à ce que vous l\'arrêtiez ou redémarriez le téléphone.</string>
+    <string name="legacy_android_auto_17_4_removed_the_way_an_app_can_ask_890c8f24">Android Auto 17.4 a supprimé la façon dont une application peut demander à projeter. MOTO-HUB essaie quand même, et sur les versions antérieures cela fonctionne — mais quand ce n\'est pas le cas, Android Auto peut être lancé depuis son propre menu développeur. Vous n\'avez rien à installer.</string>
+    <string name="legacy_android_auto_does_not_start_2266b70e">Android Auto ne démarre pas</string>
+    <string name="legacy_every_time_android_auto_will_not_start_18ff3ab9">CHAQUE FOIS QU\'ANDROID AUTO NE DÉMARRE PAS</string>
+    <string name="legacy_go_back_to_moto_hub_and_start_android_auto_it_co_ff8cc50d">Revenez à MOTO-HUB et lancez Android Auto. La connexion se fait seule en quelques secondes : il n\'y a rien d\'autre à appuyer.</string>
+    <string name="legacy_in_android_auto_s_developer_settings_open_the_me_1ea3a8cf">Dans les réglages Développeur d\'Android Auto, ouvrez le menu ⋮ en haut à droite et choisissez « Démarrer le serveur d\'unité principale ». C\'est dans ce menu, pas dans la liste de réglages en dessous.</string>
+    <string name="legacy_in_developer_settings_turn_on_add_new_cars_to_an_19f79566">Dans les réglages Développeur, activez « Ajouter de nouvelles voitures à Android Auto » (les anciennes versions parlent de « Sources inconnues »).</string>
+    <string name="legacy_jumps_straight_to_the_app_where_the_menu_above_l_7c8b2093">Ouvre directement l\'application où se trouve le menu ci-dessus</string>
+    <string name="legacy_normally_moto_hub_waits_and_asks_android_auto_to_6c183bab">Normalement MOTO-HUB attend et demande à Android Auto de s\'y connecter. La version 17.4 a fermé cette porte à toutes les applications de ce type, pas seulement à celle-ci. Le serveur d\'unité principale inverse le sens — Android Auto attend et MOTO-HUB se connecte à lui — et c\'est une porte que Google a laissée ouverte pour ses propres outils de test.</string>
+    <string name="legacy_one_time_setup_ca24c531">CONFIGURATION UNIQUE</string>
+    <string name="legacy_open_android_auto_settings_48a5120d">Ouvrir les réglages d\'Android Auto</string>
+    <string name="legacy_open_the_android_auto_app_scroll_to_the_bottom_a_69ae9e53">Ouvrez l\'application Android Auto, descendez tout en bas et appuyez dix fois sur « Version ». Les réglages Développeur apparaissent.</string>
+    <string name="legacy_why_14fa8">POURQUOI</string>
+
+    <!-- Source: feature/controls/BluetoothStatus.kt -->
+    <string name="legacy_allow_bluetooth_access_so_the_app_can_see_whethe_8754f4c2">Autorisez l\'accès Bluetooth pour que l\'application voie si la moto est connectée.</string>
+    <string name="legacy_bluetooth_is_off_turn_it_on_then_pair_the_motorc_5375bc65">Le Bluetooth est désactivé — activez-le, puis appairez la moto.</string>
+    <string name="legacy_connected_now_1_s_if_that_is_the_motorcycle_the__cd016af1">Connecté actuellement : %1$s. S\'il s\'agit de la moto, les touches du guidon peuvent atteindre le téléphone.</string>
+    <string name="legacy_no_audio_device_is_connected_right_now_with_the__7d4f4d3e">Aucun appareil audio n\'est connecté pour l\'instant. Moto allumée, son tableau de bord devrait apparaître ici — s\'il n\'apparaît jamais, appairez-le depuis les réglages Bluetooth.</string>
+    <string name="legacy_this_phone_has_no_bluetooth_b42f7e85">Ce téléphone n\'a pas de Bluetooth.</string>
+
+    <!-- Source: feature/controls/HandlebarMappingScreen.kt -->
+    <string name="legacy_a_button_the_app_has_not_been_taught_yet_53060697">Une touche que l\'application n\'a pas encore apprise</string>
+    <string name="legacy_a_single_press_acts_immediately_instead_of_waiti_ebd37a80">Un appui simple agit immédiatement au lieu d\'attendre la fin de la fenêtre de double appui. Le double fonctionne toujours - il exécute simplement le simple d\'abord.</string>
+    <string name="legacy_allow_bluetooth_bbde9a57">Autoriser le Bluetooth</string>
+    <string name="legacy_bluetooth_settings_ed5eb975">Réglages Bluetooth</string>
+    <string name="legacy_checking_bluetooth_ce222d3e">Vérification du Bluetooth…</string>
+    <string name="legacy_choose_what_this_press_does_4e74fce9">Choisissez ce que fait cet appui.</string>
+    <string name="legacy_done_1_d_presses_learned_dd4b86bd">Terminé - %1$d appuis appris.</string>
+    <string name="legacy_double_press_window_a8b0763c">Fenêtre de double appui</string>
+    <string name="legacy_every_card_now_describes_your_handlebar_buttons__f70bd7b3">Chaque fiche décrit maintenant votre guidon. Les touches marquées comme absentes ont disparu.</string>
+    <string name="legacy_finish_7d6e78b3">Terminer</string>
+    <string name="legacy_handlebar_7b449ccb">Guidon</string>
+    <string name="legacy_hold_gestures_a5df4e6b">Appuis longs</string>
+    <string name="legacy_hold_time_bba08d6e">Durée d\'appui long</string>
+    <string name="legacy_how_long_the_app_waits_before_deciding_a_press_w_fbe08ef2">Combien de temps l\'application attend avant de décider qu\'un appui était double, ou long.</string>
+    <string name="legacy_motorcycle_bluetooth_88c59adf">Bluetooth de la moto</string>
+    <string name="legacy_not_detected_yet_d1e8f877">pas encore détecté</string>
+    <string name="legacy_not_on_my_bike_49509421">Pas sur ma moto</string>
+    <string name="legacy_nothing_happens_some_dashboards_keep_a_button_fo_c80119d0">Rien ne se passe ? Certains tableaux de bord gardent une touche pour eux et n\'envoient rien du tout au téléphone - sur un CFMOTO CFDL16 c\'est exactement ce que fait un appui COURT sur le rocker. Marquez-la comme absente et elle cesse de prendre de la place.</string>
+    <string name="legacy_on_the_motorcycle_do_this_5d34555e">Sur la moto, faites ceci</string>
+    <string name="legacy_one_card_per_button_with_what_a_press_a_double_p_e88303f5">Une fiche par touche, avec ce que font un appui, un double appui et un appui long. Apprenez le guidon à l\'application pour qu\'elle sache quelles touches le vôtre possède vraiment.</string>
+    <string name="legacy_press_a_handlebar_button_fd958503">Appuyez sur une touche du guidon</string>
+    <string name="legacy_reset_actions_to_defaults_95ecb43">Rétablir les actions par défaut</string>
+    <string name="legacy_skip_27599f">Passer</string>
+    <string name="legacy_snappy_singles_330a9d7e">Appuis simples vifs</string>
+    <string name="legacy_step_1_d_of_2_d_72bf41f6">ÉTAPE %1$d SUR %2$d</string>
+    <string name="legacy_stop_here_d51e892e">Arrêter ici</string>
+    <string name="legacy_teach_my_handlebar_51393162">Apprendre mon guidon</string>
+    <string name="legacy_timing_937fe44a">DÉLAIS</string>
+    <string name="legacy_turn_off_if_your_handlebar_needs_a_long_physical_c92718d1">Désactivez si votre guidon exige un appui physique long à chaque clic - sinon ces appuis sont pris pour des appuis longs.</string>
+    <string name="legacy_controls_fd1b9add">‹ Commandes</string>
+    <string name="legacy_handlebar_c1b6ada4">‹ Guidon</string>
+
+    <!-- Source: feature/garage/GarageScreen.kt -->
+    <string name="legacy_add_your_first_motorcycle_to_get_rolling_b8e9f267">Ajoutez votre première moto pour démarrer.</string>
+    <string name="legacy_no_motorcycle_no_problem_4346def1">PAS DE MOTO ? PAS DE PROBLÈME</string>
+
+    <!-- Source: feature/home/CoreAvailability.kt -->
+    <string name="legacy_advanced_needs_moto_hub_core_installed_and_paire_722fef7d">Advanced a besoin de MOTO-HUB (Core) installé et appairé à votre T-Box pour se connecter, recopier l\'écran ou lancer Android Auto.</string>
+    <string name="legacy_couldn_t_open_the_browser_3e0fae25">Impossible d\'ouvrir le navigateur.</string>
+    <string name="legacy_download_moto_hub_core_976f62e2">Télécharger MOTO-HUB Core</string>
+    <string name="legacy_moto_hub_core_not_found_b76c3f4f">MOTO-HUB CORE INTROUVABLE</string>
+
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_android_auto_17_4_removed_the_way_apps_ask_it_to_b5455068">Android Auto 17.4 a supprimé la façon dont les applications demandent à projeter. Il peut encore être lancé depuis le menu développeur d\'Android Auto.</string>
+    <string name="legacy_one_possible_cause_the_official_cfmoto_app_is_in_b6013d8d">Une cause possible : l\'application officielle CFMOTO est installée et peut occuper la liaison T-Box même en arrière-plan. Si la connexion échoue encore, forcez son arrêt depuis sa page Infos sur l\'appli, puis réessayez.</string>
+    <string name="legacy_open_cfmoto_app_info_4af1a737">Ouvrir les infos de l\'appli CFMOTO</string>
+    <string name="legacy_retry_connection_54743f76">Réessayer la connexion</string>
+    <string name="legacy_some_dashboards_never_broadcast_a_network_of_the_787ecd2c">Certains tableaux de bord ne diffusent jamais de réseau : ils rejoignent un point d\'accès créé par votre téléphone, avec le Ssid et le mot de passe affichés à l\'écran. Si le vôtre indique « ouvrez le point d\'accès Android », essayez ainsi.</string>
+    <string name="legacy_the_official_cfmoto_app_is_installed_and_may_be__461e26a6">L\'application officielle CFMOTO est installée et occupe peut-être le T-Box. Forcez son arrêt depuis sa page Infos sur l\'appli, puis réessayez.</string>
+    <string name="legacy_try_my_phone_hosts_the_hotspot_d4f6db66">Essayer : c\'est mon téléphone qui héberge</string>
+
+    <!-- Source: feature/home/HubViewModel.kt -->
+    <string name="legacy_network_connected_pairing_over_bluetooth_and_wai_5b4c6259">Réseau connecté. Appairage par Bluetooth et attente du tableau de bord.</string>
+
+    <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
+    <string name="legacy_altitude_ft_89feab0c">ALTITUDE FT</string>
+    <string name="legacy_altitude_m_caa51e4f">ALTITUDE M</string>
+    <string name="legacy_distance_ft_552284d9">DISTANCE FT</string>
+    <string name="legacy_distance_km_5522856d">DISTANCE KM</string>
+    <string name="legacy_distance_m_a7e856e2">DISTANCE M</string>
+    <string name="legacy_distance_mi_552285a7">DISTANCE MI</string>
+    <string name="legacy_max_km_h_45403037">MAX KM/H</string>
+    <string name="legacy_max_mph_5d129e29">MAX MPH</string>
+
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_auto_connect_and_recovery_57ed0872">Connexion automatique et reprise</string>
+    <string name="legacy_auto_recover_stalled_android_auto_streams_bd3e2d8e">Reprendre seul les flux Android Auto bloqués</string>
+    <string name="legacy_button_mapping_815600">Attribution des touches</string>
+    <string name="legacy_buttons_control_android_auto_3dc44642">Les touches commandent Android Auto</string>
+    <string name="legacy_drive_android_auto_with_the_motorcycle_s_buttons_ec16509d">Commandez Android Auto avec les touches de la moto</string>
+    <string name="legacy_handlebar_buttons_47b4fd2c">Touches au guidon</string>
+    <string name="legacy_managed_by_the_companion_app_its_controls_screen_9ad80a75">Géré par l\'application compagnon : son écran Commandes réapplique sa propre configuration du guidon à chaque démarrage de session, écrasant ce qui est réglé ici. Configurez le guidon là-bas.</string>
+    <string name="legacy_music_volume_9fa56d95">VOLUME DE LA MUSIQUE</string>
+    <string name="legacy_off_means_the_mode_picker_stays_exactly_as_befor_c93efb5c">Désactivé signifie que le sélecteur de mode reste, exactement comme avant.</string>
+    <string name="legacy_on_9ff">Activé</string>
+    <string name="legacy_put_a_screen_on_the_tft_as_soon_as_the_motorcycl_60bf969c">Afficher un écran sur le TFT dès que la moto se connecte</string>
+    <string name="legacy_requires_the_phone_paired_to_the_motorcycle_s_bl_dda6960a">Nécessite que le téléphone soit appairé au Bluetooth de la moto. La musique continue, mais ses touches sont captées pendant qu\'une session tourne.</string>
+    <string name="legacy_set_the_dash_clock_over_bluetooth_experimental_3431b284">Régler l\'horloge du tableau de bord par Bluetooth (expérimental)</string>
+    <string name="legacy_settings_595d2043">Réglages</string>
+    <string name="legacy_some_dashboards_ask_for_the_time_over_bluetooth__b44ce43b">Certains tableaux de bord demandent l\'heure par Bluetooth plutôt que par Wi-Fi, et restent à 00:00 sans elle. Il faut que la moto soit déjà appairée à ce téléphone dans les réglages Bluetooth d\'Android. Désactivé par défaut ; MOTO-HUB ne répond jamais qu\'à un appareil qui interroge dans le protocole propre au tableau de bord.</string>
+    <string name="legacy_some_dashboards_forget_settings_like_the_clock_w_76d95842">Certains tableaux de bord oublient des réglages comme l\'horloge quand la liaison Wi-Fi Direct tombe complètement. Garde le téléphone associé au réseau de la moto jusqu\'à ce que vous quittiez l\'application ou coupiez le Wi-Fi. Désactivé par défaut ; à n\'activer que si votre tableau de bord perd l\'heure après la déconnexion.</string>
+    <string name="legacy_start_automatically_2cb44c45">Démarrer automatiquement</string>
+    <string name="legacy_start_on_connect_94487a47">Démarrer à la connexion</string>
+    <string name="legacy_stay_linked_to_the_bike_s_wi_fi_after_disconnect_81b0e941">Rester sur le Wi-Fi de la moto après la déconnexion</string>
+    <string name="legacy_the_motorcycle_s_buttons_reach_the_phone_over_bl_356cbf0d">Les touches de la moto arrivent au téléphone par Bluetooth sous forme de touches multimédia. Pendant qu\'une session diffuse, MOTO-HUB peut les capter et piloter la navigation Android Auto au lieu du lecteur de musique.</string>
+    <string name="legacy_what_each_press_double_press_and_hold_does_97201ad9">Ce que font l\'appui simple, l\'appui double et l\'appui long</string>
+    <string name="legacy_what_to_do_when_android_auto_refuses_to_project_fa692d1b">Que faire quand Android Auto refuse de projeter</string>
+    <string name="legacy_what_to_start_5b78fc39">QUOI DÉMARRER</string>
+    <string name="legacy_while_capture_is_on_the_volume_buttons_navigate__9e410bf">Tant que la capture est active, les touches de volume servent à naviguer au lieu de régler le volume — définissez ici votre niveau d\'écoute.</string>
+    <string name="legacy_with_this_on_moto_hub_skips_the_what_should_i_sh_498b0614">Avec cette option, MOTO-HUB saute l\'écran « qu\'est-ce que j\'affiche ? » et met l\'écran choisi sur le TFT dès que la liaison avec la moto s\'établit. Cela vaut une fois par lancement de l\'application : arrêtez un écran et vous reprenez la main.</string>
+
+    <!-- Source: ui/components/SystemKillNotice.kt -->
+    <string name="legacy_dismiss_c6dc4a6a">Ignorer</string>
+    <string name="legacy_stopped_by_your_phone_37b2b157">ARRÊTÉ PAR VOTRE TÉLÉPHONE</string>
+    <string name="legacy_your_last_session_ended_at_1_s_because_the_phone_8386f49c">Votre dernière session s\'est terminée à %1$s parce que le téléphone a fermé %2$s, et non à cause d\'un défaut de l\'application.</string>
+
+    <!-- ==================================================================
+         Catalogue sweep, 2026-08-13 (second pass): source strings that sit
+         inside an if/when/arrayOf within the lookup call.
+         ================================================================== -->
+
+    <!-- Source: feature/ai/AiSettingsScreen.kt -->
+    <string name="legacy_api_key_fb0d9b39">Clé API</string>
+    <string name="legacy_replace_api_key_d64eadad">Remplacer la clé API</string>
+
+    <!-- Source: feature/androidauto/AndroidAutoPreviewScreen.kt -->
+    <string name="legacy_hide_controls_2dc943b4">Masquer les commandes</string>
+
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_1_d_rpm_2_d_km_h_3_d_c_coolant_60ed46da">%1$d tr/min · %2$d km/h · %3$d °C liquide</string>
+    <string name="legacy_obd_adapter_connected_29e365e9">Adaptateur OBD connecté</string>
+    <string name="legacy_saved_4bf7e67">Enregistré</string>
+    <string name="legacy_the_dashboard_shows_why_on_the_motorcycle_442e8daa">Le tableau de bord en donne la raison sur la moto.</string>
+    <string name="legacy_waiting_for_the_obd_adapter_b3b01207">En attente de l\'adaptateur OBD</string>
+
+    <!-- Source: feature/controls/HandlebarMappingScreen.kt -->
+    <string name="legacy_listening_2ece009b">À l\'écoute</string>
+    <string name="legacy_received_d3a64e01">Reçu</string>
+    <string name="legacy_teach_again_4fb10bd5">Réapprendre</string>
+
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_bluetooth_is_turned_off_so_the_obd_adapter_canno_5a8640c">Le Bluetooth est désactivé, l\'adaptateur OBD est donc injoignable.</string>
+    <string name="legacy_customizable_vector_map_rendered_on_the_tft_bfa6e220">Carte vectorielle personnalisable dessinée sur le TFT</string>
+    <string name="legacy_gps_following_8ad5867b">Suivi GPS</string>
+    <string name="legacy_moto_hub_needs_bluetooth_access_to_reach_the_obd_af681be3">MOTO-HUB a besoin de l\'accès Bluetooth pour atteindre l\'adaptateur OBD.</string>
+    <string name="legacy_no_map_live_engine_data_from_a_paired_elm327_ada_8ecf531c">Aucune carte : données moteur en direct depuis un adaptateur ELM327 appairé</string>
+    <string name="legacy_no_paired_obd_adapter_found_pair_the_elm327_dong_90029f7c">Aucun adaptateur OBD appairé. Appairez d\'abord le dongle ELM327.</string>
+    <string name="legacy_restore_gps_76fc23d8">Revenir au GPS</string>
+
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_mute_24c639">Muet</string>
+    <string name="legacy_voice_on_8e4723ad">Voix activée</string>
+
+    <!-- Source: feature/obd/ObdFuelAirScreen.kt -->
+    <string name="legacy_the_ecu_is_adding_fuel_steadily_worth_a_look_if__da08dd7">Le calculateur enrichit le mélange de façon régulière. À surveiller si cela continue de monter.</string>
+    <string name="legacy_the_ecu_is_taking_fuel_away_steadily_worth_a_loo_b2e06214">Le calculateur appauvrit le mélange de façon régulière. À surveiller si cela continue de descendre.</string>
+
+    <!-- Source: feature/obd/ObdFullScanScreen.kt -->
+    <string name="legacy_last_scan_1c6351c7">DERNIÈRE ANALYSE</string>
+    <string name="legacy_run_full_scan_62e71f9">Lancer l\'analyse complète</string>
+    <string name="legacy_scanning_f99dc8b1">ANALYSE</string>
+    <string name="legacy_scanning_b757d75">Analyse…</string>
+
+    <!-- Source: feature/obd/ObdHubScreen.kt -->
+    <string name="legacy_bluetooth_is_turned_off_92ceda3f">Le Bluetooth est désactivé.</string>
+    <string name="legacy_connected_and_reading_1e53c68c">Connecté et en lecture</string>
+    <string name="legacy_connecting_ca35204e">Connexion…</string>
+    <string name="legacy_moto_hub_needs_bluetooth_access_to_reach_the_ada_8763b3f4">MOTO-HUB a besoin de l\'accès Bluetooth pour atteindre l\'adaptateur.</string>
+    <string name="legacy_no_paired_obd_adapter_found_72c35314">Aucun adaptateur OBD appairé.</string>
+    <string name="legacy_not_connected_273cf5d2">Non connecté.</string>
+
+    <!-- Source: feature/ridedashboard/widget/AltitudeWidget.kt -->
+    <string name="legacy_1h_af24">-1H</string>
+    <string name="legacy_climbing_6536490d">EN MONTÉE</string>
+    <string name="legacy_descending_da6096f8">EN DESCENTE</string>
+    <string name="legacy_gnss_live_7bc47fe5">GNSS ACTIF</string>
+    <string name="legacy_level_44fa364">À PLAT</string>
+    <string name="legacy_no_fix_8982dd16">PAS DE FIX</string>
+    <string name="legacy_vertical_speed_427682fd">VITESSE VERT.</string>
+
+    <!-- Source: feature/ridedashboard/widget/BatteryWidget.kt -->
+    <string name="legacy_battery_level_508e0b71">NIVEAU BATTERIE</string>
+    <string name="legacy_charging_843f5271">EN CHARGE</string>
+    <string name="legacy_external_power_41cdb450">ALIMENTATION EXTERNE</string>
+    <string name="legacy_hot_1182d">CHAUD</string>
+    <string name="legacy_low_power_483394f9">BATTERIE FAIBLE</string>
+    <string name="legacy_no_sensor_69b15af9">PAS DE CAPTEUR</string>
+    <string name="legacy_normal_8999b0e7">NORMAL</string>
+    <string name="legacy_off_1314f">ARRÊT</string>
+    <string name="legacy_warm_288a85">TIÈDE</string>
+
+    <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
+    <string name="legacy_east_205bfd">EST</string>
+    <string name="legacy_glare_risk_8e426920">RISQUE D\'ÉBLOUISSEMENT</string>
+    <string name="legacy_gnss_stale_fd32d3a0">GNSS ANCIEN</string>
+    <string name="legacy_ne_9b7">NE</string>
+    <string name="legacy_no_gnss_a6d94c86">PAS DE GNSS</string>
+    <string name="legacy_north_47050e5">NORD</string>
+    <string name="legacy_nw_9c9">NO</string>
+    <string name="legacy_se_a52">SE</string>
+    <string name="legacy_south_4b6d1ad">SUD</string>
+    <string name="legacy_sun_tracking_5fd65e2b">SUIVI DU SOLEIL</string>
+    <string name="legacy_sw_a64">SO</string>
+    <string name="legacy_west_2899af">OUEST</string>
+
+    <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
+    <string name="legacy_off_for_1_s_a8aabb23">Désactivé sur %1$s</string>
+    <string name="legacy_one_widget_pinned_on_1_s_9ab92ad6">Un widget fixe sur %1$s</string>
+    <string name="legacy_rotating_on_1_s_c5e75b74">En rotation sur %1$s</string>
+    <string name="legacy_this_panel_cycles_through_the_1_d_ticked_widgets_3a2b2d0e">Ce panneau alterne entre les %1$d widgets cochés.</string>
+    <string name="legacy_this_panel_shows_that_one_widget_and_never_rotat_f3acc606">Ce panneau affiche ce seul widget et ne tourne jamais. Cochez-en un de plus pour lancer le carrousel.</string>
+    <string name="legacy_tick_widgets_below_to_build_this_panel_s_carouse_ab0f3111">Cochez des widgets ci-dessous pour composer le carrousel de ce panneau. Chaque panneau a le sien.</string>
+
+    <!-- Source: feature/ridedashboard/widget/SatelliteWidget.kt -->
+    <string name="legacy_2d_fix_weak_geometry_e5b0cd1f">FIX 2D  •  GÉOMÉTRIE FAIBLE</string>
+    <string name="legacy_3d_fix_navigation_ready_bff99e13">FIX 3D  •  PRÊT À NAVIGUER</string>
+    <string name="legacy_scan_26be7d">RECHERCHE</string>
+    <string name="legacy_searching_for_satellites_f009ee35">RECHERCHE DE SATELLITES</string>
+
+    <!-- Source: feature/ridedashboard/widget/SpeedGaugeWidget.kt -->
+    <string name="legacy_gnss_ok_35ac4b15">GNSS OK</string>
+    <string name="legacy_n_4e">N</string>
+    <string name="legacy_w_57">O</string>
+
+    <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
+    <string name="legacy_session_live_5f7f2456">SESSION ACTIVE</string>
+
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_capture_84285f26">Capturer</string>
+    <string name="legacy_capturing_561c2223">Capture…</string>
+    <string name="legacy_recalibrate_ceebf5d4">Recalibrer</string>
+
+    <!-- Source: feature/trips/TripLibraryUi.kt -->
+    <string name="legacy_enhanced_9c6c8376">COMPLET</string>
+    <string name="legacy_gps_only_e6f03982">GPS SEUL</string>
+</resources>

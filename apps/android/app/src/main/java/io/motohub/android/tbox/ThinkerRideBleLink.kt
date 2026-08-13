@@ -76,7 +76,11 @@ internal class ThinkerRideBleLink(
 
     private val closed = AtomicBoolean(false)
     private val handshakeStarted = AtomicBoolean(false)
+    private val discoveryStarted = AtomicBoolean(false)
     private val ready = CompletableDeferred<Result<String>>()
+
+    /** Notifications are fragments, not messages; this puts them back together. */
+    private val notifyAssembler = ThinkerRideProtocol.NotifyAssembler()
 
     /** Guards [writeQueue], [inFlight], [inFlightAttempts], [writeGeneration], [writeWatchdog]. */
     private val queueLock = Any()
@@ -86,8 +90,12 @@ internal class ThinkerRideBleLink(
     private var writeGeneration = 0L
     private var writeWatchdog: ScheduledFuture<*>? = null
 
-    /** Completed once the dash acknowledges pairing (`send_pairresult` = 1) over notify. */
-    private val pairConfirmation = CompletableDeferred<Unit>()
+    /**
+     * Completed once the dash acknowledges pairing (`send_pairresult` = 1) over notify. Replaced
+     * by [repairAndAwaitConfirmation], which re-arms it before asking the dash to pair again.
+     */
+    @Volatile
+    private var pairConfirmation = CompletableDeferred<Unit>()
 
     /**
      * Scans for the dash, connects, subscribes to notifications, sends the opening handshake and
@@ -168,6 +176,32 @@ internal class ThinkerRideBleLink(
         } == true
     }
 
+    /**
+     * Asks the dash to pair again and suspends until it confirms, so that a mirror-start can
+     * follow the confirmation immediately.
+     *
+     * KoveMirror fires mirror-start straight out of the `send_pairresult` notification; we only
+     * reach that point once the video pipeline is up, seconds later. A KOVE 800X PRO that
+     * mirrors fine under KoveMirror ignored every mirror-start we sent ~4.6s after pairing
+     * (2026-08-13), so the gap is worth closing. Returns false when the dash does not answer in
+     * time, in which case the caller carries on exactly as it did before.
+     */
+    suspend fun repairAndAwaitConfirmation(timeoutMillis: Long): Boolean {
+        if (closed.get()) return false
+        val rearmed = CompletableDeferred<Unit>()
+        pairConfirmation = rearmed
+        val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
+        ThinkerRideProtocol.bleHandshakePackets(timestamp).forEach { enqueue(it) }
+        return withTimeoutOrNull(timeoutMillis) {
+            try {
+                rearmed.await()
+                true
+            } catch (_: IllegalStateException) {
+                false
+            }
+        } == true
+    }
+
     /** Sends the projection start/stop pair; safe to call from any thread. */
     fun sendMirrorStatus(active: Boolean) {
         ThinkerRideProtocol.bleMirrorStatusPackets(active).forEach { enqueue(it) }
@@ -221,8 +255,18 @@ internal class ThinkerRideBleLink(
             override fun onConnectionStateChange(connectedGatt: BluetoothGatt, status: Int, newState: Int) {
                 when (newState) {
                     BluetoothProfile.STATE_CONNECTED -> {
-                        log("BLE connected; discovering the mirroring service.")
-                        runCatching { connectedGatt.discoverServices() }
+                        // Ask for a bigger MTU before anything else: at the 23-byte default the
+                        // dash's JSON arrives in 20-byte fragments. Only one GATT operation may
+                        // be in flight, so service discovery waits for the answer (or for the
+                        // fallback below when the stack never calls onMtuChanged).
+                        val requested = runCatching {
+                            connectedGatt.requestMtu(ThinkerRideProtocol.BLE_PREFERRED_MTU)
+                        }.getOrDefault(false)
+                        if (requested) {
+                            schedule(MTU_TIMEOUT_MS) { startDiscoveryOnce(connectedGatt) }
+                        } else {
+                            startDiscoveryOnce(connectedGatt)
+                        }
                     }
                     BluetoothProfile.STATE_DISCONNECTED -> {
                         if (closed.get()) return
@@ -235,6 +279,11 @@ internal class ThinkerRideBleLink(
                         }
                     }
                 }
+            }
+
+            override fun onMtuChanged(connectedGatt: BluetoothGatt, mtu: Int, status: Int) {
+                log("BLE MTU is now $mtu bytes (status $status).")
+                startDiscoveryOnce(connectedGatt)
             }
 
             override fun onServicesDiscovered(connectedGatt: BluetoothGatt, status: Int) {
@@ -296,11 +345,13 @@ internal class ThinkerRideBleLink(
                 value: ByteArray
             ) {
                 if (characteristic.uuid != notifyUuid) return
-                val text = value.toString(StandardCharsets.UTF_8)
-                log("Dash -> BLE: $text")
-                if (ThinkerRideProtocol.isPairConfirmation(text)) {
-                    if (pairConfirmation.complete(Unit)) {
-                        log("Dashboard confirmed Bluetooth pairing (send_pairresult=1).")
+                // One notification is not one message: reassemble first, then act.
+                notifyAssembler.accept(value.toString(StandardCharsets.UTF_8)).forEach { message ->
+                    log("Dash -> BLE: $message")
+                    if (ThinkerRideProtocol.isPairConfirmation(message)) {
+                        if (pairConfirmation.complete(Unit)) {
+                            log("Dashboard confirmed Bluetooth pairing (send_pairresult=1).")
+                        }
                     }
                 }
             }
@@ -314,6 +365,13 @@ internal class ThinkerRideBleLink(
                 Result.failure(opened.exceptionOrNull() ?: IllegalStateException("Unable to open the Bluetooth link."))
             )
         }
+    }
+
+    /** Discovery is reached from both the MTU answer and its fallback timer; run it once. */
+    private fun startDiscoveryOnce(connectedGatt: BluetoothGatt) {
+        if (closed.get() || !discoveryStarted.compareAndSet(false, true)) return
+        log("BLE connected; discovering the mirroring service.")
+        runCatching { connectedGatt.discoverServices() }
     }
 
     /** True when a CCCD write was actually submitted, so [onDescriptorWrite] is coming. */
@@ -338,6 +396,10 @@ internal class ThinkerRideBleLink(
         val packets = ThinkerRideProtocol.bleHandshakePackets(timestamp)
         log("Sending the Bluetooth handshake (${packets.size} packets, queued).")
         packets.forEach { enqueue(it) }
+        // The first heartbeat goes out with the handshake, not one interval later: KoveMirror
+        // added exactly this (upstream 22ed5d5, "Trying to fix the connection issues") and a
+        // dash that never heard from us for 5s is one we have seen ignore mirror-start.
+        queueHeartbeat()
         heartbeat = scheduleRepeating(ThinkerRideProtocol.BLE_HEARTBEAT_INTERVAL_MS) { queueHeartbeat() }
     }
 
@@ -463,6 +525,9 @@ internal class ThinkerRideBleLink(
 
         /** Upper bound on a missing [BluetoothGattCallback.onDescriptorWrite]. */
         const val DESCRIPTOR_TIMEOUT_MS = 2_000L
+
+        /** Upper bound on a missing [BluetoothGattCallback.onMtuChanged]. */
+        const val MTU_TIMEOUT_MS = 1_500L
 
         const val WRITE_DRAIN_POLL_MS = 25L
     }

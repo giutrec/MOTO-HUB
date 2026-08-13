@@ -10,6 +10,7 @@
     <string name="language_italian">Italiano</string>
     <string name="language_portuguese">Português</string>
     <string name="language_korean">한국어 (대한민국)</string>
+    <string name="language_french">Français</string>
     <string name="language_title">Language</string>
     <string name="language_description">Choose the language used by MOTO-HUB</string>
     <string name="language_detail_description">MOTO-HUB follows the phone language by default. Choose a language below to override it for this app.</string>
@@ -1274,4 +1275,262 @@
     <string name="legacy_several_manufacturers_ship_the_same_dashboard_so_49305d38">Several manufacturers ship the same dashboard software under their own branding, so this may well be your motorcycle. Continue only if you scanned it from your own dashboard.</string>
     <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
     <string name="legacy_use_these_details_52f852ac">Use these details</string>
+
+    <!-- ==================================================================
+         Catalogue sweep, 2026-08-13: strings this worktree draws but had
+         no identifier for. Values come from the pro-poc catalogues, where
+         the same source strings are already translated.
+         ================================================================== -->
+
+    <!-- Source: MainActivity.kt -->
+    <string name="legacy_unable_to_open_discord_50e2e02e">Unable to open Discord</string>
+
+    <!-- Source: feature/about/AboutScreen.kt -->
+    <string name="legacy_d_taps_away_from_the_prototype_779bf960">%d taps away from the prototype</string>
+    <string name="legacy_community_source_fe28bfcc">COMMUNITY &amp; SOURCE</string>
+    <string name="legacy_discord_c6d7d50c">Discord</string>
+    <string name="legacy_github_7f258fe3">GitHub</string>
+    <string name="legacy_map_rendering_by_maplibre_native_bsd_2_clause_ve_cb6afe3f">Map rendering by MapLibre Native (BSD-2-Clause). Vector tiles by OpenFreeMap, to the OpenMapTiles schema; raster tiles by CARTO. Address search by Photon. Routing by Valhalla, hosted by Stadia Maps or the FOSSGIS demo server. Places by Overpass. Weather by Open-Meteo. Petrol prices published as open data by Spain\'s Ministerio para la Transición Ecológica, Portugal\'s DGEG, the French Ministère de l\'Économie and Italy\'s MIMIT. DGEG\'s data may not be used commercially.</string>
+    <string name="legacy_maps_data_b256210d">MAPS &amp; DATA</string>
+    <string name="legacy_maps_addresses_and_routes_are_built_on_data_by_o_f0b02b91">Maps, addresses and routes are built on data by © OpenStreetMap contributors, licensed under the ODbL.</string>
+    <string name="legacy_prototype_unlocked_856a4841">Prototype unlocked</string>
+
+    <!-- Source: feature/androidauto/AndroidAutoHelpScreen.kt -->
+    <string name="legacy_a_notification_confirms_the_server_is_running_le_eacf82e">A notification confirms the server is running. Leave it running: it stays up until you stop it or restart the phone.</string>
+    <string name="legacy_android_auto_17_4_removed_the_way_an_app_can_ask_890c8f24">Android Auto 17.4 removed the way an app can ask it to project. MOTO-HUB still tries, and on older versions it works — but when it does not, Android Auto can be started from its own developer menu instead. You do not need to install anything.</string>
+    <string name="legacy_android_auto_does_not_start_2266b70e">Android Auto does not start</string>
+    <string name="legacy_every_time_android_auto_will_not_start_18ff3ab9">EVERY TIME ANDROID AUTO WILL NOT START</string>
+    <string name="legacy_go_back_to_moto_hub_and_start_android_auto_it_co_ff8cc50d">Go back to MOTO-HUB and start Android Auto. It connects on its own within a couple of seconds — there is nothing else to press.</string>
+    <string name="legacy_in_android_auto_s_developer_settings_open_the_me_1ea3a8cf">In Android Auto\'s Developer settings, open the ⋮ menu at the top right and choose \"Start head unit server\". It is in that menu, not in the list of settings below it.</string>
+    <string name="legacy_in_developer_settings_turn_on_add_new_cars_to_an_19f79566">In Developer settings, turn on \"Add new cars to Android Auto\" (older versions call it \"Unknown sources\").</string>
+    <string name="legacy_jumps_straight_to_the_app_where_the_menu_above_l_7c8b2093">Jumps straight to the app where the menu above lives</string>
+    <string name="legacy_normally_moto_hub_waits_and_asks_android_auto_to_6c183bab">Normally MOTO-HUB waits and asks Android Auto to connect to it. Version 17.4 closed that door for every app of this kind, not just this one. The head unit server reverses the direction — Android Auto waits and MOTO-HUB connects to it — which is a door Google left open for its own testing tools.</string>
+    <string name="legacy_one_time_setup_ca24c531">ONE-TIME SETUP</string>
+    <string name="legacy_open_android_auto_settings_48a5120d">Open Android Auto settings</string>
+    <string name="legacy_open_the_android_auto_app_scroll_to_the_bottom_a_69ae9e53">Open the Android Auto app, scroll to the bottom and tap \"Version\" ten times. Developer settings appear.</string>
+    <string name="legacy_why_14fa8">WHY</string>
+
+    <!-- Source: feature/controls/BluetoothStatus.kt -->
+    <string name="legacy_allow_bluetooth_access_so_the_app_can_see_whethe_8754f4c2">Allow Bluetooth access so the app can see whether the motorcycle is connected.</string>
+    <string name="legacy_bluetooth_is_off_turn_it_on_then_pair_the_motorc_5375bc65">Bluetooth is off — turn it on, then pair the motorcycle.</string>
+    <string name="legacy_connected_now_1_s_if_that_is_the_motorcycle_the__cd016af1">Connected now: %1$s. If that is the motorcycle, the handlebar buttons can reach the phone.</string>
+    <string name="legacy_no_audio_device_is_connected_right_now_with_the__7d4f4d3e">No audio device is connected right now. With the motorcycle on, its dash should appear here — if it never does, pair it from Bluetooth settings.</string>
+    <string name="legacy_this_phone_has_no_bluetooth_b42f7e85">This phone has no Bluetooth.</string>
+
+    <!-- Source: feature/controls/HandlebarMappingScreen.kt -->
+    <string name="legacy_a_button_the_app_has_not_been_taught_yet_53060697">A button the app has not been taught yet</string>
+    <string name="legacy_a_single_press_acts_immediately_instead_of_waiti_ebd37a80">A single press acts immediately instead of waiting out the double-press window. A double still works - it just runs the single first.</string>
+    <string name="legacy_allow_bluetooth_bbde9a57">Allow Bluetooth</string>
+    <string name="legacy_bluetooth_settings_ed5eb975">Bluetooth settings</string>
+    <string name="legacy_checking_bluetooth_ce222d3e">Checking Bluetooth…</string>
+    <string name="legacy_choose_what_this_press_does_4e74fce9">Choose what this press does.</string>
+    <string name="legacy_done_1_d_presses_learned_dd4b86bd">Done - %1$d presses learned.</string>
+    <string name="legacy_double_press_window_a8b0763c">Double press window</string>
+    <string name="legacy_every_card_now_describes_your_handlebar_buttons__f70bd7b3">Every card now describes your handlebar. Buttons you marked as absent are gone.</string>
+    <string name="legacy_finish_7d6e78b3">Finish</string>
+    <string name="legacy_handlebar_7b449ccb">Handlebar</string>
+    <string name="legacy_hold_gestures_a5df4e6b">Hold gestures</string>
+    <string name="legacy_hold_time_bba08d6e">Hold time</string>
+    <string name="legacy_how_long_the_app_waits_before_deciding_a_press_w_fbe08ef2">How long the app waits before deciding a press was double, or held.</string>
+    <string name="legacy_motorcycle_bluetooth_88c59adf">Motorcycle Bluetooth</string>
+    <string name="legacy_not_detected_yet_d1e8f877">not detected yet</string>
+    <string name="legacy_not_on_my_bike_49509421">Not on my bike</string>
+    <string name="legacy_nothing_happens_some_dashboards_keep_a_button_fo_c80119d0">Nothing happens? Some dashboards keep a button for themselves and send the phone nothing at all - on a CFMOTO CFDL16 that is exactly what a SHORT rocker press does. Mark it as absent and it stops taking up space.</string>
+    <string name="legacy_on_the_motorcycle_do_this_5d34555e">On the motorcycle, do this</string>
+    <string name="legacy_one_card_per_button_with_what_a_press_a_double_p_e88303f5">One card per button, with what a press, a double press and a hold each do. Teach the handlebar so the app knows which buttons yours actually has.</string>
+    <string name="legacy_press_a_handlebar_button_fd958503">Press a handlebar button</string>
+    <string name="legacy_reset_actions_to_defaults_95ecb43">Reset actions to defaults</string>
+    <string name="legacy_skip_27599f">Skip</string>
+    <string name="legacy_snappy_singles_330a9d7e">Snappy singles</string>
+    <string name="legacy_step_1_d_of_2_d_72bf41f6">STEP %1$d OF %2$d</string>
+    <string name="legacy_stop_here_d51e892e">Stop here</string>
+    <string name="legacy_teach_my_handlebar_51393162">Teach my handlebar</string>
+    <string name="legacy_timing_937fe44a">TIMING</string>
+    <string name="legacy_turn_off_if_your_handlebar_needs_a_long_physical_c92718d1">Turn off if your handlebar needs a long physical press for every click - otherwise those presses are eaten as holds.</string>
+    <string name="legacy_controls_fd1b9add">‹ Controls</string>
+    <string name="legacy_handlebar_c1b6ada4">‹ Handlebar</string>
+
+    <!-- Source: feature/garage/GarageScreen.kt -->
+    <string name="legacy_add_your_first_motorcycle_to_get_rolling_b8e9f267">Add your first motorcycle to get rolling.</string>
+    <string name="legacy_no_motorcycle_no_problem_4346def1">NO MOTORCYCLE? NO PROBLEM</string>
+
+    <!-- Source: feature/home/CoreAvailability.kt -->
+    <string name="legacy_advanced_needs_moto_hub_core_installed_and_paire_722fef7d">Advanced needs MOTO-HUB (Core) installed and paired with your T-Box to connect, mirror, or run Android Auto.</string>
+    <string name="legacy_couldn_t_open_the_browser_3e0fae25">Couldn\'t open the browser.</string>
+    <string name="legacy_download_moto_hub_core_976f62e2">Download MOTO-HUB Core</string>
+    <string name="legacy_moto_hub_core_not_found_b76c3f4f">MOTO-HUB CORE NOT FOUND</string>
+
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_android_auto_17_4_removed_the_way_apps_ask_it_to_b5455068">Android Auto 17.4 removed the way apps ask it to project. It can still be started from Android Auto\'s own developer menu.</string>
+    <string name="legacy_one_possible_cause_the_official_cfmoto_app_is_in_b6013d8d">One possible cause: the official CFMOTO app is installed and can keep the T-Box link busy even in the background. If the connection keeps failing, force-stop it from its App info page, then retry.</string>
+    <string name="legacy_open_cfmoto_app_info_4af1a737">Open CFMOTO app info</string>
+    <string name="legacy_retry_connection_54743f76">Retry connection</string>
+    <string name="legacy_some_dashboards_never_broadcast_a_network_of_the_787ecd2c">Some dashboards never broadcast a network of their own: they join a hotspot your phone creates, using the Ssid and Password shown on the dash. If yours says \"open Android hotspot\", try that instead.</string>
+    <string name="legacy_the_official_cfmoto_app_is_installed_and_may_be__461e26a6">The official CFMOTO app is installed and may be holding the T-Box. Force-stop it from its App info page, then retry.</string>
+    <string name="legacy_try_my_phone_hosts_the_hotspot_d4f6db66">Try: my phone hosts the hotspot</string>
+
+    <!-- Source: feature/home/HubViewModel.kt -->
+    <string name="legacy_network_connected_pairing_over_bluetooth_and_wai_5b4c6259">Network connected. Pairing over Bluetooth and waiting for the dashboard.</string>
+
+    <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
+    <string name="legacy_altitude_ft_89feab0c">ALTITUDE FT</string>
+    <string name="legacy_altitude_m_caa51e4f">ALTITUDE M</string>
+    <string name="legacy_distance_ft_552284d9">DISTANCE FT</string>
+    <string name="legacy_distance_km_5522856d">DISTANCE KM</string>
+    <string name="legacy_distance_m_a7e856e2">DISTANCE M</string>
+    <string name="legacy_distance_mi_552285a7">DISTANCE MI</string>
+    <string name="legacy_max_km_h_45403037">MAX KM/H</string>
+    <string name="legacy_max_mph_5d129e29">MAX MPH</string>
+
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_auto_connect_and_recovery_57ed0872">Auto-connect and recovery</string>
+    <string name="legacy_auto_recover_stalled_android_auto_streams_bd3e2d8e">Auto-recover stalled Android Auto streams</string>
+    <string name="legacy_button_mapping_815600">Button mapping</string>
+    <string name="legacy_buttons_control_android_auto_3dc44642">Buttons control Android Auto</string>
+    <string name="legacy_drive_android_auto_with_the_motorcycle_s_buttons_ec16509d">Drive Android Auto with the motorcycle\'s buttons</string>
+    <string name="legacy_handlebar_buttons_47b4fd2c">Handlebar buttons</string>
+    <string name="legacy_managed_by_the_companion_app_its_controls_screen_9ad80a75">Managed by the companion app: its Controls screen re-applies its own handlebar configuration every time a session starts, overwriting what is set here. Configure the handlebar there.</string>
+    <string name="legacy_music_volume_9fa56d95">MUSIC VOLUME</string>
+    <string name="legacy_off_means_the_mode_picker_stays_exactly_as_befor_c93efb5c">Off means the mode picker stays, exactly as before.</string>
+    <string name="legacy_on_9ff">On</string>
+    <string name="legacy_put_a_screen_on_the_tft_as_soon_as_the_motorcycl_60bf969c">Put a screen on the TFT as soon as the motorcycle connects</string>
+    <string name="legacy_requires_the_phone_paired_to_the_motorcycle_s_bl_dda6960a">Requires the phone paired to the motorcycle\'s Bluetooth. Music keeps playing but its buttons are captured while a session runs.</string>
+    <string name="legacy_set_the_dash_clock_over_bluetooth_experimental_3431b284">Set the dash clock over Bluetooth (experimental)</string>
+    <string name="legacy_settings_595d2043">Settings</string>
+    <string name="legacy_some_dashboards_ask_for_the_time_over_bluetooth__b44ce43b">Some dashboards ask for the time over Bluetooth instead of Wi-Fi, and sit at 00:00 without it. Needs the bike already paired to this phone in Android\'s Bluetooth settings. Off by default; MOTO-HUB only ever replies to a device that asks in the dashboard\'s own protocol.</string>
+    <string name="legacy_some_dashboards_forget_settings_like_the_clock_w_76d95842">Some dashboards forget settings like the clock when the Wi-Fi Direct link fully drops. Keeps the phone associated to the bike\'s network until you leave the app or turn Wi-Fi off. Off by default; only turn on if your dash loses the time after disconnecting.</string>
+    <string name="legacy_start_automatically_2cb44c45">Start automatically</string>
+    <string name="legacy_start_on_connect_94487a47">Start on connect</string>
+    <string name="legacy_stay_linked_to_the_bike_s_wi_fi_after_disconnect_81b0e941">Stay linked to the bike\'s Wi-Fi after disconnecting</string>
+    <string name="legacy_the_motorcycle_s_buttons_reach_the_phone_over_bl_356cbf0d">The motorcycle\'s buttons reach the phone over Bluetooth as media keys. While a session is streaming, MOTO-HUB can capture them and drive Android Auto navigation instead of the music player.</string>
+    <string name="legacy_what_each_press_double_press_and_hold_does_97201ad9">What each press, double press and hold does</string>
+    <string name="legacy_what_to_do_when_android_auto_refuses_to_project_fa692d1b">What to do when Android Auto refuses to project</string>
+    <string name="legacy_what_to_start_5b78fc39">WHAT TO START</string>
+    <string name="legacy_while_capture_is_on_the_volume_buttons_navigate__9e410bf">While capture is on, the volume buttons navigate instead of changing volume — set your listening level here.</string>
+    <string name="legacy_with_this_on_moto_hub_skips_the_what_should_i_sh_498b0614">With this on, MOTO-HUB skips the \"what should I show?\" screen and puts the chosen screen on the TFT as soon as the motorcycle link comes up. It runs once per app launch - stop a screen and you are back in control.</string>
+
+    <!-- Source: ui/components/SystemKillNotice.kt -->
+    <string name="legacy_dismiss_c6dc4a6a">Dismiss</string>
+    <string name="legacy_stopped_by_your_phone_37b2b157">STOPPED BY YOUR PHONE</string>
+    <string name="legacy_your_last_session_ended_at_1_s_because_the_phone_8386f49c">Your last session ended at %1$s because the phone closed %2$s, not because of a fault in the app.</string>
+
+    <!-- ==================================================================
+         Catalogue sweep, 2026-08-13 (second pass): source strings that sit
+         inside an if/when/arrayOf within the lookup call.
+         ================================================================== -->
+
+    <!-- Source: feature/ai/AiSettingsScreen.kt -->
+    <string name="legacy_api_key_fb0d9b39">API key</string>
+    <string name="legacy_replace_api_key_d64eadad">Replace API key</string>
+
+    <!-- Source: feature/androidauto/AndroidAutoPreviewScreen.kt -->
+    <string name="legacy_hide_controls_2dc943b4">Hide controls</string>
+
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_1_d_rpm_2_d_km_h_3_d_c_coolant_60ed46da">%1$d rpm · %2$d km/h · %3$d °C coolant</string>
+    <string name="legacy_obd_adapter_connected_29e365e9">OBD adapter connected</string>
+    <string name="legacy_saved_4bf7e67">Saved</string>
+    <string name="legacy_the_dashboard_shows_why_on_the_motorcycle_442e8daa">The dashboard shows why on the motorcycle.</string>
+    <string name="legacy_waiting_for_the_obd_adapter_b3b01207">Waiting for the OBD adapter</string>
+
+    <!-- Source: feature/controls/HandlebarMappingScreen.kt -->
+    <string name="legacy_listening_2ece009b">Listening</string>
+    <string name="legacy_received_d3a64e01">Received</string>
+    <string name="legacy_teach_again_4fb10bd5">Teach again</string>
+
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_bluetooth_is_turned_off_so_the_obd_adapter_canno_5a8640c">Bluetooth is turned off, so the OBD adapter cannot be reached.</string>
+    <string name="legacy_customizable_vector_map_rendered_on_the_tft_bfa6e220">Customizable vector map rendered on the TFT</string>
+    <string name="legacy_gps_following_8ad5867b">GPS following</string>
+    <string name="legacy_moto_hub_needs_bluetooth_access_to_reach_the_obd_af681be3">MOTO-HUB needs Bluetooth access to reach the OBD adapter.</string>
+    <string name="legacy_no_map_live_engine_data_from_a_paired_elm327_ada_8ecf531c">No map: live engine data from a paired ELM327 adapter</string>
+    <string name="legacy_no_paired_obd_adapter_found_pair_the_elm327_dong_90029f7c">No paired OBD adapter found. Pair the ELM327 dongle first.</string>
+    <string name="legacy_restore_gps_76fc23d8">Restore GPS</string>
+
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_mute_24c639">Mute</string>
+    <string name="legacy_voice_on_8e4723ad">Voice on</string>
+
+    <!-- Source: feature/obd/ObdFuelAirScreen.kt -->
+    <string name="legacy_the_ecu_is_adding_fuel_steadily_worth_a_look_if__da08dd7">The ECU is adding fuel steadily. Worth a look if it keeps climbing.</string>
+    <string name="legacy_the_ecu_is_taking_fuel_away_steadily_worth_a_loo_b2e06214">The ECU is taking fuel away steadily. Worth a look if it keeps falling.</string>
+
+    <!-- Source: feature/obd/ObdFullScanScreen.kt -->
+    <string name="legacy_last_scan_1c6351c7">LAST SCAN</string>
+    <string name="legacy_run_full_scan_62e71f9">Run full scan</string>
+    <string name="legacy_scanning_f99dc8b1">SCANNING</string>
+    <string name="legacy_scanning_b757d75">Scanning…</string>
+
+    <!-- Source: feature/obd/ObdHubScreen.kt -->
+    <string name="legacy_bluetooth_is_turned_off_92ceda3f">Bluetooth is turned off.</string>
+    <string name="legacy_connected_and_reading_1e53c68c">Connected and reading</string>
+    <string name="legacy_connecting_ca35204e">Connecting…</string>
+    <string name="legacy_moto_hub_needs_bluetooth_access_to_reach_the_ada_8763b3f4">MOTO-HUB needs Bluetooth access to reach the adapter.</string>
+    <string name="legacy_no_paired_obd_adapter_found_72c35314">No paired OBD adapter found.</string>
+    <string name="legacy_not_connected_273cf5d2">Not connected.</string>
+
+    <!-- Source: feature/ridedashboard/widget/AltitudeWidget.kt -->
+    <string name="legacy_1h_af24">-1H</string>
+    <string name="legacy_climbing_6536490d">CLIMBING</string>
+    <string name="legacy_descending_da6096f8">DESCENDING</string>
+    <string name="legacy_gnss_live_7bc47fe5">GNSS LIVE</string>
+    <string name="legacy_level_44fa364">LEVEL</string>
+    <string name="legacy_no_fix_8982dd16">NO FIX</string>
+    <string name="legacy_vertical_speed_427682fd">VERTICAL SPEED</string>
+
+    <!-- Source: feature/ridedashboard/widget/BatteryWidget.kt -->
+    <string name="legacy_battery_level_508e0b71">BATTERY LEVEL</string>
+    <string name="legacy_charging_843f5271">CHARGING</string>
+    <string name="legacy_external_power_41cdb450">EXTERNAL POWER</string>
+    <string name="legacy_hot_1182d">HOT</string>
+    <string name="legacy_low_power_483394f9">LOW POWER</string>
+    <string name="legacy_no_sensor_69b15af9">NO SENSOR</string>
+    <string name="legacy_normal_8999b0e7">NORMAL</string>
+    <string name="legacy_off_1314f">OFF</string>
+    <string name="legacy_warm_288a85">WARM</string>
+
+    <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
+    <string name="legacy_east_205bfd">EAST</string>
+    <string name="legacy_glare_risk_8e426920">GLARE RISK</string>
+    <string name="legacy_gnss_stale_fd32d3a0">GNSS STALE</string>
+    <string name="legacy_ne_9b7">NE</string>
+    <string name="legacy_no_gnss_a6d94c86">NO GNSS</string>
+    <string name="legacy_north_47050e5">NORTH</string>
+    <string name="legacy_nw_9c9">NW</string>
+    <string name="legacy_se_a52">SE</string>
+    <string name="legacy_south_4b6d1ad">SOUTH</string>
+    <string name="legacy_sun_tracking_5fd65e2b">SUN TRACKING</string>
+    <string name="legacy_sw_a64">SW</string>
+    <string name="legacy_west_2899af">WEST</string>
+
+    <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
+    <string name="legacy_off_for_1_s_a8aabb23">Off for %1$s</string>
+    <string name="legacy_one_widget_pinned_on_1_s_9ab92ad6">One widget pinned on %1$s</string>
+    <string name="legacy_rotating_on_1_s_c5e75b74">Rotating on %1$s</string>
+    <string name="legacy_this_panel_cycles_through_the_1_d_ticked_widgets_3a2b2d0e">This panel cycles through the %1$d ticked widgets.</string>
+    <string name="legacy_this_panel_shows_that_one_widget_and_never_rotat_f3acc606">This panel shows that one widget and never rotates. Tick one more to start the carousel.</string>
+    <string name="legacy_tick_widgets_below_to_build_this_panel_s_carouse_ab0f3111">Tick widgets below to build this panel\'s carousel. Each panel has its own.</string>
+
+    <!-- Source: feature/ridedashboard/widget/SatelliteWidget.kt -->
+    <string name="legacy_2d_fix_weak_geometry_e5b0cd1f">2D FIX  •  WEAK GEOMETRY</string>
+    <string name="legacy_3d_fix_navigation_ready_bff99e13">3D FIX  •  NAVIGATION READY</string>
+    <string name="legacy_scan_26be7d">SCAN</string>
+    <string name="legacy_searching_for_satellites_f009ee35">SEARCHING FOR SATELLITES</string>
+
+    <!-- Source: feature/ridedashboard/widget/SpeedGaugeWidget.kt -->
+    <string name="legacy_gnss_ok_35ac4b15">GNSS OK</string>
+    <string name="legacy_n_4e">N</string>
+    <string name="legacy_w_57">W</string>
+
+    <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
+    <string name="legacy_session_live_5f7f2456">SESSION LIVE</string>
+
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_capture_84285f26">Capture</string>
+    <string name="legacy_capturing_561c2223">Capturing…</string>
+    <string name="legacy_recalibrate_ceebf5d4">Recalibrate</string>
+
+    <!-- Source: feature/trips/TripLibraryUi.kt -->
+    <string name="legacy_enhanced_9c6c8376">ENHANCED</string>
+    <string name="legacy_gps_only_e6f03982">GPS ONLY</string>
 </resources>

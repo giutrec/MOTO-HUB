@@ -138,6 +138,23 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
                         "${PAIR_CONFIRM_TIMEOUT_MS}ms; sending mirror-start anyway."
                 )
             }
+            // Pairing was confirmed while the video pipeline was still coming up, so by now it
+            // is seconds old. KoveMirror mirror-starts straight out of the confirmation, and a
+            // dash that mirrors under KoveMirror ignored our later one, so re-pair and ride the
+            // fresh confirmation. Best effort: if the dash stays quiet we send mirror-start
+            // anyway, exactly as before.
+            if (active.ble.repairAndAwaitConfirmation(REPAIR_CONFIRM_TIMEOUT_MS)) {
+                ProjectionEventLog.record(
+                    "THINKERRIDE",
+                    "Dashboard re-confirmed pairing; sending mirror-start on the fresh handshake."
+                )
+            } else {
+                ProjectionEventLog.record(
+                    "THINKERRIDE",
+                    "No fresh pairing confirmation within ${REPAIR_CONFIRM_TIMEOUT_MS}ms; " +
+                        "sending mirror-start on the existing session."
+                )
+            }
             active.mirrorArea = area
             active.ble.sendMirrorStatus(true)
             ProjectionEventLog.record(
@@ -457,6 +474,13 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
 
         /** How long [start] waits for `send_pairresult` before going ahead regardless. */
         const val PAIR_CONFIRM_TIMEOUT_MS = 6_000L
+
+        /**
+         * How long the re-pair right before mirror-start waits. Short on purpose: the dash
+         * answered the first handshake in ~4ms, and every millisecond here is added latency on
+         * dashes that never needed the re-pair.
+         */
+        const val REPAIR_CONFIRM_TIMEOUT_MS = 1_500L
 
         /** How long [stop] gives the mirror-stop packets to leave the phone. */
         const val BLE_DRAIN_TIMEOUT_MS = 1_500L

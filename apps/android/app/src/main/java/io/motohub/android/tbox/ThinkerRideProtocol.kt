@@ -59,6 +59,13 @@ object ThinkerRideProtocol {
 
     const val BLE_HEARTBEAT_INTERVAL_MS = 5_000L
 
+    /**
+     * MTU asked for right after connecting. At the 23-byte default a dash notification is cut
+     * into 20-byte fragments — a KOVE 800X PRO was logged splitting one `send_pairinfo` across
+     * four of them (2026-08-13). [NotifyAssembler] copes either way; this just avoids the split.
+     */
+    const val BLE_PREFERRED_MTU = 517
+
     /** 6-byte keep-alive used on every TCP channel; the control server must echo it back. */
     val KEEPALIVE_PACKET = byteArrayOf(0x02, 0x01, 0x00, 0x00, 0x00, 0x00)
 
@@ -107,6 +114,58 @@ object ThinkerRideProtocol {
 
     /** `"result": 1` exactly — the lookahead keeps 10, 11, … from matching. */
     private val PAIR_RESULT_OK_REGEX = Regex("\"result\"\\s*:\\s*1(?!\\d)")
+
+    /**
+     * Turns the dash's notify stream back into whole JSON messages.
+     *
+     * One notification is not one message: at the default 23-byte MTU the firmware splits a
+     * single object across several notifications (`{"msg_id":27,"f` / `unc":"PAIR","act"` / …),
+     * and it also concatenates several objects into one. Parsing notifications as they arrive
+     * therefore both misses messages and mis-reads them, so every fragment goes through here
+     * first and only balanced top-level objects come out.
+     */
+    class NotifyAssembler {
+        private val pending = StringBuilder()
+
+        fun accept(fragment: String): List<String> {
+            pending.append(fragment)
+            val messages = mutableListOf<String>()
+            var depth = 0
+            var inString = false
+            var escaped = false
+            var start = -1
+            var consumedTo = 0
+            for (index in pending.indices) {
+                val char = pending[index]
+                when {
+                    escaped -> escaped = false
+                    char == '\\' && inString -> escaped = true
+                    char == '"' -> inString = !inString
+                    inString -> Unit
+                    char == '{' -> {
+                        if (depth == 0) start = index
+                        depth++
+                    }
+                    char == '}' -> {
+                        if (depth > 0 && --depth == 0 && start >= 0) {
+                            messages += pending.substring(start, index + 1)
+                            consumedTo = index + 1
+                            start = -1
+                        }
+                    }
+                }
+            }
+            if (consumedTo > 0) pending.delete(0, consumedTo)
+            // A dash that goes silent mid-object, or sends something that never balances, must
+            // not grow this buffer without bound.
+            if (pending.length > MAX_PENDING_CHARS) pending.setLength(0)
+            return messages
+        }
+
+        private companion object {
+            const val MAX_PENDING_CHARS = 8 * 1024
+        }
+    }
 
     // ---- Control channel framing -------------------------------------------------------------
 
