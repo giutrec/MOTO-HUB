@@ -150,4 +150,25 @@ class ThinkerRideProtocolTest {
         assertFalse(ThinkerRideProtocol.isPairConfirmation("""{"msg_id":25,"msg_type":24}"""))
         assertFalse(ThinkerRideProtocol.isPairConfirmation("send_pairresult but not json"))
     }
+
+    @Test
+    fun recognisesAPairResultInsideAConcatenatedNotification() {
+        // Dash firmware packs multiple JSON objects into one notify payload; whole-string
+        // parsing fails on these, so the confirmation must still be recognised.
+        assertTrue(
+            ThinkerRideProtocol.isPairConfirmation(
+                """{"msg_id":10,"item":1}{"msg_id":27,"func":"PAIR","act":"send_pairresult","result":1}"""
+            )
+        )
+        assertTrue(
+            ThinkerRideProtocol.isPairConfirmation(
+                "{\n\t\"msg_id\":\t27,\n\t\"act\":\t\"send_pairresult\",\n\t\"result\":\t1\n}{\"msg_id\":10}"
+            )
+        )
+        assertFalse(
+            ThinkerRideProtocol.isPairConfirmation(
+                """{"msg_id":27,"act":"send_pairresult","result":0}{"msg_id":10,"item":1}"""
+            )
+        )
+    }
 }

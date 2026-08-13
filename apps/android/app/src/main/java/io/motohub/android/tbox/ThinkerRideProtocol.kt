@@ -97,14 +97,16 @@ object ThinkerRideProtocol {
 
     /** True when a notify payload is the dash confirming BLE pairing (`send_pairresult` = 1). */
     fun isPairConfirmation(notifyPayload: String): Boolean {
-        if (!notifyPayload.contains("send_pairresult")) return false
-        return runCatching {
-            val json = org.json.JSONObject(notifyPayload)
-            json.optInt("msg_id") == 27 &&
-                json.optString("act") == "send_pairresult" &&
-                json.optInt("result") == 1
-        }.getOrDefault(false)
+        // The dash firmware may concatenate several JSON objects into one notification, and
+        // org.json is lenient enough to silently parse just the first of them — so a
+        // whole-payload parse answers for the wrong message. KoveMirror (794de80) matches
+        // these payloads on substrings instead, and so do we.
+        return notifyPayload.contains("send_pairresult") &&
+            PAIR_RESULT_OK_REGEX.containsMatchIn(notifyPayload)
     }
+
+    /** `"result": 1` exactly — the lookahead keeps 10, 11, … from matching. */
+    private val PAIR_RESULT_OK_REGEX = Regex("\"result\"\\s*:\\s*1(?!\\d)")
 
     // ---- Control channel framing -------------------------------------------------------------
 
