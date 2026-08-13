@@ -41,6 +41,7 @@ import io.motohub.android.ui.components.HeroTile
 import io.motohub.android.ui.components.LivePill
 import io.motohub.android.ui.components.ModeIcon
 import io.motohub.android.ui.components.MonoLabel
+import io.motohub.android.ui.components.ScreenSlideTransition
 import io.motohub.android.ui.theme.MotoHubDashboard
 import io.motohub.android.ui.theme.MotoHubManual
 
@@ -55,7 +56,6 @@ fun GarageTabContent(
     onOpenDefaultSettings: () -> Unit = {}
 ) {
     val active = profiles.firstOrNull { it.id == activeProfileId }
-    val others = profiles.filterNot { it.id == activeProfileId }
 
     Column(
         modifier = Modifier
@@ -70,55 +70,71 @@ fun GarageTabContent(
             Text(motoHubText("Motorcycles"), style = MaterialTheme.typography.displaySmall)
         }
 
-        if (active == null) {
-            EmptyGarageHero()
-            HeroPrimaryAction(
-                title = "Scan motorcycle QR code",
-                subtitle = "Point your camera at the T-Box sticker",
-                icon = "QrScan",
-                color = MaterialTheme.colorScheme.primary,
-                onClick = onAddMotorcycle
-            )
-            HeroTile(
-                title = "No QR? Manual setup",
-                subtitle = "Type the network in yourself",
-                icon = "Manual",
-                color = MotoHubManual,
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onAddMotorcycleManually
-            )
-        } else {
-            ActiveMotorcycleCard(
-                profile = active,
-                onOpenDetails = { onOpenDetails(active.id) }
-            )
-            if (others.isNotEmpty()) {
-                MonoLabel(motoHubText("SAVED MOTORCYCLES"))
-                others.forEach { profile ->
-                    SavedMotorcycleCard(
-                        profile = profile,
-                        onSelect = { onSelectMotorcycle(profile.id) },
-                        onOpenDetails = { onOpenDetails(profile.id) }
+        // The rider's first pairing is the one moment this whole tab has a single before/after:
+        // the empty hero becomes the active-motorcycle card mid-scroll, in a Column that also
+        // holds the sections above and below it - so this animates only the piece that actually
+        // changed rather than sliding the fixed "YOUR GARAGE" heading along with it.
+        ScreenSlideTransition(
+            screen = active?.id,
+            isBase = { it == null },
+            modifier = Modifier.fillMaxWidth()
+        ) { activeId ->
+            val shownActive = profiles.firstOrNull { it.id == activeId }
+            if (shownActive == null) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    EmptyGarageHero()
+                    HeroPrimaryAction(
+                        title = "Scan motorcycle QR code",
+                        subtitle = "Point your camera at the T-Box sticker",
+                        icon = "QrScan",
+                        color = MaterialTheme.colorScheme.primary,
+                        onClick = onAddMotorcycle
+                    )
+                    HeroTile(
+                        title = "No QR? Manual setup",
+                        subtitle = "Type the network in yourself",
+                        icon = "Manual",
+                        color = MotoHubManual,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onAddMotorcycleManually
                     )
                 }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HeroTile(
-                    title = "Add motorcycle",
-                    subtitle = "Scan its T-Box QR code",
-                    icon = "Bike",
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.weight(1f),
-                    onClick = onAddMotorcycle
-                )
-                HeroTile(
-                    title = "No QR? Manual",
-                    subtitle = "Type the network in",
-                    icon = "Manual",
-                    color = MotoHubManual,
-                    modifier = Modifier.weight(1f),
-                    onClick = onAddMotorcycleManually
-                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    ActiveMotorcycleCard(
+                        profile = shownActive,
+                        onOpenDetails = { onOpenDetails(shownActive.id) }
+                    )
+                    val shownOthers = profiles.filterNot { it.id == activeId }
+                    if (shownOthers.isNotEmpty()) {
+                        MonoLabel(motoHubText("SAVED MOTORCYCLES"))
+                        shownOthers.forEach { profile ->
+                            SavedMotorcycleCard(
+                                profile = profile,
+                                onSelect = { onSelectMotorcycle(profile.id) },
+                                onOpenDetails = { onOpenDetails(profile.id) }
+                            )
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        HeroTile(
+                            title = "Add motorcycle",
+                            subtitle = "Scan its T-Box QR code",
+                            icon = "Bike",
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.weight(1f),
+                            onClick = onAddMotorcycle
+                        )
+                        HeroTile(
+                            title = "No QR? Manual",
+                            subtitle = "Type the network in",
+                            icon = "Manual",
+                            color = MotoHubManual,
+                            modifier = Modifier.weight(1f),
+                            onClick = onAddMotorcycleManually
+                        )
+                    }
+                }
             }
         }
 

@@ -45,8 +45,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.motohub.android.i18n.motoHubText
 import io.motohub.android.session.ProjectionEventLog
+import androidx.compose.foundation.layout.fillMaxSize
 import io.motohub.android.ui.components.MonoLabel
 import io.motohub.android.ui.components.MotoHubDetailScreen
+import io.motohub.android.ui.components.ScreenSlideTransition
 import io.motohub.android.ui.components.ToggleRow
 import io.motohub.android.ui.theme.MotoHubFavorite
 import io.motohub.android.ui.theme.MotoHubLive
@@ -86,43 +88,84 @@ fun HandlebarMappingScreen(
     BackHandler(enabled = calibrating) { calibrating = false }
     BackHandler(enabled = editing != null) { editing = null }
 
-    if (calibrating) {
-        HandlebarCalibrationScreen(
-            onDone = {
-                revision++
-                calibrating = false
-                // The taught set may have just changed whether volume presses exist on this
-                // handlebar — a live capture must re-decide the volume pin NOW, not at the
-                // next session (stale pin = phone volume keys acting as handlebar presses).
-                MediaButtonBridge.refreshVolumeGestureUse()
-            }
-        )
-        return
-    }
-
     val pressBeingEdited = editing
-    if (pressBeingEdited != null) {
-        val gesture = HandlebarCalibration.gestureFor(context, pressBeingEdited)
-        if (gesture != null) {
-            HandlebarActionPicker(
-                title = pressBeingEdited.label,
-                current = HandlebarControlStore.action(context, gesture),
+    val editingGesture = pressBeingEdited?.let { HandlebarCalibration.gestureFor(context, it) }
+    // A press with nothing taught for it yet cannot be edited - drop back to the list rather
+    // than open a picker for a gesture that does not exist.
+    if (pressBeingEdited != null && editingGesture == null) editing = null
+
+    val screenState = when {
+        calibrating -> HandlebarScreenState.Calibrating
+        pressBeingEdited != null && editingGesture != null ->
+            HandlebarScreenState.Editing(pressBeingEdited, editingGesture)
+        else -> HandlebarScreenState.List
+    }
+    ScreenSlideTransition(
+        screen = screenState,
+        isBase = { it is HandlebarScreenState.List },
+        modifier = Modifier.fillMaxSize()
+    ) { shown ->
+        when (shown) {
+            HandlebarScreenState.Calibrating -> HandlebarCalibrationScreen(
+                onDone = {
+                    revision++
+                    calibrating = false
+                    // The taught set may have just changed whether volume presses exist on this
+                    // handlebar — a live capture must re-decide the volume pin NOW, not at the
+                    // next session (stale pin = phone volume keys acting as handlebar presses).
+                    MediaButtonBridge.refreshVolumeGestureUse()
+                }
+            )
+            is HandlebarScreenState.Editing -> HandlebarActionPicker(
+                title = shown.press.label,
+                current = HandlebarControlStore.action(context, shown.gesture),
                 onPicked = { action ->
-                    HandlebarControlStore.setAction(context, gesture, action)
+                    HandlebarControlStore.setAction(context, shown.gesture, action)
                     ProjectionEventLog.record(
                         "CONTROLS",
-                        "Handlebar ${pressBeingEdited.id} (${gesture.id}) -> ${action.id}"
+                        "Handlebar ${shown.press.id} (${shown.gesture.id}) -> ${action.id}"
                     )
                     revision++
                     editing = null
                 },
                 onBack = { editing = null }
             )
-            return
+            HandlebarScreenState.List -> HandlebarListContent(
+                context = context,
+                backLabel = backLabel,
+                onBack = onBack,
+                revision = revision,
+                litGesture = litGesture,
+                onTeach = { calibrating = true },
+                onEdit = { editing = it },
+                onReset = {
+                    HandlebarControlStore.reset(context)
+                    revision++
+                    ProjectionEventLog.record("CONTROLS", "Handlebar mapping reset to defaults.")
+                }
+            )
         }
-        editing = null
     }
+}
 
+/** The list's own destinations - a screen key for [ScreenSlideTransition], not shared state. */
+private sealed interface HandlebarScreenState {
+    data object List : HandlebarScreenState
+    data object Calibrating : HandlebarScreenState
+    data class Editing(val press: PhysicalPress, val gesture: HandlebarGesture) : HandlebarScreenState
+}
+
+@Composable
+private fun HandlebarListContent(
+    context: android.content.Context,
+    backLabel: String,
+    onBack: () -> Unit,
+    revision: Int,
+    litGesture: HandlebarGesture?,
+    onTeach: () -> Unit,
+    onEdit: (PhysicalPress) -> Unit,
+    onReset: () -> Unit
+) {
     MotoHubDetailScreen(
         title = motoHubText("Handlebar"),
         backLabel = backLabel,
@@ -144,7 +187,7 @@ fun HandlebarMappingScreen(
         LiveCaptureBanner(litGesture)
 
         Button(
-            onClick = { calibrating = true },
+            onClick = onTeach,
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(16.dp)
         ) {
@@ -161,18 +204,14 @@ fun HandlebarMappingScreen(
                 button = button,
                 revision = currentRevision,
                 litGesture = litGesture,
-                onEdit = { editing = it }
+                onEdit = onEdit
             )
         }
 
         HandlebarTimingSection()
 
         OutlinedButton(
-            onClick = {
-                HandlebarControlStore.reset(context)
-                revision++
-                ProjectionEventLog.record("CONTROLS", "Handlebar mapping reset to defaults.")
-            },
+            onClick = onReset,
             modifier = Modifier.fillMaxWidth()
         ) { Text(motoHubText("Reset actions to defaults")) }
     }
