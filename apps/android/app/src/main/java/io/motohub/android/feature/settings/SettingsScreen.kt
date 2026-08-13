@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import io.motohub.android.BuildConfig
 import io.motohub.android.R
 import io.motohub.android.feature.controls.HandlebarControlStore
+import io.motohub.android.feature.controls.HandlebarHidCaptureService
+import io.motohub.android.feature.controls.HandlebarInputMode
 import io.motohub.android.feature.controls.HandlebarMappingScreen
 import io.motohub.android.feature.controls.MediaButtonBridge
 import io.motohub.android.session.ProjectionEventLog
@@ -549,6 +551,7 @@ private fun DiagnosticsDetail(
 private fun HandlebarControlsDetail(onBack: () -> Unit, onOpenMapping: () -> Unit) {
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(HandlebarControlStore.isEnabled(context)) }
+    var inputMode by remember { mutableStateOf(HandlebarControlStore.inputMode(context)) }
     val volumeLevels = remember { MediaButtonBridge.volumeLevels(context) }
     var listeningVolume by remember { mutableStateOf(volumeLevels.first.toFloat()) }
     MotoHubDetailScreen(
@@ -579,6 +582,51 @@ private fun HandlebarControlsDetail(onBack: () -> Unit, onOpenMapping: () -> Uni
                 color = MaterialTheme.colorScheme.error
             )
         }
+        MonoLabel(motoHubText("INPUT PROTOCOL"))
+        Text(
+            motoHubText(
+                "Most dashboards send buttons as AVRCP media keys — leave this on AVRCP. Pick " +
+                    "HID only if the remote pairs as a Bluetooth keyboard and its presses never " +
+                    "register below."
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        HandlebarInputMode.entries.forEach { candidate ->
+            MotoHubRadioRow(
+                title = motoHubText(candidate.label),
+                description = motoHubText(candidate.description),
+                selected = inputMode == candidate,
+                onClick = {
+                    inputMode = candidate
+                    HandlebarControlStore.setInputMode(context, candidate)
+                    ProjectionEventLog.record(
+                        "SETTINGS",
+                        "Handlebar input mode changed to ${candidate.name}."
+                    )
+                }
+            )
+        }
+        if (inputMode == HandlebarInputMode.HID) {
+            if (!HandlebarHidCaptureService.isEnabled(context)) {
+                Text(
+                    motoHubText(
+                        "HID mode also needs MOTO-HUB's Accessibility Service turned on, or " +
+                            "presses will not be seen."
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            MotoHubActionRow(
+                title = motoHubText("Open Accessibility settings"),
+                description = motoHubText(
+                    "Turn on MOTO-HUB so handlebar presses reach the app from any screen"
+                ),
+                onClick = { HandlebarHidCaptureService.openAccessibilitySettings(context) }
+            )
+        }
+        HorizontalDivider()
         ToggleRow(
             title = motoHubText("Buttons control Android Auto"),
             description = motoHubText(

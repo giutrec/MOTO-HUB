@@ -698,4 +698,7 @@
     <string name="legacy_several_manufacturers_ship_the_same_dashboard_so_49305d38">Diversi produttori usano lo stesso software del cruscotto con il proprio marchio, quindi può benissimo essere la tua moto. Continua solo se hai inquadrato il cruscotto della tua moto.</string>
     <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
     <string name="legacy_use_these_details_52f852ac">Usa questi dati</string>
+
+    <!-- Source: feature/controls/HandlebarHidCaptureService.kt -->
+    <string name="handlebar_hid_capture_description">Consente a MOTO-HUB di leggere le pressioni del D-pad da un telecomando manubrio Bluetooth HID quando la modalità HID è selezionata nelle impostazioni dei pulsanti manubrio.</string>
 </resources>
