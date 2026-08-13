@@ -108,6 +108,8 @@ import io.motohub.android.tbox.TBoxPortScanResult
 import io.motohub.android.tbox.TBoxPortScanner
 import io.motohub.android.tbox.OfficialCfmotoClient
 import io.motohub.android.tbox.WifiGate
+import io.motohub.android.ui.components.HubScreenKey
+import io.motohub.android.ui.components.HubScreenTransition
 import io.motohub.android.ui.components.HubTab
 import io.motohub.android.ui.theme.MotoHubTheme
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
@@ -790,7 +792,29 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                if (showApplicationLogs) {
+                // Which full-screen destination is on top, derived from the same state the old
+                // if/else chain read. The chain replaced the whole tree in a single frame; the
+                // key gives HubScreenTransition an identity to slide between instead.
+                val hubScreen = when {
+                    showApplicationLogs -> HubScreenKey.APPLICATION_LOGS
+                    showAndroidAutoHelp -> HubScreenKey.ANDROID_AUTO_HELP
+                    showAbout -> HubScreenKey.ABOUT
+                    showAndroidAutoPreview -> HubScreenKey.ANDROID_AUTO_PREVIEW
+                    capabilityProfileId != null -> HubScreenKey.CAPABILITIES
+                    editorProfileId != null -> HubScreenKey.MOTORCYCLE_DETAILS
+                    showNetworkDiagnostics -> HubScreenKey.NETWORK_DIAGNOSTICS
+                    showQrScanner -> HubScreenKey.QR_SCANNER
+                    showManualPairing -> HubScreenKey.MANUAL_PAIRING
+                    else -> HubScreenKey.HOME
+                }
+                // The last profile each profile-keyed screen actually showed. During the slide
+                // out its id has already been nulled, and without this the exiting screen would
+                // recompose against a missing profile and vanish mid-animation.
+                var lastCapabilityProfile by remember { mutableStateOf<MotorcycleProfile?>(null) }
+                var lastEditorProfile by remember { mutableStateOf<MotorcycleProfile?>(null) }
+                HubScreenTransition(hubScreen) { screen ->
+                    when (screen) {
+                        HubScreenKey.APPLICATION_LOGS ->
                     ApplicationLogScreen(
                         events = projectionEvents,
                         onCopy = {
@@ -820,14 +844,14 @@ class MainActivity : ComponentActivity() {
                             showApplicationLogs = false
                         }
                     )
-                } else if (showAndroidAutoHelp) {
+                        HubScreenKey.ANDROID_AUTO_HELP ->
                     AndroidAutoHelpScreen(
                         onBack = {
                             ProjectionEventLog.record("UI", "Android Auto help screen closed.")
                             showAndroidAutoHelp = false
                         }
                     )
-                } else if (showAbout) {
+                        HubScreenKey.ABOUT ->
                     AboutScreen(
                         onOpenGithub = {
                             ProjectionEventLog.record("UI", "GitHub repository link opened.")
@@ -868,7 +892,7 @@ class MainActivity : ComponentActivity() {
                             showAbout = false
                         }
                     )
-                } else if (showAndroidAutoPreview) {
+                        HubScreenKey.ANDROID_AUTO_PREVIEW ->
                     AndroidAutoPreviewScreen(
                         onBack = {
                             ProjectionEventLog.record("UI", "Android Auto phone preview closed.")
@@ -883,8 +907,13 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     )
-                } else if (capabilityProfileId != null) {
-                    val profile = state.motorcycles.firstOrNull { it.id == capabilityProfileId }
+                        HubScreenKey.CAPABILITIES -> {
+                    // The live lookup falls back to the last profile shown so the screen can
+                    // still draw itself while it slides out after its id has been cleared.
+                    val liveCapabilityProfile =
+                        state.motorcycles.firstOrNull { it.id == capabilityProfileId }
+                    if (liveCapabilityProfile != null) lastCapabilityProfile = liveCapabilityProfile
+                    val profile = liveCapabilityProfile ?: lastCapabilityProfile
                     if (profile == null) {
                         capabilityProfileId = null
                         selectedTab = HubTab.GARAGE
@@ -903,8 +932,11 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
-                } else if (editorProfileId != null) {
-                    val profile = state.motorcycles.firstOrNull { it.id == editorProfileId }
+                        }
+                        HubScreenKey.MOTORCYCLE_DETAILS -> {
+                    val liveEditorProfile = state.motorcycles.firstOrNull { it.id == editorProfileId }
+                    if (liveEditorProfile != null) lastEditorProfile = liveEditorProfile
+                    val profile = liveEditorProfile ?: lastEditorProfile
                     if (profile == null) {
                         editorProfileId = null
                         selectedTab = HubTab.GARAGE
@@ -961,7 +993,8 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
-                } else if (showNetworkDiagnostics) {
+                        }
+                        HubScreenKey.NETWORK_DIAGNOSTICS ->
                     NetworkDiagnosticsScreen(
                         state = diagnosticsState,
                         projectionEvents = projectionEvents,
@@ -971,7 +1004,7 @@ class MainActivity : ComponentActivity() {
                             showNetworkDiagnostics = false
                         }
                     )
-                } else if (showQrScanner) {
+                        HubScreenKey.QR_SCANNER ->
                     TBoxQrScannerScreen(
                         onPayload = { payload ->
                             acceptQrPayload(payload)
@@ -1000,7 +1033,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     )
-                } else if (showManualPairing) {
+                        HubScreenKey.MANUAL_PAIRING ->
                     ManualPairingScreen(
                         ssid = state.ssid,
                         password = state.password,
@@ -1028,7 +1061,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     )
-                } else {
+                        else ->
                     HubHomeScreen(
                         state = state,
                         selectedTab = selectedTab,
@@ -1263,6 +1296,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     )
+                    }
                 }
                 if (showUpdateDialog) {
                     GithubUpdateDialog(
