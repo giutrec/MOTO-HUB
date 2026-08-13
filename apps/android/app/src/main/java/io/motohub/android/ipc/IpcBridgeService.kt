@@ -662,6 +662,25 @@ class IpcBridgeService : Service() {
                     )
                 }
             }
+            // The Bluetooth dash-clock channel lives here in Core, so the companion's copy of the
+            // switch has to be mirrored or flipping it there configures a process that never reads
+            // it. Gated like the handlebar block: Core offers this toggle in its own settings too,
+            // and a caller that predates the field would otherwise push a default `false` over a
+            // rider's own choice.
+            if (settings.bluetoothClockSyncProvided) {
+                runCatching {
+                    MotoHubSettings.setBluetoothClockSync(ctx, settings.bluetoothClockSync)
+                    ProjectionEventLog.record(
+                        "IPC_AA",
+                        "Bluetooth dash-clock sync mirrored from companion: " +
+                            "enabled=${settings.bluetoothClockSync}."
+                    )
+                    // The transport already decided about this channel when it connected, seconds
+                    // before this parcel arrived, so acting on the value now is what makes the
+                    // rider's first ride after enabling behave like every later one.
+                    io.motohub.android.tbox.EcBtpClockChannel.refresh(ctx)
+                }
+            }
             ProjectionEventLog.record("IPC_AA", "Applied companion Android Auto settings snapshot.")
         }
 
