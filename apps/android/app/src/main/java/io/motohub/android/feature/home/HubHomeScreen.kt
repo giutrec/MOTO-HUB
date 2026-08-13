@@ -75,6 +75,7 @@ import io.motohub.android.ui.components.HubTab
 import io.motohub.android.ui.components.LivePill
 import io.motohub.android.ui.components.MonoLabel
 import io.motohub.android.ui.components.MotoHubBackground
+import io.motohub.android.ui.components.ScreenSlideTransition
 import io.motohub.android.ui.theme.MotoHubAndroidAuto
 import io.motohub.android.ui.theme.MotoHubMirror
 import io.motohub.android.tbox.TBoxConflictDiagnostics
@@ -244,7 +245,17 @@ private fun HomeTabContent(
             )
         }
 
-        when (destination) {
+        // The connection state machine, not a drill-down: PAIRING is the floor a rider starts
+        // from before any motorcycle is chosen, and every other destination counts as forward
+        // from it - including the return trip through MODE_SELECTION after a stopped session,
+        // which is still "forward" by this model (see ScreenSlideTransition's doc comment on
+        // why that reads right rather than backwards).
+        ScreenSlideTransition(
+            screen = destination,
+            isBase = { it == HubDestination.PAIRING },
+            modifier = Modifier.fillMaxWidth()
+        ) { shown ->
+        when (shown) {
             HubDestination.PAIRING -> PairingContent(
                 onScanQr = onScanQr,
                 onImportQrPhoto = onImportQrPhoto,
@@ -289,6 +300,7 @@ private fun HomeTabContent(
                 onImportQrPhoto = onImportQrPhoto,
                 onManualPairing = onManualPairing
             )
+        }
         }
         Spacer(Modifier.height(10.dp))
     }
