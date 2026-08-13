@@ -139,6 +139,10 @@ class RideDaemonTransport(
     }
     @Volatile
     private var pxcWatchdogTask: ScheduledFuture<*>? = null
+
+    /** The opt-in Bluetooth clock channel, when a rider turned it on; see [EcBtpTimeLink]. */
+    @Volatile
+    private var bluetoothClockLink: EcBtpTimeLink? = null
     /** One report per session: the rider needs the failure once, not every tick. */
     private val pxcStallReported = AtomicBoolean(false)
     /** One log per session for the opposite outcome: silence observed on a dash that never
@@ -191,6 +195,7 @@ class RideDaemonTransport(
                         .toLong() / 1000L
                 )
             }
+            startBluetoothClockLinkIfEnabled(profile)
             val generation = nextSessionGeneration.incrementAndGet()
             val createdSession = Api.newMobileSession(
                 mobileConfig,
@@ -379,7 +384,43 @@ class RideDaemonTransport(
         stopSession()
     }
 
+    /**
+     * Opens the Bluetooth clock channel for the rider who asked for it.
+     *
+     * Only ever for an EasyConn dash: a ThinkerRide (KOVE) profile already holds its own GATT
+     * link, and two concurrent connections are a known way to destabilise the Android Bluetooth
+     * stack - the one that dash depends on to work at all.
+     */
+    private fun startBluetoothClockLinkIfEnabled(profile: TBoxModelProfile) {
+        stopBluetoothClockLink()
+        if (!MotoHubSettings.bluetoothClockSync(appContext)) return
+        if (profile.transportFamily != TBoxTransportFamily.EASYCONN) {
+            ProjectionEventLog.debug(
+                "TBOX",
+                "Bluetooth clock sync is on but this dashboard uses the " +
+                    "${profile.transportFamily} transport, which owns its own Bluetooth link; skipping."
+            )
+            return
+        }
+        val link = EcBtpTimeLink(
+            context = appContext,
+            log = { message -> ProjectionEventLog.record("TBOX", message) }
+        )
+        bluetoothClockLink = link
+        runCatching { link.start() }
+            .onFailure {
+                ProjectionEventLog.warning("TBOX", "Bluetooth clock sync could not start.", it)
+                stopBluetoothClockLink()
+            }
+    }
+
+    private fun stopBluetoothClockLink() {
+        bluetoothClockLink?.let { runCatching { it.close() } }
+        bluetoothClockLink = null
+    }
+
     private fun stopSession() {
+        stopBluetoothClockLink()
         cancelPxcWatchdog()
         val sessionToStop: MobileSession?
         synchronized(sessionLock) {

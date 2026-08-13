@@ -151,6 +151,7 @@ object MotoHubSettings {
     private const val KEY_AUTOSTART_SERVICE = "autostart_service"
     private const val KEY_AUTO_RECOVERY = "auto_recovery"
     private const val KEY_KEEP_WIFI_DIRECT_ON_DISCONNECT = "keep_wifi_direct_on_disconnect"
+    private const val KEY_BLUETOOTH_CLOCK_SYNC = "bluetooth_clock_sync"
     private const val KEY_AUTO_RECORD_TRIPS = "auto_record_trips"
     private const val KEY_SHOW_RECORDED_TRACK = "show_recorded_track_on_dashboard"
     private const val KEY_DISTANCE_UNITS = "distance_units"
@@ -307,6 +308,22 @@ object MotoHubSettings {
 
     fun setKeepWifiDirectAfterDisconnect(context: Context, enabled: Boolean) {
         preferences(context).edit().putBoolean(KEY_KEEP_WIFI_DIRECT_ON_DISCONNECT, enabled).apply()
+    }
+
+    /**
+     * Answer the dashboard's clock questions over Bluetooth as well as over Wi-Fi.
+     *
+     * Off by default and deliberately opt-in: the protocol runs on generic serial-over-BLE service
+     * UUIDs that intercoms, OBD dongles and tyre sensors also use, so this is not something to
+     * switch on for riders who are not chasing a wrong dash clock. Even when enabled,
+     * [io.motohub.android.tbox.EcBtpTimeLink] never transmits to a device until that device has
+     * sent a valid frame of the protocol.
+     */
+    fun bluetoothClockSync(context: Context): Boolean =
+        preferences(context).getBoolean(KEY_BLUETOOTH_CLOCK_SYNC, false)
+
+    fun setBluetoothClockSync(context: Context, enabled: Boolean) {
+        preferences(context).edit().putBoolean(KEY_BLUETOOTH_CLOCK_SYNC, enabled).apply()
     }
 
     /**

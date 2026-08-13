@@ -445,6 +445,7 @@ private fun AutomationDetail(onBack: () -> Unit) {
     var autoConnect by remember { mutableStateOf(MotoHubSettings.autoConnect(context)) }
     var autoRecovery by remember { mutableStateOf(MotoHubSettings.autoRecovery(context)) }
     var keepWifiDirect by remember { mutableStateOf(MotoHubSettings.keepWifiDirectAfterDisconnect(context)) }
+    var bluetoothClock by remember { mutableStateOf(MotoHubSettings.bluetoothClockSync(context)) }
     MotoHubDetailScreen(title = motoHubText("Connection & automation"), backLabel = motoHubText("‹ Settings"), onBack = onBack) {
         ToggleRow(
             title = motoHubText("Auto-connect on launch"),
@@ -464,6 +465,21 @@ private fun AutomationDetail(onBack: () -> Unit) {
                 autoRecovery = it
                 MotoHubSettings.setAutoRecovery(context, it)
                 ProjectionEventLog.record("SETTINGS", "Auto-recovery changed to enabled=$it.")
+            }
+        )
+        ToggleRow(
+            title = motoHubText("Set the dash clock over Bluetooth (experimental)"),
+            description = motoHubText(
+                "Some dashboards ask for the time over Bluetooth instead of Wi-Fi, and sit at " +
+                    "00:00 without it. Needs the bike already paired to this phone in Android's " +
+                    "Bluetooth settings. Off by default; MOTO-HUB only ever replies to a device " +
+                    "that asks in the dashboard's own protocol."
+            ),
+            checked = bluetoothClock,
+            onCheckedChange = {
+                bluetoothClock = it
+                MotoHubSettings.setBluetoothClockSync(context, it)
+                ProjectionEventLog.record("SETTINGS", "Bluetooth clock sync changed to enabled=$it.")
             }
         )
         ToggleRow(
