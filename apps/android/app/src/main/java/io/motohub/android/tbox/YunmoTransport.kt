@@ -354,15 +354,15 @@ class YunmoTransport(context: Context) : TBoxTransport {
                 write(YunmoProtocol.mapNaviFrame())
                 phase("map-nav requested (A0 cmd=6)")
                 awaitMapNav()
-                frameId.set(0)
-                unackedSinceAck = 0
-                if (mapNavConfirmed) {
-                    phase("map-nav confirmed by dash")
-                } else {
+                if (!mapNavConfirmed) {
+                    // The counter is normally reset by the confirmation itself; do it here only
+                    // when none arrived, so a silent dash still starts from a known state.
+                    frameId.set(0)
+                    unackedSinceAck = 0
                     phase(
-                        "map-nav not echoed within ${MAP_NAV_TIMEOUT_MS}ms - streaming anyway " +
-                            "(the OEM app does not echo either). If the TFT stays black, select " +
-                            "the full-screen map view in the dash menu before connecting."
+                        "map-nav not confirmed within ${MAP_NAV_TIMEOUT_MS}ms - streaming anyway. " +
+                            "If the TFT stays black, select the full-screen map view in the dash " +
+                            "menu before connecting."
                     )
                 }
             } else {
@@ -515,17 +515,25 @@ class YunmoTransport(context: Context) : TBoxTransport {
                             pendingDim = dimension
                             phase("dash reported ${dimension.reportedWidth}x${dimension.reportedHeight}")
                             synchronized(dimLock) { dimLock.notifyAll() }
-                        } else if (frame.payload.isEmpty()) {
-                            // The OEM's `CTRL_RX a=51 b=0`, confirmed on our own wire: an empty OK
-                            // right after the canvas report. In the OEM capture this is what the
-                            // app answers with its 0xA1..0xAA control burst before the TFT paints.
-                            // We do not send that burst - its payloads have never been captured -
-                            // so this is recorded as the point where our flow and the OEM's part.
-                            phaseOnce("state-confirm") {
-                                "dash sent the empty OK state confirmation (0x33) - the point where " +
-                                    "the OEM app answers with its 0xA1..0xAA control burst, which we " +
-                                    "do not reproduce"
+                        } else if (frame.command == YunmoProtocol.CMD_OK_B && mapNavMode) {
+                            // THIS is the map-nav confirmation, and we spent days looking for it in
+                            // the wrong shape. The OEM app's listener keys on the command byte alone
+                            // (`i == 51`, GoogleMediaCodecH264LiveThread) and answers it by entering
+                            // map-nav and calling ResetFrameID; it never waits for an inbound A0{6},
+                            // which is what this transport used to look for and never saw. The dash
+                            // had been answering all along, ~2s after the request and well inside
+                            // our own timeout, under a command we were logging and discarding.
+                            //
+                            // The frame counter resets HERE rather than when the request was sent:
+                            // the OEM resets on the dash's confirmation, so the first frame the dash
+                            // sees numbered zero is the first one it was actually ready for.
+                            if (!mapNavConfirmed) {
+                                mapNavConfirmed = true
+                                frameId.set(0)
+                                unackedSinceAck = 0
+                                phase("dash confirmed map-nav (0x33) - frame counter reset")
                             }
+                            synchronized(ackLock) { ackLock.notifyAll() }
                         } else {
                             logUnrecognised(frame, "OK frame that is not a canvas report")
                         }

@@ -15,6 +15,7 @@ import io.motohub.android.tbox.SelectingTBoxTransport
 import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxLinkResolver
 import io.motohub.android.tbox.TBoxModelProfile
+import io.motohub.android.tbox.TBoxProtocolMemory
 import io.motohub.android.tbox.TBoxNetworkConnector
 import io.motohub.android.tbox.TBoxSessionHandle
 import io.motohub.android.tbox.TBoxSessionRegistry
@@ -78,9 +79,26 @@ class CoreTBoxConnector(private val context: Context) {
             "AIDL connect: resolving protocol profile: modelId=${profile.modelId ?: "none"}, " +
                 "override=${requestedOverride.key}, connectionMode=${profile.connectionMode}."
         )
-        transport.configureProtocolProfile(
-            TBoxModelProfile.resolve(profile.modelId, null, requestedOverride)
-        )
+        // A dash whose family we already learned is routed straight there. Discovery can answer
+        // this, but only by letting EasyConn fail first, which costs two 15s NSD windows and the
+        // wake probes before anything else is tried - the difference a rider sees between pinning
+        // the profile by hand and leaving it on Auto. Only ever a shortcut: a pinned override wins,
+        // and only non-EasyConn families are ever remembered.
+        val learnedProfile = if (requestedOverride == ProfileOverride.AUTO) {
+            TBoxProtocolMemory(context).learnedFamily(profile.ssid)
+                ?.let { family -> TBoxModelProfile.entries.firstOrNull { it.transportFamily == family } }
+        } else {
+            null
+        }
+        val resolvedProfile = learnedProfile ?: TBoxModelProfile.resolve(profile.modelId, null, requestedOverride)
+        learnedProfile?.let {
+            ProjectionEventLog.record(
+                "PROFILE",
+                "This motorcycle was already seen speaking ${it.transportFamily}; going straight " +
+                    "to that transport instead of letting EasyConn discovery time out first."
+            )
+        }
+        transport.configureProtocolProfile(resolvedProfile)
         val discovered = transport.discover(link, profile.modelId)
         val host = discovered.getOrElse {
             ProjectionEventLog.error("IPC_TBOX", "AIDL connect: EasyConn discovery failed.", it)
@@ -89,6 +107,10 @@ class CoreTBoxConnector(private val context: Context) {
             networkConnector.disconnect()
             TBoxSessionRegistry.clear()
             return false
+        }
+        // Record what discovery settled on, so the next ride skips the slow path.
+        transport.activeProtocolProfile?.let { discoveredProfile ->
+            TBoxProtocolMemory(context).remember(profile.ssid, discoveredProfile.transportFamily)
         }
         capabilityStore.recordDiscovery(profile, host)
         TBoxSessionRegistry.install(

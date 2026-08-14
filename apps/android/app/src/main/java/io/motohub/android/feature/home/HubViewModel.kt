@@ -19,6 +19,7 @@ import io.motohub.android.tbox.SelectingTBoxTransport
 import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxLinkResolver
 import io.motohub.android.tbox.TBoxModelProfile
+import io.motohub.android.tbox.TBoxProtocolMemory
 import io.motohub.android.tbox.ProfileOverride
 import io.motohub.android.tbox.TBoxNetworkConnector
 import io.motohub.android.tbox.TBoxNetworkEvent
@@ -404,8 +405,26 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                     "Resolving protocol profile: modelId=${profile.modelId ?: "none"}, " +
                         "override=${requestedOverride.key}, connectionMode=${profile.connectionMode}."
                 )
+                // A dash whose family we already learned is routed straight there, instead of
+                // waiting for EasyConn discovery to time out first (two 15s NSD windows plus wake
+                // probes). A pinned override always wins, and only non-EasyConn families are ever
+                // remembered, so this can only ever save time.
+                val protocolMemory = TBoxProtocolMemory(getApplication())
+                val learnedProfile = if (requestedOverride == ProfileOverride.AUTO) {
+                    protocolMemory.learnedFamily(profile.ssid)
+                        ?.let { family -> TBoxModelProfile.entries.firstOrNull { it.transportFamily == family } }
+                } else {
+                    null
+                }
+                learnedProfile?.let {
+                    ProjectionEventLog.record(
+                        "PROFILE",
+                        "This motorcycle was already seen speaking ${it.transportFamily}; going " +
+                            "straight to that transport instead of letting EasyConn time out first."
+                    )
+                }
                 transport.configureProtocolProfile(
-                    TBoxModelProfile.resolve(profile.modelId, null, requestedOverride)
+                    learnedProfile ?: TBoxModelProfile.resolve(profile.modelId, null, requestedOverride)
                 )
                 val discovered = transport.discover(establishedLink, profile.modelId)
                 val discoveryFailure = discovered.exceptionOrNull()
@@ -419,6 +438,10 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
                 val host = discovered.getOrThrow()
+                // Record what discovery settled on, so the next ride skips the slow path.
+                transport.activeProtocolProfile?.let { discoveredProfile ->
+                    protocolMemory.remember(profile.ssid, discoveredProfile.transportFamily)
+                }
                 capabilityStore.recordDiscovery(profile, host)
                 ProjectionEventLog.record(
                     "DISCOVERY",
