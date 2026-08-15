@@ -70,6 +70,20 @@ enum class TBoxModelProfile(
      */
     val encoderBitRate: Int? = null,
     /**
+     * Keep the GOP stream on plain periodic IDR keyframes instead of intra refresh. For a dash
+     * whose decoder mishandles intra-refresh streams this is the difference between working and
+     * freezing: a KOVE 800X froze hard (ignition-cycle hard) 15-30s into every intra-refresh
+     * session, while KoveMirror's plain 1s-IDR stream runs indefinitely on the same panel.
+     */
+    val encoderPlainGopWithoutIntraRefresh: Boolean = false,
+    /**
+     * Encode exactly [fallbackTBoxVideoArea]'s dimensions instead of the 16-aligned canvas.
+     * ThinkerRide declares the stream size to the dash in a header, and the reference app
+     * encodes precisely what it declares (600x1024); we used to declare 600 and stream 592.
+     * Dimensions must be even — H.264 4:2:0 needs that; the codec pads and crops internally.
+     */
+    val encoderUsesExactVideoArea: Boolean = false,
+    /**
      * Density for the captured virtual display, or null to use the phone's own. The phone's density
      * is right whenever the dash shows a mirror of the phone, and wrong whenever the dash drives a
      * layout of its own at a fixed size: a 1024x464 panel rendered at a modern phone's ~420dpi gets
@@ -260,9 +274,13 @@ enum class TBoxModelProfile(
      * and a future KOVE model with a different panel is a new profile with a different area
      * (pinned via [ProfileOverride] until its QR can be told apart). The modelId is the
      * pseudo-id the ThinkerRide QR dialect records, since the QR itself carries no model
-     * information. GOP mirrors the reference implementation (streaming ~1.8 Mbps with a short
-     * GOP, never all-intra) and detection scoring never claims this profile: CLIENT_INFO is an
-     * EasyConn concept and does not exist on this wire.
+     * information. The stream mirrors the reference implementation EXACTLY — 600x1024 as
+     * declared in the video header, plain 1s-IDR GOP (never intra refresh), ~1.8 Mbps
+     * (KoveMirror's width*height*3) — because deviating froze the dash: field logs 2026-08-13
+     * show every intra-refresh session (592x1024 on the wire, IDR every 10s, 2.5 Mbps) killing
+     * the panel 15-30s in, on two riders' bikes, while KoveMirror ran clean on the same
+     * hardware. Detection scoring never claims this profile: CLIENT_INFO is an EasyConn
+     * concept and does not exist on this wire.
      */
     KOVE_800X(
         key = "kove_800x",
@@ -279,6 +297,10 @@ enum class TBoxModelProfile(
         requiresSockAuth = false,
         advertisedSupportFunction = 0,
         encoderKeyframeIntervalSeconds = 1,
+        encoderBitRate = ThinkerRideProtocol.DEFAULT_VIDEO_WIDTH *
+            ThinkerRideProtocol.DEFAULT_VIDEO_HEIGHT * 3,
+        encoderPlainGopWithoutIntraRefresh = true,
+        encoderUsesExactVideoArea = true,
         transportFamily = TBoxTransportFamily.THINKERRIDE
     ),
     /**
@@ -347,6 +369,34 @@ enum class TBoxModelProfile(
         virtualDisplayDpi = 187,
         transportFamily = TBoxTransportFamily.YUNMO,
         yunmoMapNavExperiment = true
+    ),
+    /**
+     * X-Cape 1200 driving the dash's plain mirror path (`B0{7}`/`A0{7}`) instead of map-nav.
+     *
+     * Never tried on this bike: map-nav was turned on in 1.1.52 from an owner's report that the
+     * OEM app always drives the navigation path, and that is true — but the OEM drives it while
+     * sending *its own map*. A dash told to enter map-nav may well expect a navigation stream with
+     * that mode's semantics and decline to paint arbitrary mirrored content, which is exactly what
+     * we push (Android Auto, or the Ride Dashboard). A separate prototype for this motorcycle
+     * sends no display command at all and its author reports a working connection, which is the
+     * other end of the same question: whether this firmware paints without being put into map-nav.
+     */
+    MORINI_XCAPE_1200_MIRROR(
+        key = "morini_xcape_1200_mirror",
+        displayName = "Moto Morini X-Cape 1200 (mirror)",
+        modelIds = emptySet(),
+        mapTilesRequireCellular = true,
+        supportsScreenTouch = false,
+        defaultAndroidAutoPreset = AndroidAutoVideoPreset.LANDSCAPE_800X480,
+        fallbackTBoxVideoArea = TBoxEvent.VideoArea(800, 480),
+        requiresSockAuth = false,
+        advertisedSupportFunction = 0,
+        encoderFrameRate = 10,
+        encoderBitRate = 2_000_000,
+        virtualDisplayDpi = 187,
+        encoderKeyframeIntervalSeconds = 2,
+        transportFamily = TBoxTransportFamily.YUNMO,
+        yunmoMapNavExperiment = false
     );
 
     companion object {
@@ -525,7 +575,7 @@ enum class TBoxModelProfile(
                 // Yunmo dashes never produce CLIENT_INFO either, and the X-Cape 1200 shares its
                 // QR ProductID with EasyConn Morinis, so detection must never claim it: it is a
                 // manual pin only.
-                MORINI_XCAPE_1200 -> 0
+                MORINI_XCAPE_1200, MORINI_XCAPE_1200_MIRROR -> 0
                 GENERIC -> 0
             }
         }

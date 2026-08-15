@@ -490,9 +490,23 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
             ),
             keyframeIntervalSeconds = sessionModelProfile.encoderKeyframeIntervalSeconds,
             // Yunmo's split framing needs real keyframes to split; intra refresh would make them
-            // rare. No other family sets this, so every EasyConn dash keeps intra refresh.
+            // rare. A profile can also demand plain IDRs for its decoder's sake (KOVE froze on
+            // intra refresh); every other EasyConn dash keeps intra refresh.
             plainGopWithoutIntraRefresh =
-                sessionModelProfile.transportFamily == TBoxTransportFamily.YUNMO
+                sessionModelProfile.encoderPlainGopWithoutIntraRefresh ||
+                    sessionModelProfile.transportFamily == TBoxTransportFamily.YUNMO,
+            // ThinkerRide's video header declares the exact stream size; encode precisely that
+            // instead of the 16-aligned canvas, like the reference app does.
+            width = if (sessionModelProfile.encoderUsesExactVideoArea) {
+                configuration.rawArea.width
+            } else {
+                configuration.encoderProfile.width
+            },
+            height = if (sessionModelProfile.encoderUsesExactVideoArea) {
+                configuration.rawArea.height
+            } else {
+                configuration.encoderProfile.height
+            }
         )
         val negotiatedArea = configuration.rawArea
         val actualGeometry = DisplayGeometry(encoderProfile.width, encoderProfile.height)
@@ -725,12 +739,17 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
     }
 
     private fun handleTBoxNetworkLost(handle: TBoxSessionHandle) {
-        if (!shouldAutoRecoverAndroidAuto(
-                hasReachedStreaming = hasReachedStreaming,
-                enabled = MotoHubSettings.autoRecovery(this)
-            )
-        ) {
-            fail("T-Box Wi-Fi connection lost.")
+        // Losing the AP *while the session is still coming up* used to be fatal, because
+        // auto-recovery only ever applied once streaming had been reached. On a dash whose
+        // network is a WifiNetworkSpecifier request, Android reclaims it exactly here: the
+        // process binding is released so Google's app can reach our AAP server, our activity
+        // drops out of the foreground as Android Auto takes the screen, and the AP goes away a
+        // second later (field logs 2026-08-15: healthy -49dBm/58Mbps right up to the loss, and
+        // dash telemetry still arriving over Bluetooth 0.3s after it). The persistent request
+        // brings the same AP back within seconds, so park and continue instead of tearing a
+        // session down over a blip nobody could have felt.
+        if (!hasReachedStreaming && !stopping) {
+            resumeAfterStartupNetworkLoss(handle)
             return
         }
         if (!MotoHubSettings.seamlessResume(this)) {
@@ -750,6 +769,38 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                     "T-Box Wi-Fi did not return within the grace period; resuming Android Auto recovery."
                 )
             }
+        }
+    }
+
+    /**
+     * Waits for the persistent Wi-Fi request to bring the T-Box AP back after it vanished during
+     * the hand-off, then restarts the bike stream on the reacquired network. The Android Auto
+     * receiver is left running throughout: it is talking to Google's app over the phone, which
+     * the missing AP never touched, so there is nothing to rebuild on that side.
+     */
+    private fun resumeAfterStartupNetworkLoss(handle: TBoxSessionHandle) {
+        networkLossJob?.cancel()
+        networkLossJob = serviceScope.launch {
+            ProjectionEventLog.warning(
+                "WATCHDOG",
+                "T-Box Wi-Fi vanished while Android Auto was starting; waiting up to " +
+                    "${STARTUP_NETWORK_LOSS_WAIT_MILLIS / 1_000L}s for it to come back " +
+                    "before giving up on the session."
+            )
+            val network = handle.networkConnector.awaitNetworkAvailable(
+                STARTUP_NETWORK_LOSS_WAIT_MILLIS
+            )
+            if (stopping) return@launch
+            if (network == null) {
+                fail("T-Box Wi-Fi connection lost and did not come back.")
+                return@launch
+            }
+            ProjectionEventLog.record(
+                "WATCHDOG",
+                "T-Box Wi-Fi is back; restarting the Android Auto hand-off to the bike."
+            )
+            runCatching { requestTBoxRecovery("T-Box Wi-Fi returned after a hand-off blip.") }
+                .onFailure { fail("T-Box Wi-Fi returned but the session could not restart: ${it.message}") }
         }
     }
 
@@ -1157,6 +1208,13 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         private const val WATCHDOG_TICK_MS = 5_000L
         private const val WATCHDOG_STALL_MS = 10_000L
         private const val NETWORK_LOSS_GRACE_MILLIS = 60_000L
+
+        /**
+         * How long a hand-off waits for an AP that disappeared mid-startup. Field logs show the
+         * persistent request getting the same AP back in 10-50s, so this covers it with room to
+         * spare while still failing in a time a rider would sit through.
+         */
+        private const val STARTUP_NETWORK_LOSS_WAIT_MILLIS = 60_000L
         private const val NETWORK_REJOIN_WAIT_MILLIS = 75_000L
         private const val RECOVERY_RETRY_MILLIS = 5_000L
         private const val RECOVERY_GIVE_UP_MILLIS = 120_000L

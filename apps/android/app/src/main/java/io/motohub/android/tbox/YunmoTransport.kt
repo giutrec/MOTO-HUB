@@ -334,40 +334,36 @@ class YunmoTransport(context: Context) : TBoxTransport {
         }
 
         /**
-         * Enters the negotiated display mode.
+         * Enters the negotiated display mode, re-sending the request until the dash confirms.
          *
-         * The state-6 echo used to be a hard gate here, on the reasoning that neither a live
-         * socket nor an ack proves the dash is actually showing the full-screen map. That reasoning
-         * still holds, but the gate was the wrong lever: the OEM app does not send `A0 cmd=6` at
-         * all on this path and waits for no echo — it goes straight from the size query to
-         * encoding. Blocking on an echo the OEM never asks for meant a dash that behaves exactly
-         * like the OEM expects would time out and the session would abort without ever encoding a
-         * frame. So the request is still sent (harmless, and firmware that does echo confirms
-         * faster), but its absence is now a logged warning, not a failure.
-         *
-         * Whether the TFT actually paints remains the rider's business — see the hint carried in
-         * the no-echo phase line, and [YunmoProtocol.DISP_SIMPLE_NAVI] for the dash telling us
-         * mid-session that it switched away from the map.
+         * The OEM app sends this command through the *synchronous* form of its own send helper
+         * (`Trans_Ins(160, {6}, 1)` — the three-argument overload sets its `z` flag), which waits
+         * for the dash's reply and re-sends up to three times if none arrives. The dash answers
+         * ours around two seconds later, which is the same order as that timeout, so the OEM very
+         * likely sends this command more than once in practice. Sending it once and moving on was
+         * a difference from the OEM we could see in its source, so it is worth removing.
          */
         fun beginMode() {
-            if (mapNavMode) {
-                write(YunmoProtocol.mapNaviFrame())
-                phase("map-nav requested (A0 cmd=6)")
-                awaitMapNav()
-                if (!mapNavConfirmed) {
-                    // The counter is normally reset by the confirmation itself; do it here only
-                    // when none arrived, so a silent dash still starts from a known state.
-                    frameId.set(0)
-                    unackedSinceAck = 0
-                    phase(
-                        "map-nav not confirmed within ${MAP_NAV_TIMEOUT_MS}ms - streaming anyway. " +
-                            "If the TFT stays black, select the full-screen map view in the dash " +
-                            "menu before connecting."
-                    )
-                }
-            } else {
+            if (!mapNavMode) {
                 YunmoProtocol.startMirrorFrames().forEach { write(it) }
                 phase("mirror requested (B0/A0 cmd=7)")
+                return
+            }
+            repeat(MODE_REQUEST_ATTEMPTS) { attempt ->
+                if (mapNavConfirmed || !running.get()) return@repeat
+                write(YunmoProtocol.mapNaviFrame())
+                phase("map-nav requested (A0 cmd=6), attempt ${attempt + 1}/$MODE_REQUEST_ATTEMPTS")
+                awaitMapNav()
+            }
+            if (!mapNavConfirmed) {
+                // The counter is normally reset by the confirmation itself; do it here only
+                // when none arrived, so a silent dash still starts from a known state.
+                frameId.set(0)
+                unackedSinceAck = 0
+                phase(
+                    "map-nav not confirmed after $MODE_REQUEST_ATTEMPTS attempts - streaming " +
+                        "anyway. If the TFT stays black, try the mirror profile variant instead."
+                )
             }
         }
 
@@ -638,6 +634,9 @@ class YunmoTransport(context: Context) : TBoxTransport {
 
         const val DIM_TIMEOUT_MS = 5_000L
         const val MAP_NAV_TIMEOUT_MS = 2_500L
+
+        /** Matches the OEM's own retry count for the synchronous form of this command. */
+        const val MODE_REQUEST_ATTEMPTS = 3
         const val SEND_WINDOW_TIMEOUT_MS = 2_000L
 
         /** Roughly every few seconds at this dash's frame rate; enough to show acks still flow. */

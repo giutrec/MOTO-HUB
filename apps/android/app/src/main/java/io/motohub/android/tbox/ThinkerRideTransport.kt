@@ -84,7 +84,7 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
                     return@runCatching TBoxHost(
                         ipAddress = alive.localAddress(),
                         port = ThinkerRideProtocol.VIDEO_PORT,
-                        packageName = THINKERRIDE_PACKAGE_TAG
+                        packageName = ThinkerRideProtocol.PACKAGE_TAG
                     )
                 }
                 teardownSession()
@@ -111,7 +111,7 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
                     TBoxHost(
                         ipAddress = created.localAddress(),
                         port = ThinkerRideProtocol.VIDEO_PORT,
-                        packageName = THINKERRIDE_PACKAGE_TAG
+                        packageName = ThinkerRideProtocol.PACKAGE_TAG
                     )
                 } catch (failure: Throwable) {
                     teardownSession()
@@ -296,6 +296,20 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
             acceptLoop("heartbeat", heartbeatServer) { socket -> runHeartbeat(socket) }
             acceptLoop("video", videoServer) { socket ->
                 socket.tcpNoDelay = true
+                // Only a dash that was told to mirror can be opening this; anything else is
+                // something on this phone probing the port. The network diagnostics screen did
+                // exactly that (it dials the registry's host:15456, which on this wire is *us*),
+                // and without this guard that probe was accepted as the dash and the real
+                // connection had nowhere to land.
+                if (mirrorArea == null) {
+                    ProjectionEventLog.record(
+                        "THINKERRIDE",
+                        "Ignoring a video connection that arrived before any mirror-start; " +
+                            "the dash was never asked to mirror."
+                    )
+                    runCatching { socket.close() }
+                    return@acceptLoop
+                }
                 latestVideoSocket = socket
                 if (!videoConnected.complete(socket)) {
                     // The dash reopened the channel — or connected after start() stopped
@@ -462,7 +476,6 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
     }
 
     private companion object {
-        const val THINKERRIDE_PACKAGE_TAG = "thinkerride"
         const val BLE_SCAN_TIMEOUT_MS = 20_000L
         const val CONTROL_CONNECT_TIMEOUT_MS = 20_000L
 

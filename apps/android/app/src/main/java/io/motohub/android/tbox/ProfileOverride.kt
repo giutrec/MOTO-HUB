@@ -36,6 +36,11 @@ enum class ProfileOverride(
         "X-Cape 1200 (Yunmo)",
         "Moto Morini X-Cape 1200 SoftAP dash on Yunmo :8200 (not the 649/700/Seiemmezzo)"
     ),
+    MORINI_XCAPE_1200_MIRROR(
+        "morini_xcape_1200_mirror",
+        "X-Cape 1200 (mirror)",
+        "Same dash, asked for plain mirroring instead of the navigation display mode"
+    ),
     MOTO_HUB_SIMULATOR("moto_hub_simulator", "MOTO-HUB Simulator", "Development simulator profile");
 
     fun resolve(): TBoxModelProfile? = when (this) {
@@ -53,6 +58,7 @@ enum class ProfileOverride(
         ZONTES_368G_TEST_B -> TBoxModelProfile.ZONTES_368G_TEST_B
         KOVE_800X -> TBoxModelProfile.KOVE_800X
         MORINI_XCAPE_1200 -> TBoxModelProfile.MORINI_XCAPE_1200
+        MORINI_XCAPE_1200_MIRROR -> TBoxModelProfile.MORINI_XCAPE_1200_MIRROR
         MOTO_HUB_SIMULATOR -> TBoxModelProfile.MOTO_HUB_SIMULATOR
     }
 

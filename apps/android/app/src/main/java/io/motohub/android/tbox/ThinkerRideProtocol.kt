@@ -42,6 +42,13 @@ object ThinkerRideProtocol {
      */
     const val PROVISIONING_MODEL_ID = "THINKERRIDE"
 
+    /**
+     * Marks a [TBoxHost] as this family's. The host it carries is *this phone* — the dash dials
+     * in on this wire — so anything that would otherwise treat a host as something to connect to
+     * has to recognise it.
+     */
+    const val PACKAGE_TAG = "thinkerride"
+
     /** GATT service the dash advertises; scan filter and service discovery both key on it. */
     const val BLE_SERVICE_UUID = "0000e0ff-3c17-d293-8e48-14fe2e4da212"
 

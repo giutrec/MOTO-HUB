@@ -195,9 +195,23 @@ class ProjectionSessionService : Service() {
             ),
             keyframeIntervalSeconds = modelProfile.encoderKeyframeIntervalSeconds,
             // Yunmo's split framing needs real keyframes to split; intra refresh would make them
-            // rare. No other family sets this, so every EasyConn dash keeps intra refresh.
+            // rare. A profile can also demand plain IDRs for its decoder's sake (KOVE froze on
+            // intra refresh); every other EasyConn dash keeps intra refresh.
             plainGopWithoutIntraRefresh =
-                modelProfile.transportFamily == TBoxTransportFamily.YUNMO
+                modelProfile.encoderPlainGopWithoutIntraRefresh ||
+                    modelProfile.transportFamily == TBoxTransportFamily.YUNMO,
+            // ThinkerRide's video header declares the exact stream size; encode precisely that
+            // instead of the 16-aligned canvas, like the reference app does.
+            width = if (modelProfile.encoderUsesExactVideoArea) {
+                configuration.rawArea.width
+            } else {
+                configuration.encoderProfile.width
+            },
+            height = if (modelProfile.encoderUsesExactVideoArea) {
+                configuration.rawArea.height
+            } else {
+                configuration.encoderProfile.height
+            }
         )
         ProjectionEventLog.record("T-BOX", "Handshake completed.")
         if (configuration.source == TBoxVideoAreaSource.LIVE) {

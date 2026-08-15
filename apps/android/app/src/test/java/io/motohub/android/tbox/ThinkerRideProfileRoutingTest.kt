@@ -52,4 +52,21 @@ class ThinkerRideProfileRoutingTest {
         assertEquals(ThinkerRideProtocol.DEFAULT_VIDEO_WIDTH, area?.width)
         assertEquals(ThinkerRideProtocol.DEFAULT_VIDEO_HEIGHT, area?.height)
     }
+
+    @Test
+    fun theKoveStreamMatchesTheReferenceImplementation() {
+        // Field logs 2026-08-13: intra refresh (IDR only every 10s), a 592-wide stream under a
+        // 600-wide header, and 2.5 Mbps froze the dash 15-30s into every session, on two bikes.
+        // KoveMirror's plain 1s-IDR 600x1024 ~1.8 Mbps stream runs clean on the same hardware,
+        // so the profile pins the exact same stream shape.
+        val profile = TBoxModelProfile.KOVE_800X
+
+        assertEquals(1, profile.encoderKeyframeIntervalSeconds)
+        assertEquals(true, profile.encoderPlainGopWithoutIntraRefresh)
+        assertEquals(true, profile.encoderUsesExactVideoArea)
+        assertEquals(
+            ThinkerRideProtocol.DEFAULT_VIDEO_WIDTH * ThinkerRideProtocol.DEFAULT_VIDEO_HEIGHT * 3,
+            profile.encoderBitRate
+        )
+    }
 }

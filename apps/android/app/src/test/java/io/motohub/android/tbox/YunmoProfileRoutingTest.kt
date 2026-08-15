@@ -8,8 +8,14 @@ import org.junit.Test
 
 class YunmoProfileRoutingTest {
 
-    /** The X-Cape profile and its header-variant experiments; everything else must stay EasyConn. */
-    private val yunmoProfiles = setOf(TBoxModelProfile.MORINI_XCAPE_1200)
+    private fun overrideFor(profile: TBoxModelProfile): ProfileOverride =
+        ProfileOverride.entries.first { it.resolve() == profile }
+
+    /** The X-Cape profile and its mirror variant; everything else must stay EasyConn. */
+    private val yunmoProfiles = setOf(
+        TBoxModelProfile.MORINI_XCAPE_1200,
+        TBoxModelProfile.MORINI_XCAPE_1200_MIRROR
+    )
 
     @Test
     fun theXCape1200ProfileRoutesToTheYunmoTransport() {
@@ -80,5 +86,32 @@ class YunmoProfileRoutingTest {
                     profile.yunmoMapNavExperiment
                 )
             }
+    }
+
+    @Test
+    fun theMirrorVariantDiffersOnlyInTheDisplayModeItAsksFor() {
+        val base = TBoxModelProfile.MORINI_XCAPE_1200
+        val mirror = TBoxModelProfile.MORINI_XCAPE_1200_MIRROR
+        // The point of the variant is to isolate one question - does this dash paint without being
+        // put into map-nav - so every other setting has to stay identical or it answers nothing.
+        assertEquals(base.encoderFrameRate, mirror.encoderFrameRate)
+        assertEquals(base.encoderBitRate, mirror.encoderBitRate)
+        assertEquals(base.encoderKeyframeIntervalSeconds, mirror.encoderKeyframeIntervalSeconds)
+        assertEquals(base.virtualDisplayDpi, mirror.virtualDisplayDpi)
+        assertEquals(base.fallbackTBoxVideoArea, mirror.fallbackTBoxVideoArea)
+        assertEquals(TBoxTransportFamily.YUNMO, mirror.transportFamily)
+        assertTrue(base.yunmoMapNavExperiment)
+        assertFalse("the mirror variant must ask for the mirror path", mirror.yunmoMapNavExperiment)
+    }
+
+    @Test
+    fun neitherXCapeProfileIsEverAutoResolvedFromTheSharedProductId() {
+        // Both are manual pins: 00297 belongs to the EasyConn 649/700/Seiemmezzo as well.
+        assertEquals(TBoxModelProfile.GENERIC, TBoxModelProfile.fromModelId("00297"))
+        // Reachable only by a manual pin, never by resolution from the QR.
+        yunmoProfiles.forEach { profile ->
+            assertNotEquals(profile, TBoxModelProfile.resolve("00297", null))
+            assertEquals(profile, TBoxModelProfile.resolve("00297", null, overrideFor(profile)))
+        }
     }
 }
