@@ -118,6 +118,25 @@ class TBoxTransportClient(
         runCatching { service?.connectOverFormedGroup(request, localIpv4, groupOwnerIpv4) }
             .getOrNull() ?: false
 
+    /**
+     * Why Core's last connect failed, as Core would put it to a rider, or null when Core is not
+     * bound, succeeded, or is too old to answer. Only meaningful right after a false [connect] /
+     * [connectOverFormedGroup]; nothing here clears it.
+     */
+    fun lastConnectFailure(): String? =
+        runCatching { service?.getLastConnectFailure() }.getOrNull()?.takeIf { it.isNotBlank() }
+
+    /**
+     * Which half of the connect failed, as one of `IpcBridgeContract.CONNECT_STAGE_*`.
+     * [IpcBridgeContract.CONNECT_STAGE_UNKNOWN] when unbound or on a Core older than
+     * [IpcBridgeContract.CONTRACT_VERSION_CONNECT_FAILURE_REASON]. The two are indistinguishable
+     * on purpose: both mean "this app cannot tell", and both leave the caller on the behaviour it
+     * had before this call existed rather than inventing a stage.
+     */
+    fun lastConnectFailureStage(): Int =
+        runCatching { service?.getLastConnectFailureStage() }.getOrNull()
+            ?: IpcBridgeContract.CONNECT_STAGE_UNKNOWN
+
     /** Aborts an in-flight connect() on Core's side; see ITBoxTransportService.aidl. */
     fun cancelConnect() {
         service?.cancelConnect()

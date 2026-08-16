@@ -292,6 +292,7 @@ private fun HomeTabContent(
                 onTryPhoneHotspot = onTryPhoneHotspot,
                 onConnect = onConnectAndDiscover,
                 officialCfmotoAppInstalled = officialCfmotoAppInstalled,
+                officialAppHelpApplies = session.offerOfficialAppHelp,
                 onCloseOfficialCfmotoAndRetry = onCloseOfficialCfmotoAndRetry,
                 onOpenOfficialCfmotoSettings = onOpenOfficialCfmotoSettings,
                 onOpenWifiSettings = onOpenWifiSettings,
@@ -428,6 +429,7 @@ private fun ConnectionContent(
     onTryPhoneHotspot: () -> Unit,
     onConnect: () -> Unit,
     officialCfmotoAppInstalled: Boolean,
+    officialAppHelpApplies: Boolean,
     onCloseOfficialCfmotoAndRetry: () -> Unit,
     onOpenOfficialCfmotoSettings: () -> Unit,
     onOpenWifiSettings: () -> Unit,
@@ -442,6 +444,7 @@ private fun ConnectionContent(
                 message = message,
                 showPortConflictHelp = TBoxConflictDiagnostics.isPortConflict(message),
                 officialCfmotoAppInstalled = officialCfmotoAppInstalled,
+                officialAppHelpApplies = officialAppHelpApplies,
                 onCloseOfficialCfmotoAndRetry = onCloseOfficialCfmotoAndRetry,
                 onOpenOfficialCfmotoSettings = onOpenOfficialCfmotoSettings,
                 showWifiSettingsAction = message == WifiGate.WIFI_OFF_MESSAGE,
@@ -475,6 +478,7 @@ private fun ErrorBanner(
     message: String,
     showPortConflictHelp: Boolean,
     officialCfmotoAppInstalled: Boolean,
+    officialAppHelpApplies: Boolean,
     onCloseOfficialCfmotoAndRetry: () -> Unit,
     onOpenOfficialCfmotoSettings: () -> Unit,
     showWifiSettingsAction: Boolean,
@@ -489,7 +493,11 @@ private fun ErrorBanner(
     // connection failure it is one possible cause among several, so it moves behind the
     // details fold - and it is dropped entirely for errors it cannot explain (phone Wi-Fi
     // off, Android Auto self-mode), where it used to read as a false culprit.
+    // ...and it is dropped for any failure that never reached a session another app could be
+    // holding - see HubSessionState.offerOfficialAppHelp. A port conflict is its own evidence and
+    // stands on that alone, whatever stage reported it.
     val officialAppMayHoldTBox = officialCfmotoAppInstalled &&
+        (officialAppHelpApplies || showPortConflictHelp) &&
         !showWifiSettingsAction && !showAndroidAutoSetupHelp
     val showOfficialAppHintProminently = officialAppMayHoldTBox && showPortConflictHelp
     val hasExtra = showPortConflictHelp || showWifiSettingsAction || showAndroidAutoSetupHelp ||

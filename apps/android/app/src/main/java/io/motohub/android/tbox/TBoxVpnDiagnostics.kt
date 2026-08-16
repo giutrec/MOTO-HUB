@@ -1,11 +1,86 @@
 package io.motohub.android.tbox
 
-/** Converts Android VPN/network errors into an actionable local-network diagnosis. */
-internal object TBoxVpnDiagnostics {
-    const val VPN_BLOCKING_MESSAGE =
-        "A VPN is blocking the motorcycle Wi-Fi. Disable Always-on VPN / Block connections without VPN, " +
-            "or allow MOTO-HUB on the local network, then try again."
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import java.net.InetAddress
 
+/**
+ * Says whether a VPN is actually standing between this app and the dash - and refuses to say so
+ * when it is not.
+ *
+ * This used to blame the VPN for any failure that happened while a VpnService-based app merely
+ * existed on the phone, on the strength of a `TRANSPORT_VPN` network being present. A rider
+ * running Tailscale was told to "disable Always-on VPN / Block connections without VPN" - two
+ * settings he did not have on - for a failure whose real shape (an exit node capturing the
+ * default route) that sentence never named. Presence is not causation, and a diagnosis that
+ * sends a rider to the wrong settings screen is worse than no diagnosis.
+ *
+ * So the evidence is gathered instead of assumed. A VPN that applies to this app is visible in
+ * `allNetworks`, and its [android.net.LinkProperties] - readable with ordinary ACCESS_NETWORK_STATE -
+ * carry the routes it claims. If those routes cover the dash, the VPN wins the route to it and
+ * the diagnosis is a fact; if they do not, the VPN is a bystander and this says nothing.
+ */
+internal object TBoxVpnDiagnostics {
+
+    /**
+     * What a VPN applying to this app is doing to the route towards the dash, as far as an
+     * ordinary app can observe it.
+     *
+     * @param interfaceName the tunnel's interface (`tun0`), when Android exposes it.
+     * @param capturesDefaultRoute the tunnel claims `0.0.0.0/0` - full-tunnel mode, which on
+     *   Tailscale/Mullvad-style clients is what an "exit node" turns on. Everything not covered
+     *   by a more specific route, including the dash, goes into the tunnel.
+     * @param capturesDash one of the tunnel's routes matches the dash's own address. Stronger
+     *   than [capturesDefaultRoute] and independent of it: a client with LAN access switched off
+     *   can claim the private ranges without claiming everything.
+     */
+    data class VpnRouting(
+        val interfaceName: String?,
+        val capturesDefaultRoute: Boolean,
+        val capturesDash: Boolean
+    ) {
+        /** The only state worth blaming: the dash's own address is inside the tunnel. */
+        val capturesTBox: Boolean get() = capturesDash || capturesDefaultRoute
+
+        val label: String get() = interfaceName?.takeIf { it.isNotBlank() } ?: "VPN"
+
+        /** For the log: the facts, not the verdict. */
+        fun describe(): String =
+            "interface=$label, capturesDefaultRoute=$capturesDefaultRoute, capturesDashAddress=$capturesDash"
+    }
+
+    /**
+     * The VPN that applies to this app right now, and what it claims about the route to
+     * [dashAddress] (the dash's gateway on the Wi-Fi it just joined). Null when no VPN applies.
+     *
+     * Never throws: this runs inside a ConnectivityManager callback on the path that establishes
+     * a ride, and a diagnostic has no business breaking the thing it is describing.
+     */
+    fun inspect(
+        connectivityManager: ConnectivityManager,
+        dashAddress: InetAddress?
+    ): VpnRouting? = runCatching {
+        @Suppress("DEPRECATION")
+        val vpn = connectivityManager.allNetworks.firstOrNull { network ->
+            connectivityManager.getNetworkCapabilities(network)
+                ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+        } ?: return@runCatching null
+        val linkProperties = connectivityManager.getLinkProperties(vpn)
+        val routes = linkProperties?.routes.orEmpty()
+        VpnRouting(
+            interfaceName = linkProperties?.interfaceName,
+            capturesDefaultRoute = routes.any { it.isDefaultRoute },
+            capturesDash = dashAddress != null && routes.any { route ->
+                runCatching { route.destination.contains(dashAddress) }.getOrDefault(false)
+            }
+        )
+    }.getOrNull()
+
+    /**
+     * Android refused something with a permission error, which is what a VPN in lockdown produces.
+     * Kept separate from [inspect] because it is evidence of a different kind: the error itself,
+     * rather than the routing table.
+     */
     fun isVpnBindBlocked(error: Throwable?): Boolean {
         var current = error
         while (current != null) {
@@ -23,8 +98,38 @@ internal object TBoxVpnDiagnostics {
         return false
     }
 
-    fun userFacingMessage(error: Throwable?, activeVpnLabel: String?): String? {
-        if (activeVpnLabel == null && !isVpnBindBlocked(error)) return null
-        return VPN_BLOCKING_MESSAGE
+    /**
+     * The rider-facing sentence for a failure a VPN demonstrably caused, or null when nothing
+     * here points at one. [routing] may be null when the caller has no network to inspect yet -
+     * the error alone can still carry the evidence.
+     */
+    fun userFacingMessage(error: Throwable?, routing: VpnRouting?): String? = when {
+        routing?.capturesTBox == true -> blockingMessage(routing)
+        isVpnBindBlocked(error) -> blockingMessage(routing)
+        else -> null
     }
+
+    /**
+     * Names the tunnel and the three ways out of it. Deliberately does not say "Always-on VPN":
+     * a full-tunnel exit node produces exactly this failure with always-on switched off, and
+     * sending a rider to that toggle is how the previous message wasted an afternoon.
+     */
+    fun blockingMessage(routing: VpnRouting?): String {
+        val tunnel = routing?.label?.let { " ($it)" }.orEmpty()
+        return "$VPN_ROUTING_MARKER$tunnel is routing the motorcycle's network into its tunnel, so " +
+            "Android will not let MOTO-HUB reach the dash. Turn the VPN off while you ride, switch " +
+            "off its exit node / full-tunnel mode, or turn on its \"allow local network access\" " +
+            "option, then retry."
+    }
+
+    /**
+     * Whether [message] is one of ours from above. Used by the error banner to keep help meant for
+     * a busy EasyConn session off a failure that never got near one - see
+     * [io.motohub.android.session.HubSessionState.offerOfficialAppHelp].
+     */
+    fun isVpnRoutingMessage(message: String?): Boolean =
+        message?.contains(VPN_ROUTING_MARKER, ignoreCase = true) == true
+
+    /** Opening words of every message above, so [isVpnRoutingMessage] has something exact to match. */
+    private const val VPN_ROUTING_MARKER = "A VPN on this phone"
 }

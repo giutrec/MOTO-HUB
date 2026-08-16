@@ -370,11 +370,12 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                 val networkFailure = connected.exceptionOrNull()
                 if (networkFailure != null) {
                     ProjectionEventLog.error("NETWORK", "T-Box AP connection failed.", networkFailure)
-                    // activeVpnLabel omitted: see TBoxNetworkConnector.connect() for why merely having a VPN active isn't evidence.
+                    // routing omitted: the connector already tested the VPN's routes against the
+                    // network it was granted and put its verdict in the message, if it had one.
                     showError(
                         TBoxVpnDiagnostics.userFacingMessage(
                             error = networkFailure,
-                            activeVpnLabel = null
+                            routing = null
                         ) ?: "Unable to connect to the T-Box network: ${networkFailure.message}",
                         // Android never joined an access point. On a dash that is itself a Wi-Fi
                         // client there is no access point to join, so this is the only failure it
@@ -430,11 +431,22 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                 val discoveryFailure = discovered.exceptionOrNull()
                 if (discoveryFailure != null) {
                     ProjectionEventLog.error("DISCOVERY", "EasyConn service discovery failed.", discoveryFailure)
+                    // The link was up and the dash did not answer on it. Another EasyConn app
+                    // holding the session is a real explanation here, and only here.
+                    val routingDiagnosis = networkConnector.vpnRoutingDiagnosis()
                     transport.stop()
                     establishedLink.disconnect()
                     networkConnector.disconnect()
                     TBoxSessionRegistry.clear()
-                    showError(motoHubText("T-Box not found: %1\$s", discoveryFailure.message.orEmpty()))
+                    if (routingDiagnosis != null) {
+                        // Nothing this app sent ever left the phone: report the route, not the dash.
+                        showError(routingDiagnosis)
+                    } else {
+                        showError(
+                            motoHubText("T-Box not found: %1\$s", discoveryFailure.message.orEmpty()),
+                            offerOfficialAppHelp = true
+                        )
+                    }
                     return@launch
                 }
                 val host = discovered.getOrThrow()
@@ -581,7 +593,16 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    private fun showError(message: String, offerPhoneHotspotRetry: Boolean = false) {
+    /**
+     * @param offerOfficialAppHelp only for failures a busy EasyConn session could have caused -
+     *   see [HubSessionState.offerOfficialAppHelp]. Defaults to false so a new failure path has to
+     *   claim that help deliberately rather than inherit it.
+     */
+    private fun showError(
+        message: String,
+        offerPhoneHotspotRetry: Boolean = false,
+        offerOfficialAppHelp: Boolean = false
+    ) {
         val userFacingMessage = TBoxConflictDiagnostics.userFacingMessage(message)
         // Recorded as a warning, not an error: this only puts a banner on screen. Whatever
         // actually failed was already reported at ERROR by the layer that detected it, and
@@ -592,7 +613,8 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
             session = mutableUiState.value.session.copy(
                 phase = SessionPhase.ERROR,
                 message = userFacingMessage,
-                offerPhoneHotspotRetry = offerPhoneHotspotRetry
+                offerPhoneHotspotRetry = offerPhoneHotspotRetry,
+                offerOfficialAppHelp = offerOfficialAppHelp
             )
         )
     }

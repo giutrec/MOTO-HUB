@@ -14,6 +14,7 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.ParcelUuid
+import android.os.SystemClock
 import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -90,12 +91,12 @@ internal class ThinkerRideBleLink(
     private var writeGeneration = 0L
     private var writeWatchdog: ScheduledFuture<*>? = null
 
-    /**
-     * Completed once the dash acknowledges pairing (`send_pairresult` = 1) over notify. Replaced
-     * by [repairAndAwaitConfirmation], which re-arms it before asking the dash to pair again.
-     */
+    /** Completed once the dash acknowledges pairing (`send_pairresult` = 1) over notify. */
+    private val pairConfirmation = CompletableDeferred<Unit>()
+
+    /** [android.os.SystemClock.elapsedRealtime] of the last confirmation, or 0 if never. */
     @Volatile
-    private var pairConfirmation = CompletableDeferred<Unit>()
+    private var pairConfirmedAtElapsed = 0L
 
     /**
      * Scans for the dash, connects, subscribes to notifications, sends the opening handshake and
@@ -177,29 +178,13 @@ internal class ThinkerRideBleLink(
     }
 
     /**
-     * Asks the dash to pair again and suspends until it confirms, so that a mirror-start can
-     * follow the confirmation immediately.
-     *
-     * KoveMirror fires mirror-start straight out of the `send_pairresult` notification; we only
-     * reach that point once the video pipeline is up, seconds later. A KOVE 800X PRO that
-     * mirrors fine under KoveMirror ignored every mirror-start we sent ~4.6s after pairing
-     * (2026-08-13), so the gap is worth closing. Returns false when the dash does not answer in
-     * time, in which case the caller carries on exactly as it did before.
+     * How long ago the dash last confirmed pairing, or [Long.MAX_VALUE] if it never has. Logged
+     * next to every mirror-start: if a dash ever turns out to care how closely the two follow
+     * each other, this is the number that will show it.
      */
-    suspend fun repairAndAwaitConfirmation(timeoutMillis: Long): Boolean {
-        if (closed.get()) return false
-        val rearmed = CompletableDeferred<Unit>()
-        pairConfirmation = rearmed
-        val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
-        ThinkerRideProtocol.bleHandshakePackets(timestamp).forEach { enqueue(it) }
-        return withTimeoutOrNull(timeoutMillis) {
-            try {
-                rearmed.await()
-                true
-            } catch (_: IllegalStateException) {
-                false
-            }
-        } == true
+    fun millisSincePairConfirmation(): Long {
+        val confirmedAt = pairConfirmedAtElapsed
+        return if (confirmedAt == 0L) Long.MAX_VALUE else SystemClock.elapsedRealtime() - confirmedAt
     }
 
     /** Sends the projection start/stop pair; safe to call from any thread. */
@@ -349,6 +334,7 @@ internal class ThinkerRideBleLink(
                 notifyAssembler.accept(value.toString(StandardCharsets.UTF_8)).forEach { message ->
                     log("Dash -> BLE: $message")
                     if (ThinkerRideProtocol.isPairConfirmation(message)) {
+                        pairConfirmedAtElapsed = SystemClock.elapsedRealtime()
                         if (pairConfirmation.complete(Unit)) {
                             log("Dashboard confirmed Bluetooth pairing (send_pairresult=1).")
                         }

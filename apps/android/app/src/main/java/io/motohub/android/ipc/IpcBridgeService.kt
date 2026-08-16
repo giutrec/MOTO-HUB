@@ -183,6 +183,13 @@ class IpcBridgeService : Service() {
 
         override fun getContractVersion(): Int = IpcBridgeContract.CONTRACT_VERSION
 
+        // Read after a false connect(), so the caller can put Core's own reason in front of its
+        // rider instead of "Core failed to connect to the T-Box" plus whichever help it happens
+        // to have. Not cleared here: the caller may ask more than once (log it, then show it).
+        override fun getLastConnectFailure(): String? = CoreConnectFailureRecord.reason()
+
+        override fun getLastConnectFailureStage(): Int = CoreConnectFailureRecord.stage()
+
         // The caller formed the Wi-Fi Direct group in its own process and passes the addresses it
         // resolved there, because this one cannot resolve them for a group it did not form. Bad
         // addresses are refused here rather than deep in the connect: a caller that cannot say
