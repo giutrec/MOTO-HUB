@@ -146,11 +146,11 @@
     <!-- Source: feature/controls/ControlsScreen.kt -->
     <string name="legacy_timing_9551dc6a">Délais</string>
     <!-- Source: feature/controls/ControlsScreen.kt -->
-    <string name="legacy_use_the_motorcycle_buttons_without_looking_down__1b06094c">Utilisez les touches de la moto sans baisser les yeux. La projection active reçoit les commandes en premier.</string>
+    <string name="legacy_use_the_motorcycle_buttons_without_looking_down__1b06094c">Utilisez les boutons de la moto sans baisser les yeux. La projection active reçoit les commandes en premier.</string>
     <!-- Source: feature/controls/ControlsScreen.kt -->
     <string name="legacy_voice_4eff112">Voix</string>
     <!-- Source: feature/controls/MediaButtonBridge.kt -->
-    <string name="legacy_motorcycle_buttons_control_targetname_c5bca78f">Les touches de la moto commandent $targetName</string>
+    <string name="legacy_motorcycle_buttons_control_targetname_c5bca78f">Les boutons de la moto commandent $targetName</string>
     <!-- Source: feature/diagnostics/ApplicationLogScreen.kt -->
     <string name="legacy_application_logs_ca54c69f">Journaux de l\'application</string>
     <!-- Source: feature/diagnostics/ApplicationLogScreen.kt -->
@@ -280,7 +280,7 @@
     <!-- Source: feature/home/HubHomeScreen.kt -->
     <string name="legacy_setting_up_network_and_t_box_7769a762">Configuration du réseau et du T-Box</string>
     <!-- Source: feature/home/HubHomeScreen.kt -->
-    <string name="legacy_what_to_show_122be0b9">Qu\'afficher ?</string>
+    <string name="legacy_what_to_show_122be0b9">Quoi afficher ?</string>
     <!-- Source: feature/home/HubHomeScreen.kt -->
     <string name="legacy_back_fe3a848e">‹ Retour</string>
     <!-- Source: feature/navigation/NavigationScreen.kt -->
@@ -524,7 +524,7 @@
     <!-- Source: feature/trips/TripsScreen.kt -->
     <string name="legacy_name_this_ride_9a657605">Nommez cette sortie</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
-    <string name="legacy_opening_the_saved_trip_now_c583b843">Ouverture de la sortie enregistrée.</string>
+    <string name="legacy_opening_the_saved_trip_now_c583b843">Ouvrir la sortie enregistrée.</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
     <string name="legacy_recorded_rides_823a26eb">SORTIES ENREGISTRÉES</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
@@ -706,7 +706,7 @@
     <!-- Source: feature/settings/SettingsScreen.kt -->
     <string name="legacy_preview_ride_dashboard_cf294e4">Aperçu du Ride Dashboard</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
-    <string name="legacy_recovery_watchdog_eb0fb218">Chien de garde de reprise</string>
+    <string name="legacy_recovery_watchdog_eb0fb218">Surveillance de reprise</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
     <string name="legacy_resolution_and_display_mode_70f7a2be">Résolution et mode d\'affichage</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
@@ -722,7 +722,7 @@
     <!-- Source: feature/settings/SettingsScreen.kt -->
     <string name="legacy_start_gps_logging_with_projection_sessions_1c3d9c89">Démarrer l\'enregistrement GPS avec les sessions de projection</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
-    <string name="legacy_t_box_discovery_wi_fi_binding_cellular_routes_32d84d5f">Découverte du T-Box, liaison Wi-Fi, routes mobiles</string>
+    <string name="legacy_t_box_discovery_wi_fi_binding_cellular_routes_32d84d5f">Détection T-Box, liaison Wi-Fi, réseaux cellulaires</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
     <string name="legacy_try_without_a_key_demo_server_74e379d4">Essayer sans clé (serveur de démonstration)</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
@@ -753,7 +753,7 @@
     <string name="legacy_save_place_1_d_39c7a048">Enregistrer le lieu %1$d</string>
     <string name="legacy_t_box_identifier_1_s_531e2638">Identifiant T-Box : %1$s</string>
     <string name="legacy_1_s_fe2c9a02">‹ %1$s</string>
-    <string name="legacy_motorcycle_buttons_control_1_s_6e2f90ac">Les touches de la moto commandent %1$s</string>
+    <string name="legacy_motorcycle_buttons_control_1_s_6e2f90ac">Les boutons de la moto commandent %1$s</string>
     <string name="legacy_rain_1_d_84b55e18">PLUIE %1$d%%</string>
     <string name="legacy_1_d_c_41e7b8ff">%1$d°C</string>
     <string name="legacy_1_d_km_h_6ce8c40f">%1$d KM/H</string>
@@ -1313,12 +1313,12 @@
     <!-- Source: feature/controls/BluetoothStatus.kt -->
     <string name="legacy_allow_bluetooth_access_so_the_app_can_see_whethe_8754f4c2">Autorisez l\'accès Bluetooth pour que l\'application voie si la moto est connectée.</string>
     <string name="legacy_bluetooth_is_off_turn_it_on_then_pair_the_motorc_5375bc65">Le Bluetooth est désactivé — activez-le, puis appairez la moto.</string>
-    <string name="legacy_connected_now_1_s_if_that_is_the_motorcycle_the__cd016af1">Connecté actuellement : %1$s. S\'il s\'agit de la moto, les touches du guidon peuvent atteindre le téléphone.</string>
+    <string name="legacy_connected_now_1_s_if_that_is_the_motorcycle_the__cd016af1">Connecté actuellement : %1$s. S\'il s\'agit de la moto, les boutons du guidon peuvent atteindre le téléphone.</string>
     <string name="legacy_no_audio_device_is_connected_right_now_with_the__7d4f4d3e">Aucun appareil audio n\'est connecté pour l\'instant. Moto allumée, son tableau de bord devrait apparaître ici — s\'il n\'apparaît jamais, appairez-le depuis les réglages Bluetooth.</string>
     <string name="legacy_this_phone_has_no_bluetooth_b42f7e85">Ce téléphone n\'a pas de Bluetooth.</string>
 
     <!-- Source: feature/controls/HandlebarMappingScreen.kt -->
-    <string name="legacy_a_button_the_app_has_not_been_taught_yet_53060697">Une touche que l\'application n\'a pas encore apprise</string>
+    <string name="legacy_a_button_the_app_has_not_been_taught_yet_53060697">Un bouton que l\'application n\'a pas encore appris</string>
     <string name="legacy_a_single_press_acts_immediately_instead_of_waiti_ebd37a80">Un appui simple agit immédiatement au lieu d\'attendre la fin de la fenêtre de double appui. Le double fonctionne toujours - il exécute simplement le simple d\'abord.</string>
     <string name="legacy_allow_bluetooth_bbde9a57">Autoriser le Bluetooth</string>
     <string name="legacy_bluetooth_settings_ed5eb975">Réglages Bluetooth</string>
@@ -1326,7 +1326,7 @@
     <string name="legacy_choose_what_this_press_does_4e74fce9">Choisissez ce que fait cet appui.</string>
     <string name="legacy_done_1_d_presses_learned_dd4b86bd">Terminé - %1$d appuis appris.</string>
     <string name="legacy_double_press_window_a8b0763c">Fenêtre de double appui</string>
-    <string name="legacy_every_card_now_describes_your_handlebar_buttons__f70bd7b3">Chaque fiche décrit maintenant votre guidon. Les touches marquées comme absentes ont disparu.</string>
+    <string name="legacy_every_card_now_describes_your_handlebar_buttons__f70bd7b3">Chaque fiche décrit maintenant votre guidon. Les boutons marqués comme absents ont disparu.</string>
     <string name="legacy_finish_7d6e78b3">Terminer</string>
     <string name="legacy_handlebar_7b449ccb">Guidon</string>
     <string name="legacy_hold_gestures_a5df4e6b">Appuis longs</string>
@@ -1335,16 +1335,16 @@
     <string name="legacy_motorcycle_bluetooth_88c59adf">Bluetooth de la moto</string>
     <string name="legacy_not_detected_yet_d1e8f877">pas encore détecté</string>
     <string name="legacy_not_on_my_bike_49509421">Pas sur ma moto</string>
-    <string name="legacy_nothing_happens_some_dashboards_keep_a_button_fo_c80119d0">Rien ne se passe ? Certains tableaux de bord gardent une touche pour eux et n\'envoient rien du tout au téléphone - sur un CFMOTO CFDL16 c\'est exactement ce que fait un appui COURT sur le rocker. Marquez-la comme absente et elle cesse de prendre de la place.</string>
+    <string name="legacy_nothing_happens_some_dashboards_keep_a_button_fo_c80119d0">Rien ne se passe ? Certains tableaux de bord gardent un bouton pour eux et n\'envoient rien du tout au téléphone - sur un CFMOTO CFDL16 c\'est exactement ce que fait un appui COURT sur le rocker. Marquez-le comme absent et il cesse de prendre de la place.</string>
     <string name="legacy_on_the_motorcycle_do_this_5d34555e">Sur la moto, faites ceci</string>
-    <string name="legacy_one_card_per_button_with_what_a_press_a_double_p_e88303f5">Une fiche par touche, avec ce que font un appui, un double appui et un appui long. Apprenez le guidon à l\'application pour qu\'elle sache quelles touches le vôtre possède vraiment.</string>
-    <string name="legacy_press_a_handlebar_button_fd958503">Appuyez sur une touche du guidon</string>
+    <string name="legacy_one_card_per_button_with_what_a_press_a_double_p_e88303f5">Une fiche par bouton, avec ce que font un appui, un double appui et un appui long. Apprenez le guidon à l\'application pour qu\'elle sache quels boutons le vôtre possède vraiment.</string>
+    <string name="legacy_press_a_handlebar_button_fd958503">Appuyez sur un bouton du guidon</string>
     <string name="legacy_reset_actions_to_defaults_95ecb43">Rétablir les actions par défaut</string>
     <string name="legacy_skip_27599f">Passer</string>
     <string name="legacy_snappy_singles_330a9d7e">Appuis simples vifs</string>
     <string name="legacy_step_1_d_of_2_d_72bf41f6">ÉTAPE %1$d SUR %2$d</string>
     <string name="legacy_stop_here_d51e892e">Arrêter ici</string>
-    <string name="legacy_teach_my_handlebar_51393162">Apprendre mon guidon</string>
+    <string name="legacy_teach_my_handlebar_51393162">Configurer mon guidon</string>
     <string name="legacy_timing_937fe44a">DÉLAIS</string>
     <string name="legacy_turn_off_if_your_handlebar_needs_a_long_physical_c92718d1">Désactivez si votre guidon exige un appui physique long à chaque clic - sinon ces appuis sont pris pour des appuis longs.</string>
     <string name="legacy_controls_fd1b9add">‹ Commandes</string>
