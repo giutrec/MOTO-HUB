@@ -83,8 +83,8 @@ android {
         // keep this identical to the PRO worktree's build.gradle.kts. They drifted after v1.1.4
         // (CORE reached 1.1.14/108 while ADVANCED sat at 1.1.6/100), which left a rider's
         // "MOTO-HUB 1.1.x" unable to identify which pair they actually had installed.
-        versionCode = 167
-        versionName = "1.1.73"
+        versionCode = 168
+        versionName = "1.1.74"
         buildConfigField("boolean", "IS_PRO", "false")
         buildConfigField("String", "SENTRY_DSN", asBuildConfigString(coreSentryDsn))
         // -PsentryDebug=true makes the SDK narrate what it is doing to logcat. Telemetry that
@@ -208,7 +208,8 @@ val syncTranslationResources by tasks.registering {
             "it-IT" to "values-it",
             "pt-PT" to "values-pt-rPT",
             "ko-KR" to "values-ko-rKR",
-            "fr-FR" to "values-fr"
+            "fr-FR" to "values-fr",
+            "es-ES" to "values-es"
         )
         sourceDir.listFiles()
             ?.filter { it.isFile && it.name.startsWith("strings-") && it.name.endsWith(".xml") }

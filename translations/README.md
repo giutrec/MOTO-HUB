@@ -26,7 +26,8 @@ Android then falls back to English for that individual string.
 
 The Android build maps the locale tags in these filenames to Android resource
 qualifiers automatically (`it-IT` becomes `values-it`, `pt-PT` becomes
-`values-pt-rPT`, `ko-KR` becomes `values-ko-rKR`, `fr-FR` becomes `values-fr`).
+`values-pt-rPT`, `ko-KR` becomes `values-ko-rKR`, `fr-FR` becomes `values-fr`,
+`es-ES` becomes `values-es`).
 A new locale must be added in three places: this directory, the `localeDirectories`
 map in `app/build.gradle.kts`, and `app/src/main/res/xml/locales_config.xml` —
 plus an `AppLanguage` entry and a `language_*` string if it should appear in the
