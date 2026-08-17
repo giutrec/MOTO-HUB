@@ -7,11 +7,19 @@ import io.motohub.android.feature.settings.VideoPowerMode
 import kotlin.math.min
 
 /**
- * Adjusts a live encoder only when the rider selects Power mode AUTO.
+ * Adjusts a live encoder to what the phone and the bike link can actually carry.
  *
- * Thermal pressure protects the phone from sustained encoder throttling. Rejected access units are
- * the downstream signal: bitrate backs off multiplicatively and recovers slowly, so a weak bike
- * link becomes softer instead of repeatedly dropping the projection.
+ * Thermal pressure protects the phone from sustained encoder throttling, and stays a Power mode
+ * AUTO courtesy: a rider who picked a fixed mode asked for that frame rate and gets it.
+ *
+ * Lost frames are the downstream signal, and they are not a preference - a link that is discarding
+ * frames wastes the bitrate spent on them and, on a GOP stream, smears the TFT until the next
+ * keyframe. So the link backoff applies in every mode, multiplicative down and slow back up, with
+ * the rider's mode as the ceiling it recovers to. Loss counts both access units the transport
+ * refused and frames it accepted and then dropped: the CORE video pipe does the latter, and
+ * counting only the former left the controller blind exactly when it was needed. A rider's CFMOTO
+ * MTX800 on 2026-08-17 lost ~280 dashboard frames in that pipe against a single rejection, at a
+ * fixed Smooth 30fps that nothing was allowed to lower.
  */
 data class AdaptiveVideoDecision(
     val bitrate: Int,
@@ -27,6 +35,10 @@ object AdaptiveVideoPolicy {
     const val LINK_BACKOFF = 0.8f
     const val LINK_RECOVERY_STEP = 0.05f
 
+    /** The slowest the link backoff may pace a stream. Below this the TFT reads as a slideshow,
+     *  and a link that cannot carry 12fps has a problem no encoder setting is going to solve. */
+    const val MIN_FRAME_RATE = 12
+
     fun thermalBitrateFactor(status: Int): Float = when {
         status <= PowerManager.THERMAL_STATUS_LIGHT -> 1.0f
         status == PowerManager.THERMAL_STATUS_MODERATE -> 0.8f
@@ -41,29 +53,45 @@ object AdaptiveVideoPolicy {
         else -> min(baseFrameRate, 12)
     }
 
-    fun nextLinkFactor(previous: Float, rejectedFrames: Int): Float = if (
-        rejectedFrames >= DROP_THRESHOLD
+    fun nextLinkFactor(previous: Float, lostFrames: Int): Float = if (
+        lostFrames >= DROP_THRESHOLD
     ) {
         (previous * LINK_BACKOFF).coerceAtLeast(LINK_MIN)
     } else {
         (previous + LINK_RECOVERY_STEP).coerceAtMost(LINK_MAX)
     }
 
+    /** Fewer, larger-budget frames on a link that is losing them. Cutting only the bitrate leaves
+     *  the same frame count queued on a transport whose queue is what overflowed. */
+    fun linkFrameRateCap(baseFrameRate: Int, linkFactor: Float): Int =
+        (baseFrameRate * linkFactor).toInt()
+            .coerceAtLeast(MIN_FRAME_RATE.coerceAtMost(baseFrameRate))
+            .coerceAtMost(baseFrameRate)
+
+    /**
+     * @param baseFrameRate the ceiling this session may run at: the encoder's own rate under Power
+     * mode AUTO, the mode's rate otherwise.
+     * @param thermalStatus always `THERMAL_STATUS_NONE` outside AUTO, so a fixed mode never gets
+     * throttled for heat behind the rider's back.
+     */
     fun decide(
         baseBitrate: Int,
         baseFrameRate: Int,
         thermalStatus: Int,
         previousLinkFactor: Float,
-        rejectedFrames: Int
+        lostFrames: Int
     ): AdaptiveVideoDecision {
-        val linkFactor = nextLinkFactor(previousLinkFactor, rejectedFrames)
+        val linkFactor = nextLinkFactor(previousLinkFactor, lostFrames)
         val factor = min(thermalBitrateFactor(thermalStatus), linkFactor)
         return AdaptiveVideoDecision(
             bitrate = (baseBitrate * factor).toInt().coerceIn(
                 MIN_BITRATE.coerceAtMost(baseBitrate),
                 baseBitrate
             ),
-            frameRate = thermalFrameRateCap(thermalStatus, baseFrameRate),
+            frameRate = min(
+                thermalFrameRateCap(thermalStatus, baseFrameRate),
+                linkFrameRateCap(baseFrameRate, linkFactor)
+            ),
             linkFactor = linkFactor
         )
     }
@@ -80,17 +108,15 @@ class AdaptiveVideoController(
     private val appContext by lazy { componentContext.applicationContext ?: componentContext }
     private val powerManager by lazy { appContext.getSystemService(PowerManager::class.java) }
     private var linkFactor = AdaptiveVideoPolicy.LINK_MAX
-    private var lastRejectedFrames = 0L
+    private var lastLostFrames = 0L
     private var appliedBitrate = -1
     private var appliedFrameRate = -1
-    private var adapting = false
 
     fun reset() {
         linkFactor = AdaptiveVideoPolicy.LINK_MAX
-        lastRejectedFrames = 0L
+        lastLostFrames = 0L
         appliedBitrate = -1
         appliedFrameRate = -1
-        adapting = false
     }
 
     /**
@@ -105,58 +131,62 @@ class AdaptiveVideoController(
         val baseBitrate = activeEncoder.targetBitrate()
         if (baseBitrate <= 0) return
         if (linkDown) {
-            lastRejectedFrames = activeEncoder.rejectedAccessUnitsTotal()
+            lastLostFrames = lostFramesTotal(activeEncoder)
             return
         }
 
         val mode = MotoHubSettings.videoPowerMode(appContext)
-        if (mode != VideoPowerMode.AUTO) {
-            if (adapting || appliedFrameRate != mode.frameRate) {
-                activeEncoder.setEncoderBitrate(baseBitrate)
-                activeEncoder.setFrameCap(mode.frameRate.coerceAtMost(activeEncoder.baseFrameRate))
-                log("[adaptive] AUTO off; restored ${mode.label} at ${mode.frameRate}fps")
-                appliedBitrate = baseBitrate
-                appliedFrameRate = mode.frameRate.coerceAtMost(activeEncoder.baseFrameRate)
-                linkFactor = AdaptiveVideoPolicy.LINK_MAX
-                lastRejectedFrames = activeEncoder.rejectedAccessUnitsTotal()
-                adapting = false
-            }
-            return
+        val autoMode = mode == VideoPowerMode.AUTO
+        // Outside AUTO the rider named a frame rate, so it becomes the ceiling the link backoff
+        // works under, and heat is left out of it entirely.
+        val ceilingFrameRate = if (autoMode) {
+            activeEncoder.baseFrameRate
+        } else {
+            mode.frameRate.coerceAtMost(activeEncoder.baseFrameRate)
         }
-
-        val thermalStatus = runCatching { powerManager?.currentThermalStatus }
-            .getOrNull()
-            ?: PowerManager.THERMAL_STATUS_NONE
-        val totalRejected = activeEncoder.rejectedAccessUnitsTotal()
-        val rejectedThisTick = (totalRejected - lastRejectedFrames)
+        val thermalStatus = if (autoMode) {
+            runCatching { powerManager?.currentThermalStatus }
+                .getOrNull()
+                ?: PowerManager.THERMAL_STATUS_NONE
+        } else {
+            PowerManager.THERMAL_STATUS_NONE
+        }
+        val totalLost = lostFramesTotal(activeEncoder)
+        val lostThisTick = (totalLost - lastLostFrames)
             .coerceAtLeast(0L)
             .toInt()
-        lastRejectedFrames = totalRejected
+        lastLostFrames = totalLost
         val decision = AdaptiveVideoPolicy.decide(
             baseBitrate = baseBitrate,
-            baseFrameRate = activeEncoder.baseFrameRate,
+            baseFrameRate = ceilingFrameRate,
             thermalStatus = thermalStatus,
             previousLinkFactor = linkFactor,
-            rejectedFrames = rejectedThisTick
+            lostFrames = lostThisTick
         )
         linkFactor = decision.linkFactor
         if (decision.bitrate != appliedBitrate) {
             activeEncoder.setEncoderBitrate(decision.bitrate)
             appliedBitrate = decision.bitrate
-            adapting = true
             log(
-                "[adaptive] thermal=${thermalLabel(thermalStatus)} " +
-                    "rejected/tick=$rejectedThisTick link=${(linkFactor * 100).toInt()}% " +
+                "[adaptive] ${mode.label} thermal=${thermalLabel(thermalStatus)} " +
+                    "lost/tick=$lostThisTick link=${(linkFactor * 100).toInt()}% " +
                     "bitrate=${decision.bitrate / 1000}kbps"
             )
         }
         if (decision.frameRate != appliedFrameRate) {
             activeEncoder.setFrameCap(decision.frameRate)
             appliedFrameRate = decision.frameRate
-            adapting = true
-            log("[adaptive] thermal=${thermalLabel(thermalStatus)} fps=${decision.frameRate}")
+            log(
+                "[adaptive] ${mode.label} thermal=${thermalLabel(thermalStatus)} " +
+                    "link=${(linkFactor * 100).toInt()}% fps=${decision.frameRate}"
+            )
         }
     }
+
+    /** Access units the transport refused, plus frames it accepted and then dropped. Both are one
+     *  picture that never reached the TFT. */
+    private fun lostFramesTotal(encoder: AvcEncoder): Long =
+        encoder.rejectedAccessUnitsTotal() + encoder.transportDroppedFramesTotal()
 
     private fun thermalLabel(status: Int): String = when (status) {
         PowerManager.THERMAL_STATUS_NONE -> "none"

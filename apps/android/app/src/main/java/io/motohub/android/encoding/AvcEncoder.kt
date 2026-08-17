@@ -39,6 +39,36 @@ data class EncoderProfile(
 internal fun alignTBoxEncoderDimension(value: Int): Int =
     (value and 0xFFF0).coerceAtLeast(16)
 
+/**
+ * The stream shape the encoder actually runs, which is not always the one the caller asked for.
+ *
+ * A GOP survives a lossy link only because intra refresh repairs it: the rolling intra columns heal
+ * a dropped frame within one cycle, without a keyframe burst. On a codec that has no intra refresh
+ * the GOP is left with no repair path at all - every frame the transport drops smears the TFT until
+ * the next scheduled IDR, and the recovery IDRs answering those drops feed the very congestion that
+ * caused them. A rider's CFMOTO MTX800 on 2026-08-17 showed exactly that: `c2.mtk.avc.encoder`
+ * reported no intra refresh, ~280 of 2342 dashboard frames died in the CORE video pipe, the TFT
+ * filled with green macroblocks and both sessions ended on a broken pipe - while Android Auto, all
+ * -intra on the same phone and the same bike, stayed clean throughout.
+ *
+ * All-intra spends the bitrate like per-frame JPEG but tolerates arbitrary frame loss, so it is the
+ * right stream whenever the repair path is missing.
+ *
+ * [plainGopWithoutIntraRefresh] profiles turned intra refresh down on purpose - Yunmo's framing
+ * splits real keyframes, KOVE's decoder froze on refresh - so their GOP is kept exactly as asked.
+ */
+internal fun effectiveKeyframeIntervalSeconds(
+    requestedSeconds: Int,
+    plainGopWithoutIntraRefresh: Boolean,
+    intraRefreshAvailable: Boolean
+): Int = if (
+    requestedSeconds > 0 && !plainGopWithoutIntraRefresh && !intraRefreshAvailable
+) {
+    0
+} else {
+    requestedSeconds
+}
+
 /** Owns the AVC codec and emits complete AVCC access units from a surface input. */
 class AvcEncoder(
     private val profile: EncoderProfile,
@@ -52,6 +82,15 @@ class AvcEncoder(
      *  [drainLoop] releases the codec itself instead of racing a concurrent release. */
     @Volatile private var selfReleaseOnExit = false
     private val rejectedAccessUnits = AtomicLong(0L)
+
+    /** Frames the transport discarded on its own, reported through [noteTransportFrameDrop]. They
+     *  never surface as rejections - the offer still returns accepted - so without this counter the
+     *  congestion they signal is invisible to [AdaptiveVideoController]. */
+    private val transportDroppedFrames = AtomicLong(0L)
+
+    /** The interval the codec was actually configured with; see [effectiveKeyframeIntervalSeconds].
+     *  Everything downstream of configure() reads the real stream shape, not the requested one. */
+    @Volatile private var streamKeyframeIntervalSeconds = profile.keyframeIntervalSeconds
 
     /** Keyframes that carried a prepended SPS/PPS; reported once at [stop], never per frame. */
     private val prependedKeyframes = AtomicLong(0L)
@@ -75,6 +114,17 @@ class AvcEncoder(
 
     fun rejectedAccessUnitsTotal(): Long = rejectedAccessUnits.get()
 
+    fun transportDroppedFramesTotal(): Long = transportDroppedFrames.get()
+
+    /** A frame the transport discarded after accepting it - the CORE video pipe drops the oldest
+     *  queued frame under congestion and still reports the offer as accepted. Counted whatever the
+     *  stream shape, because the congestion it signals is what [AdaptiveVideoController] must back
+     *  off from; the recovery IDR is only relevant to a GOP that has no other repair path. */
+    fun noteTransportFrameDrop(reason: String) {
+        transportDroppedFrames.incrementAndGet()
+        requestRecoverySyncFrame(reason)
+    }
+
     fun start() {
         check(running.compareAndSet(false, true)) { "Encoder is already running" }
         recoverySyncRunCount = 0
@@ -90,13 +140,6 @@ class AvcEncoder(
             val capabilities = runCatching {
                 configuredCodec.codecInfo.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC)
             }.getOrNull()
-            // GOP streams ride links with shallow queues (the CORE video pipe): VBR spikes on
-            // keyframes and fast map motion overflow them and every dropped frame smears the
-            // picture until the next IDR. CBR bounds the per-frame burst instead.
-            val useCbr = profile.keyframeIntervalSeconds > 0 && runCatching {
-                capabilities?.encoderCapabilities
-                    ?.isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
-            }.getOrNull() == true
             // Periodic IDRs are the remaining burst on a GOP stream, and answering congestion
             // drops with recovery IDRs feeds the very congestion that caused them. Intra
             // refresh removes the burst entirely: intra macroblocks are spread over a full
@@ -109,14 +152,37 @@ class AvcEncoder(
                         MediaCodecInfo.CodecCapabilities.FEATURE_IntraRefresh
                     )
                 }.getOrNull() == true
+            // A GOP this codec cannot repair is worse than no GOP at all.
+            val streamInterval = effectiveKeyframeIntervalSeconds(
+                requestedSeconds = profile.keyframeIntervalSeconds,
+                plainGopWithoutIntraRefresh = profile.plainGopWithoutIntraRefresh,
+                intraRefreshAvailable = useIntraRefresh
+            )
+            streamKeyframeIntervalSeconds = streamInterval
+            // GOP streams ride links with shallow queues (the CORE video pipe): VBR spikes on
+            // keyframes and fast map motion overflow them and every dropped frame smears the
+            // picture until the next IDR. CBR bounds the per-frame burst instead.
+            val useCbr = streamInterval > 0 && runCatching {
+                capabilities?.encoderCapabilities
+                    ?.isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
+            }.getOrNull() == true
             if (profile.keyframeIntervalSeconds > 0) {
-                ProjectionEventLog.record(
-                    "ENCODER",
-                    "GOP stream rate control: " +
-                        (if (useCbr) "CBR" else "codec default (CBR unsupported)") +
-                        ", intra refresh: " +
-                        if (useIntraRefresh) "enabled." else "unsupported by this codec."
-                )
+                if (streamInterval == 0) {
+                    ProjectionEventLog.record(
+                        "ENCODER",
+                        "This codec has no intra refresh, so nothing would repair the " +
+                            "${profile.keyframeIntervalSeconds}s GOP between keyframes when the link " +
+                            "drops a frame: encoding an all-intra stream instead, where every frame " +
+                            "decodes on its own."
+                    )
+                } else {
+                    ProjectionEventLog.record(
+                        "ENCODER",
+                        "GOP stream rate control: " +
+                            (if (useCbr) "CBR" else "codec default (CBR unsupported)") +
+                            ", intra refresh: enabled."
+                    )
+                }
             }
             fun encoderFormat(forceBaseline: Boolean, intraRefresh: Boolean) = MediaFormat.createVideoFormat(
                 MediaFormat.MIMETYPE_VIDEO_AVC,
@@ -132,7 +198,7 @@ class AvcEncoder(
                     setInteger(MediaFormat.KEY_INTRA_REFRESH_PERIOD, profile.frameRate)
                     setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, INTRA_REFRESH_IDR_INTERVAL_SECONDS)
                 } else {
-                    setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, profile.keyframeIntervalSeconds)
+                    setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, streamInterval)
                 }
                 if (useCbr) {
                     setInteger(
@@ -210,7 +276,8 @@ class AvcEncoder(
         ProjectionEventLog.record(
             "ENCODER",
             "Stopping AVC encoder. prependedKeyframes=${prependedKeyframes.get()}, " +
-                "rejectedAccessUnits=${rejectedAccessUnits.get()}."
+                "rejectedAccessUnits=${rejectedAccessUnits.get()}, " +
+                "transportDroppedFrames=${transportDroppedFrames.get()}."
         )
         val activeDrainThread = drainThread
         drainThread = null
@@ -370,7 +437,7 @@ class AvcEncoder(
      *  keyframe bits. All-intra streams need no recovery: every forwarded frame already
      *  decodes on its own. */
     fun requestRecoverySyncFrame(reason: String) {
-        if (profile.keyframeIntervalSeconds <= 0) return
+        if (streamKeyframeIntervalSeconds <= 0) return
         // With intra refresh the rolling intra columns repair a lost frame within one refresh
         // cycle on their own; injecting IDRs here would reintroduce the very keyframe bursts
         // that congest the link and drop frames in the first place.
@@ -444,7 +511,7 @@ class AvcEncoder(
         // GOP streams must forward every frame: dropping a P-frame corrupts the decode until
         // the next keyframe. Their frame pacing happens at the input surface instead, via the
         // frame-cap listener (dashboard renderer / AA compositor).
-        if (profile.keyframeIntervalSeconds > 0) return true
+        if (streamKeyframeIntervalSeconds > 0) return true
         // Never pace out a sync frame: after a reconnect the T-Box decoder needs the next keyframe
         // immediately or the resumed stream can remain black until the next codec refresh.
         if (isKeyFrame) {
