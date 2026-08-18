@@ -85,8 +85,8 @@ android {
         // keep this identical to the PRO worktree's build.gradle.kts. They drifted after v1.1.4
         // (CORE reached 1.1.14/108 while ADVANCED sat at 1.1.6/100), which left a rider's
         // "MOTO-HUB 1.1.x" unable to identify which pair they actually had installed.
-        versionCode = 169
-        versionName = "1.1.75"
+        versionCode = 170
+        versionName = "1.1.76"
         buildConfigField("boolean", "IS_PRO", "false")
         buildConfigField("String", "SENTRY_DSN", asBuildConfigString(coreSentryDsn))
         // -PsentryDebug=true makes the SDK narrate what it is doing to logcat. Telemetry that
