@@ -7,11 +7,15 @@ import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.session.TBoxConnectionMode
 
 /**
- * Whether a ThinkerRide (BLE-paired) connection is allowed to run — the Bluetooth sibling of
- * [WifiDirectGate]. Checked before [ThinkerRideTransport] starts scanning, because a missing
+ * Whether a Bluetooth connection is allowed to run — the Bluetooth sibling of [WifiDirectGate].
+ * Checked before [ThinkerRideTransport] starts scanning, because a missing
  * `BLUETOOTH_SCAN`/`BLUETOOTH_CONNECT` grant makes the LE scanner throw `SecurityException`
  * from deep inside a callback, which reads as a crash rather than the one screen tap that
  * actually fixes it.
+ *
+ * [requiresBle] is about ThinkerRide specifically, but [blePermissions] and [hasBlePermissions]
+ * are the app's one answer for "may this process touch the LE radio" and [EcBtpTimeLink] uses
+ * them too: its dash-clock write goes to an unbonded peripheral, which has to be scanned for.
  */
 internal object ThinkerRideGate {
 

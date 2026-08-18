@@ -607,7 +607,7 @@ class MainActivity : ComponentActivity() {
                             "Reconnecting automatically after $mode stop."
                         )
                         val permissions =
-                            tboxConnectPermissions(viewModel.uiState.value.session.motorcycle)
+                            tboxConnectPermissions(context, viewModel.uiState.value.session.motorcycle)
                         if (permissions.all { permission ->
                                 ContextCompat.checkSelfPermission(context, permission) ==
                                     PackageManager.PERMISSION_GRANTED
@@ -659,7 +659,7 @@ class MainActivity : ComponentActivity() {
                         "AUTO_CONNECT",
                         "Launching automatic connection to saved motorcycle ${profile.ssid}."
                     )
-                    val permissions = tboxConnectPermissions(profile)
+                    val permissions = tboxConnectPermissions(context, profile)
                     if (permissions.all { permission ->
                             ContextCompat.checkSelfPermission(context, permission) ==
                                 PackageManager.PERMISSION_GRANTED
@@ -1096,7 +1096,7 @@ class MainActivity : ComponentActivity() {
                         },
                         onConnectAndDiscover = {
                             val permissions =
-                                tboxConnectPermissions(viewModel.uiState.value.session.motorcycle)
+                                tboxConnectPermissions(context, viewModel.uiState.value.session.motorcycle)
                             if (permissions.all { permission ->
                                     ContextCompat.checkSelfPermission(context, permission) ==
                                         PackageManager.PERMISSION_GRANTED
@@ -1539,10 +1539,19 @@ class MainActivity : ComponentActivity() {
 
 /**
  * Runtime permissions a connect to [profile] needs before it can start: the Wi-Fi join set
- * always, plus the Bluetooth pair for a ThinkerRide (KOVE) motorcycle — asked together so the
- * rider sees one permission sheet, not one per radio.
+ * always, plus the Bluetooth pair when this connection will use a radio that needs it — asked
+ * together so the rider sees one permission sheet, not one per radio.
+ *
+ * Two things want Bluetooth. A ThinkerRide (KOVE) motorcycle pairs over it and cannot connect
+ * without it at all. An EasyConn dash with the Bluetooth dash-clock setting on needs it for a
+ * different reason: that clock is written over BLE to a peripheral that is usually not bonded,
+ * so finding it means scanning, and without the grant the scan throws and the setting silently
+ * does nothing — which is exactly how it behaved before anyone noticed.
  */
-private fun tboxConnectPermissions(profile: MotorcycleProfile?): Array<String> {
+private fun tboxConnectPermissions(
+    context: Context,
+    profile: MotorcycleProfile?
+): Array<String> {
     val permissions = mutableListOf(
         Manifest.permission.ACCESS_COARSE_LOCATION,
         Manifest.permission.ACCESS_FINE_LOCATION
@@ -1552,7 +1561,7 @@ private fun tboxConnectPermissions(profile: MotorcycleProfile?): Array<String> {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         permissions += Manifest.permission.NEARBY_WIFI_DEVICES
     }
-    if (ThinkerRideGate.requiresBle(profile)) {
+    if (ThinkerRideGate.requiresBle(profile) || MotoHubSettings.bluetoothClockSync(context)) {
         permissions += ThinkerRideGate.blePermissions
     }
     return permissions.toTypedArray()

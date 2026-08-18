@@ -9,21 +9,29 @@ import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.le.BluetoothLeScanner
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
+import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.ParcelUuid
 import java.util.Date
 import java.util.TimeZone
 import java.util.UUID
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Answers the dashboard's Bluetooth clock questions, and says nothing to anything else.
  *
- * A dash that only speaks PXC over Wi-Fi can have its clock set exactly one way - by answering
- * `ECP_C2P_QUERY_TIME` when it asks - and MOTO-HUB already does that byte-for-byte as the official
- * app does. A rider's Voge still sits at 00:00 while Carbit Ride keeps it right on the same bike,
- * and the reason is that Carbit also answers two clock requests over Bluetooth
- * ([EcBtpProtocol.CMD_SYNC_TIME] and [EcBtpProtocol.CMD_QUERY_TIME]). This is that second channel.
+ * MOTO-HUB answers `ECP_C2P_QUERY_TIME` over Wi-Fi byte-for-byte as the official app does - the
+ * two handlers were compared field by field against Carbit's own `ih/n0.java` - and a rider's Voge
+ * still sits at 00:00 while Carbit Ride keeps it right on the same bike. The reason is that PXC is
+ * not where that clock is written at all: Carbit's `sendSyncTime()` builds
+ * [EcBtpProtocol.CMD_SYNC_TIME] with `System.currentTimeMillis() + rawOffset` and pushes it over
+ * **BLE**, and that write is what survives an ignition cycle. This is that second channel.
  *
  * **This is a diagnostic first and a fix second.** Both requests are reactive: if this dash never
  * asks, nothing here will ever fire, and the log saying so is the answer that closes the question.
@@ -34,9 +42,15 @@ import java.util.concurrent.atomic.AtomicBoolean
  * dongles, TPMS sensors and countless toys:
  *
  *  1. **Opt-in.** The caller only builds this when the rider turned the setting on; off by default.
- *  2. **Never scan.** Only devices the phone is already bonded to are considered, and a bonded
- *     device whose cached UUID list is known and contains none of ours is skipped without ever
- *     being connected to. This mirrors the official app, whose BLE stack has no `startScan` either.
+ *  2. **Only devices advertising one of these services.** The bonded list alone was the original
+ *     rule and it was wrong: Carbit reaches the dash as an *unbonded* BLE peripheral - its own
+ *     stack drives the Nordic scanner compat library and writes through a GATT service in the
+ *     list below - and an unbonded peripheral is in nobody's `bondedDevices` and publishes no
+ *     cached UUIDs. Every Voge log therefore said "no bonded Bluetooth devices" while Carbit was
+ *     setting that very dash's clock. So both sources are used: bonded devices whose cached UUID
+ *     list does not rule them out, plus a [SCAN_WINDOW_MILLIS] scan whose [ScanFilter]s name
+ *     exactly these service UUIDs, so the Bluetooth controller drops every other advertiser
+ *     before it reaches this process.
  *  3. **Listen before writing.** Not one byte is transmitted until that device has sent a
  *     *syntactically valid* EC-BTP frame - right start byte, self-consistent length, correct XOR,
  *     right terminator. An intercom or an OBD dongle cannot produce one by accident, so it never
@@ -62,11 +76,25 @@ internal class EcBtpTimeLink(
     private val connections = mutableListOf<BluetoothGatt>()
     private val lock = Any()
 
+    /** Addresses already being watched, so the bonded pass and the scan cannot both open one. */
+    private val watched = mutableSetOf<String>()
+
+    private val scheduler = Executors.newSingleThreadScheduledExecutor { runnable ->
+        Thread(runnable, "ec-btp-scan").apply { isDaemon = true }
+    }
+
+    @Volatile
+    private var scanner: BluetoothLeScanner? = null
+
+    @Volatile
+    private var scanCallback: ScanCallback? = null
+
     /**
-     * Connects to every bonded device that could plausibly be a dashboard and listens.
+     * Watches every device that could plausibly be this dashboard, from both sources, and listens.
      *
-     * Returns the number of devices being watched, which is what a field log needs: "0 candidates"
-     * and "2 candidates, none ever spoke" are different answers to the same question.
+     * Returns how many bonded devices were opened immediately. Scan results arrive later and are
+     * logged as they come, so a field log distinguishes the three answers that matter: nothing was
+     * ever found, something was found and never spoke, or something spoke and was answered.
      */
     fun start(): Int {
         val adapter = bluetoothManager?.adapter
@@ -78,30 +106,97 @@ internal class EcBtpTimeLink(
             log("EC-BTP: Bluetooth is off, so the dashboard cannot be asked for its clock over it.")
             return 0
         }
-        val bonded = runCatching { adapter.bondedDevices }.getOrNull().orEmpty()
-        if (bonded.isEmpty()) {
-            log("EC-BTP: no bonded Bluetooth devices; the official app reaches the dash through one, so there is nothing to listen to.")
+
+        if (!ThinkerRideGate.hasBlePermissions(appContext)) {
+            // Worth its own line: without this grant the scan below throws and the rider sees a
+            // setting that is on and does nothing at all.
+            log(
+                "EC-BTP: " + ThinkerRideGate.missingPermissionMessage("MOTO-HUB") +
+                    " Until then the dash clock cannot be set over Bluetooth."
+            )
             return 0
         }
 
+        val bonded = runCatching { adapter.bondedDevices }.getOrNull().orEmpty()
         val candidates = bonded.filter { candidateWorthOpening(it) }
         log(
-            "EC-BTP: ${bonded.size} bonded device(s), ${candidates.size} expose a serial service this " +
-                "protocol can run on. Listening only; nothing is sent until one speaks EC-BTP."
+            "EC-BTP: ${bonded.size} bonded device(s), ${candidates.size} of them could carry this " +
+                "protocol. Scanning as well, because the dash need not be bonded at all. " +
+                "Listening only; nothing is sent until something speaks EC-BTP."
         )
         candidates.forEach { device -> openGatt(device) }
+        beginScan(adapter.bluetoothLeScanner)
         return candidates.size
     }
 
     fun close() {
         if (!closed.compareAndSet(false, true)) return
+        endScan()
+        scheduler.shutdownNow()
         synchronized(lock) {
             connections.forEach { gatt ->
                 runCatching { gatt.disconnect() }
                 runCatching { gatt.close() }
             }
             connections.clear()
+            watched.clear()
         }
+    }
+
+    /**
+     * Starts a bounded scan for peripherals advertising one of [SERVICE_UUIDS].
+     *
+     * Bounded because a dash that is going to ask for the time asks within seconds of the session
+     * starting, and an unbounded LE scan is a battery cost the rider did not ask for. The filters
+     * are handed to the Bluetooth controller, so an intercom or a tyre sensor is dropped below this
+     * process rather than being connected to and then let go.
+     */
+    private fun beginScan(leScanner: BluetoothLeScanner?) {
+        if (leScanner == null) {
+            log("EC-BTP: Bluetooth LE scanning is unavailable on this phone; only bonded devices can be watched.")
+            return
+        }
+        val callback = object : ScanCallback() {
+            override fun onScanResult(callbackType: Int, result: ScanResult) {
+                if (closed.get()) return
+                val device = runCatching { result.device }.getOrNull() ?: return
+                openGatt(device)
+            }
+
+            override fun onScanFailed(errorCode: Int) {
+                log("EC-BTP: the Bluetooth scan could not start (code $errorCode); only bonded devices are watched.")
+                endScan()
+            }
+        }
+        val filters = SERVICE_UUIDS.map { uuid ->
+            ScanFilter.Builder().setServiceUuid(ParcelUuid(uuid)).build()
+        }
+        val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
+        val started = runCatching { leScanner.startScan(filters, settings, callback) }
+        if (started.isFailure) {
+            val failure = started.exceptionOrNull()
+            val reason = if (failure is SecurityException) {
+                "the Bluetooth scan permission is not granted"
+            } else {
+                failure?.message ?: "an unknown error"
+            }
+            log("EC-BTP: could not scan for the dashboard ($reason); only bonded devices are watched.")
+            return
+        }
+        scanner = leScanner
+        scanCallback = callback
+        log("EC-BTP: scanning ${SCAN_WINDOW_MILLIS / 1000}s for a dashboard advertising one of ${SERVICE_UUIDS.size} serial services.")
+        runCatching {
+            scheduler.schedule({ endScan() }, SCAN_WINDOW_MILLIS, TimeUnit.MILLISECONDS)
+        }
+    }
+
+    private fun endScan() {
+        val active = scanner ?: return
+        val callback = scanCallback ?: return
+        scanner = null
+        scanCallback = null
+        runCatching { active.stopScan(callback) }
     }
 
     /**
@@ -120,7 +215,15 @@ internal class EcBtpTimeLink(
     }
 
     private fun openGatt(device: BluetoothDevice) {
-        val label = runCatching { device.name }.getOrNull() ?: device.address
+        val address = runCatching { device.address }.getOrNull() ?: return
+        synchronized(lock) {
+            if (closed.get()) return
+            // The bonded pass and the scan can both surface the same dash, and a second GATT
+            // connection to one peripheral is exactly the thing that destabilises the stack.
+            if (!watched.add(address)) return
+        }
+        val label = runCatching { device.name }.getOrNull() ?: address
+        log("EC-BTP: watching $label ($address).")
         val callback = object : BluetoothGattCallback() {
             /** Set once this peer has proven it speaks EC-BTP; nothing is written before that. */
             private val proven = AtomicBoolean(false)
@@ -228,11 +331,25 @@ internal class EcBtpTimeLink(
     }
 
     private fun forget(gatt: BluetoothGatt) {
-        synchronized(lock) { connections.remove(gatt) }
+        val address = runCatching { gatt.device?.address }.getOrNull()
+        synchronized(lock) {
+            connections.remove(gatt)
+            if (address != null) watched.remove(address)
+        }
         runCatching { gatt.close() }
     }
 
     private companion object {
+        /**
+         * How long to scan for an unbonded dashboard.
+         *
+         * A dash that asks for the time asks within seconds of the session starting - in every
+         * field log the whole PXC opening burst lands inside ten - so a window this size is
+         * generous, and leaving an LE scan running for a whole ride is battery the rider did not
+         * agree to spend.
+         */
+        const val SCAN_WINDOW_MILLIS = 30_000L
+
         /** Carbit's service list (`pe/a.java:17`), in its own order. */
         val SERVICE_UUIDS = listOf(
             UUID.fromString("00001c00-d102-11e1-9b23-000efb0000b2"),
