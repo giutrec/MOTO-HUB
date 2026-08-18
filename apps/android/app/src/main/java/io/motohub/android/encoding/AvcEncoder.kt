@@ -176,11 +176,15 @@ class AvcEncoder(
                             "decodes on its own."
                     )
                 } else {
+                    // Report what was actually configured. This line used to say "enabled"
+                    // unconditionally, which read as a bug in the Voge experiment: that
+                    // profile disables intra refresh on purpose and the log denied it.
                     ProjectionEventLog.record(
                         "ENCODER",
                         "GOP stream rate control: " +
                             (if (useCbr) "CBR" else "codec default (CBR unsupported)") +
-                            ", intra refresh: enabled."
+                            ", intra refresh: " +
+                            if (useIntraRefresh) "enabled." else "disabled (plain periodic IDRs)."
                     )
                 }
             }
