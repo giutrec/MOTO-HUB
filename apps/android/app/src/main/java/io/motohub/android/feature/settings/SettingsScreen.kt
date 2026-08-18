@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,6 +39,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.motohub.android.BuildConfig
@@ -279,12 +283,14 @@ private fun GeneralDetail(
         backLabel = "‹ ${context.getString(R.string.settings_title)}",
         onBack = onBack
     ) {
-        MotoHubActionRow(
-            title = context.getString(R.string.language_title),
-            description = context.getString(R.string.language_description),
-            value = context.getString(AppLanguageManager.current(context).labelRes),
-            onClick = onOpenLanguage
-        )
+        if (AppLanguageManager.isSupported) {
+            MotoHubActionRow(
+                title = context.getString(R.string.language_title),
+                description = context.getString(R.string.language_description),
+                value = context.getString(AppLanguageManager.current(context).labelRes),
+                onClick = onOpenLanguage
+            )
+        }
         MotoHubActionRow(
             title = motoHubText("Start automatically"),
             description = motoHubText("Put a screen on the TFT as soon as the motorcycle connects"),
@@ -447,6 +453,7 @@ private fun AutomationDetail(onBack: () -> Unit) {
     var autoConnect by remember { mutableStateOf(MotoHubSettings.autoConnect(context)) }
     var autoRecovery by remember { mutableStateOf(MotoHubSettings.autoRecovery(context)) }
     var keepWifiDirect by remember { mutableStateOf(MotoHubSettings.keepWifiDirectAfterDisconnect(context)) }
+    var bluetoothClock by remember { mutableStateOf(MotoHubSettings.bluetoothClockSync(context)) }
     MotoHubDetailScreen(title = motoHubText("Connection & automation"), backLabel = motoHubText("‹ Settings"), onBack = onBack) {
         ToggleRow(
             title = motoHubText("Auto-connect on launch"),
@@ -466,6 +473,21 @@ private fun AutomationDetail(onBack: () -> Unit) {
                 autoRecovery = it
                 MotoHubSettings.setAutoRecovery(context, it)
                 ProjectionEventLog.record("SETTINGS", "Auto-recovery changed to enabled=$it.")
+            }
+        )
+        ToggleRow(
+            title = motoHubText("Set the dash clock over Bluetooth (experimental)"),
+            description = motoHubText(
+                "Some dashboards ask for the time over Bluetooth instead of Wi-Fi, and sit at " +
+                    "00:00 without it. Needs the bike already paired to this phone in Android's " +
+                    "Bluetooth settings. Off by default; MOTO-HUB only ever replies to a device " +
+                    "that asks in the dashboard's own protocol."
+            ),
+            checked = bluetoothClock,
+            onCheckedChange = {
+                bluetoothClock = it
+                MotoHubSettings.setBluetoothClockSync(context, it)
+                ProjectionEventLog.record("SETTINGS", "Bluetooth clock sync changed to enabled=$it.")
             }
         )
         ToggleRow(
@@ -552,6 +574,20 @@ private fun HandlebarControlsDetail(onBack: () -> Unit, onOpenMapping: () -> Uni
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(HandlebarControlStore.isEnabled(context)) }
     var inputMode by remember { mutableStateOf(HandlebarControlStore.inputMode(context)) }
+    // Granted outside this app, in system settings, so the only moment it can have changed is a
+    // return to this screen - hence the resume watch rather than a plain read in composition.
+    var hidServiceEnabled by remember { mutableStateOf(HandlebarHidCaptureService.isEnabled(context)) }
+    var openedAccessibilitySettings by rememberSaveable { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hidServiceEnabled = HandlebarHidCaptureService.isEnabled(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val volumeLevels = remember { MediaButtonBridge.volumeLevels(context) }
     var listeningVolume by remember { mutableStateOf(volumeLevels.first.toFloat()) }
     MotoHubDetailScreen(
@@ -608,7 +644,7 @@ private fun HandlebarControlsDetail(onBack: () -> Unit, onOpenMapping: () -> Uni
             )
         }
         if (inputMode == HandlebarInputMode.HID) {
-            if (!HandlebarHidCaptureService.isEnabled(context)) {
+            if (!hidServiceEnabled) {
                 Text(
                     motoHubText(
                         "HID mode also needs MOTO-HUB's Accessibility Service turned on, or " +
@@ -623,8 +659,33 @@ private fun HandlebarControlsDetail(onBack: () -> Unit, onOpenMapping: () -> Uni
                 description = motoHubText(
                     "Turn on MOTO-HUB so handlebar presses reach the app from any screen"
                 ),
-                onClick = { HandlebarHidCaptureService.openAccessibilitySettings(context) }
+                onClick = {
+                    openedAccessibilitySettings = true
+                    HandlebarHidCaptureService.openAccessibilitySettings(context)
+                }
             )
+            // Second half of the grant, and only shown once the rider has come back from the
+            // first half without the service on - which is exactly what the Android 13+
+            // restricted-settings gate looks like from here. Never shown pre-emptively: on a
+            // phone where the toggle worked normally this step would be noise.
+            // See HandlebarHidCaptureService.openAppInfo.
+            if (openedAccessibilitySettings && !hidServiceEnabled) {
+                Text(
+                    motoHubText(
+                        "Was MOTO-HUB's switch greyed out? Android blocks it for apps that " +
+                            "were not installed from a store, and MOTO-HUB is downloaded from " +
+                            "GitHub. Open App info, tap ⋮ at the top right, choose \"Allow " +
+                            "restricted settings\", then come back and turn the switch on."
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+                MotoHubActionRow(
+                    title = motoHubText("Open App info"),
+                    description = motoHubText("Where \"Allow restricted settings\" lives"),
+                    onClick = { HandlebarHidCaptureService.openAppInfo(context) }
+                )
+            }
         }
         HorizontalDivider()
         ToggleRow(

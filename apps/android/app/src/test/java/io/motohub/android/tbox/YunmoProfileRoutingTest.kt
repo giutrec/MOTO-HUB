@@ -8,12 +8,14 @@ import org.junit.Test
 
 class YunmoProfileRoutingTest {
 
-    /** The X-Cape profile and its header-variant experiments; everything else must stay EasyConn. */
+    private fun overrideFor(profile: TBoxModelProfile): ProfileOverride =
+        ProfileOverride.entries.first { it.resolve() == profile }
+
+    /** The X-Cape profile and its mirror variant; everything else must stay EasyConn. */
     private val yunmoProfiles = setOf(
         TBoxModelProfile.MORINI_XCAPE_1200,
-        TBoxModelProfile.MORINI_XCAPE_1200_B,
-        TBoxModelProfile.MORINI_XCAPE_1200_C,
-        TBoxModelProfile.MORINI_XCAPE_1200_D
+        TBoxModelProfile.MORINI_XCAPE_1200_MIRROR,
+        TBoxModelProfile.MORINI_XCAPE_1200_JPEG
     )
 
     @Test
@@ -35,20 +37,14 @@ class YunmoProfileRoutingTest {
     }
 
     @Test
-    fun theHeaderVariantsCoverTheFullTwoByTwoAndDifferOnlyInThoseTwoFields() {
-        val corners = yunmoProfiles.map { it.yunmoTypedMediaHeader to it.yunmoFrameMetadata }.toSet()
-        assertEquals(
-            "the four variants must be the four combinations, with no duplicates",
-            setOf(false to false, true to false, true to true, false to true),
-            corners
-        )
-        // A variant that also changed geometry or rate would not be a controlled experiment.
-        yunmoProfiles.forEach { profile ->
-            assertEquals(10, profile.encoderFrameRate)
-            assertEquals(187, profile.virtualDisplayDpi)
-            assertEquals(TBoxTransportFamily.YUNMO, profile.transportFamily)
-            assertTrue("${profile.name} must drive the OEM map-nav path", profile.yunmoMapNavExperiment)
-        }
+    fun theProfileMatchesTheOemEncoderSettings() {
+        // Read from Ride MO 1.0.23's GoogleMediaCodecH264LiveThread, not inferred.
+        val profile = TBoxModelProfile.MORINI_XCAPE_1200
+        assertEquals(10, profile.encoderFrameRate)
+        assertEquals(2_000_000, profile.encoderBitRate)
+        assertEquals("the OEM encodes a 2-second GOP, not all-intra", 2, profile.encoderKeyframeIntervalSeconds)
+        assertEquals(187, profile.virtualDisplayDpi)
+        assertTrue(profile.yunmoMapNavExperiment)
     }
 
     @Test
@@ -91,5 +87,53 @@ class YunmoProfileRoutingTest {
                     profile.yunmoMapNavExperiment
                 )
             }
+    }
+
+    @Test
+    fun theMirrorVariantDiffersOnlyInTheDisplayModeItAsksFor() {
+        val base = TBoxModelProfile.MORINI_XCAPE_1200
+        val mirror = TBoxModelProfile.MORINI_XCAPE_1200_MIRROR
+        // The point of the variant is to isolate one question - does this dash paint without being
+        // put into map-nav - so every other setting has to stay identical or it answers nothing.
+        assertEquals(base.encoderFrameRate, mirror.encoderFrameRate)
+        assertEquals(base.encoderBitRate, mirror.encoderBitRate)
+        assertEquals(base.encoderKeyframeIntervalSeconds, mirror.encoderKeyframeIntervalSeconds)
+        assertEquals(base.virtualDisplayDpi, mirror.virtualDisplayDpi)
+        assertEquals(base.fallbackTBoxVideoArea, mirror.fallbackTBoxVideoArea)
+        assertEquals(TBoxTransportFamily.YUNMO, mirror.transportFamily)
+        assertTrue(base.yunmoMapNavExperiment)
+        assertFalse("the mirror variant must ask for the mirror path", mirror.yunmoMapNavExperiment)
+    }
+
+    @Test
+    fun neitherXCapeProfileIsEverAutoResolvedFromTheSharedProductId() {
+        // Both are manual pins: 00297 belongs to the EasyConn 649/700/Seiemmezzo as well.
+        assertEquals(TBoxModelProfile.GENERIC, TBoxModelProfile.fromModelId("00297"))
+        // Reachable only by a manual pin, never by resolution from the QR.
+        yunmoProfiles.forEach { profile ->
+            assertNotEquals(profile, TBoxModelProfile.resolve("00297", null))
+            assertEquals(profile, TBoxModelProfile.resolve("00297", null, overrideFor(profile)))
+        }
+    }
+
+    @Test
+    fun onlyTheJpegProfileEverCapturesStills() {
+        // The guarantee that matters for every other motorcycle: this flag is what diverts a
+        // session away from the AVC encoder, so exactly one profile may carry it.
+        val jpegProfiles = TBoxModelProfile.entries.filter { it.yunmoJpegVideo }
+        assertEquals(listOf(TBoxModelProfile.MORINI_XCAPE_1200_JPEG), jpegProfiles)
+    }
+
+    @Test
+    fun theJpegProfileCannotBeReachedWithoutTheRiderPinningIt() {
+        // It answers to no modelId, so no QR and no capability score can land a bike here.
+        // The shared ProductID must keep resolving to the EasyConn Morinis, not to this.
+        assertTrue(TBoxModelProfile.fromModelId("00297") != TBoxModelProfile.MORINI_XCAPE_1200_JPEG)
+        assertTrue(TBoxModelProfile.fromModelId("21322") != TBoxModelProfile.MORINI_XCAPE_1200_JPEG)
+        // A rider pinning it is the only way in.
+        assertEquals(
+            TBoxModelProfile.MORINI_XCAPE_1200_JPEG,
+            ProfileOverride.MORINI_XCAPE_1200_JPEG.resolve()
+        )
     }
 }

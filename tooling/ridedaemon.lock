@@ -1,32 +1,34 @@
 # Generated dependency record. Update this file whenever hudlib.aar is rebuilt.
 source_repository=https://github.com/vincenzobpt/ridedaemon-lib
-source_commit=de02c4c6edfbd0662a9b64a2f6ab7497fc22c409
+source_commit=da7253b3c12f1a116d989d2ec89954b0e3d5bcdc
 source_dirty=false
 source_checkout=refs/ridedaemon-lib-motohub
-gomobile_android_api=34
+gomobile_android_api=31
 artifact=apps/android/app/libs/hudlib.aar
-sha256=7a5ac3ff3dfb45088fd45dd561a4fbd72b0f5fdb03bc6ea7903108b854dd8c88
+sha256=48c5f876880e5dac36f77f361b26aa8d0d2a6b34bf0d37a93cd0ed47ba558319
 license=GPL-3.0-only
 
-# Rebuilt 2026-08-10, second time that day, and the second build REVERSES the
-# first. The morning build made the phone advertise supportSyncCorrectTime in
-# CLIENT_INFO; the reference implementation shipped exactly that claim, then
-# withdrew it hours later reporting that firmware which saw it applied the
-# 0x10601 reply aggressively and drove Zontes and Voge clusters to 00:00 even
-# when their clock was already right. We have testers on both brands, so the
-# claim is gone again and a test now asserts it stays off the wire.
+# Rebuilt 2026-08-18: the 0x10600 echo rule is now permissive. It used to hand
+# the dash its own timestamp back only when that stamp matched an exact 29-char
+# layout - anchored, space separator, precisely nine fractional digits - and
+# rewrote everything else with phone time. Firmware that formats the field even
+# slightly differently had a perfectly good clock overwritten; the reference
+# implementation measured that as clusters landing HOURS out on Voge, QJ,
+# X-Cape and Griffin, and dropped the strict check in their 2.0.10.
 #
-# The 0x10600 answer itself is unchanged in spirit but smarter in fact: it used
-# to overwrite the 29-byte stamp with phone time every single occasion, which
-# the same reports say still left some clusters at 00:00. It now echoes the
-# dash's own stamp untouched when that stamp is a sane wall clock (year
-# 2020-2099, exact format), and supplies phone time only when the dash sends
-# epoch, zeroes or junk. Never empty - an empty ack is what pushed Morini and
-# Voge to 1970 in the first place. The log line carries mode=echo|phone, which
-# is the whole diagnosis for a wrong-clock report.
+# Now: echo unless the dash sent nothing, sent epoch, or filled the field with
+# something that is not printable text of at least a date's length. That last
+# guard is ours and theirs lacks it - without it a short request carrying two
+# raw bytes echoes back as an all-but-empty body, which is the exact shape that
+# put Morini and Voge at 1970 to begin with. The old 18-byte regression test
+# still passes because of it.
 #
-# source_dirty=false: uncommitted in the fork checkout, so source_commit names
-# the parent, not the built tree. Verified in the artifact by grepping the .so
-# for the new timestamp regex - present here, absent in the previous AAR.
-# Binding surface diffed against the previous AAR: identical.
-source_note=clock-ack-echoes-sane-bike-stamp-no-capability-claim
+# Built with -androidapi 31 to match this worktree's minSdk. CORE is minSdk 31
+# since "Run on Android 12 and 13"; pro-poc and the experiment worktree are
+# still 34, so they keep the 34 build. An AAR must never require a higher API
+# than the app's minSdk.
+#
+# Verified in the artifact by grepping the .so for the relaxed year pattern -
+# present here, absent in the previous AAR. Binding surface diffed against the
+# previous AAR: identical.
+source_note=clock-ack-echoes-any-plausible-dash-stamp

@@ -30,26 +30,26 @@ enum class ProfileOverride(
         "Zontes 368G (test B)",
         "Same experiment with plain framing instead: the dash's ext byte decides, plus a 1s GOP"
     ),
+    VOGE_TEST(
+        "voge_test",
+        "Voge (test)",
+        "Experiment for Voge dashes that reboot mid-ride: 1s plain-IDR GOP instead of all-intra"
+    ),
     KOVE_800X("kove_800x", "KOVE 800X (ThinkerRide)", "BLE-paired ThinkerRide dash, 600x1024 portrait"),
     MORINI_XCAPE_1200(
         "morini_xcape_1200",
         "X-Cape 1200 (Yunmo)",
         "Moto Morini X-Cape 1200 SoftAP dash on Yunmo :8200 (not the 649/700/Seiemmezzo)"
     ),
-    MORINI_XCAPE_1200_B(
-        "morini_xcape_1200_b",
-        "X-Cape 1200 (test B)",
-        "Same dash, but each video frame is tagged with its own type instead of a fixed one"
+    MORINI_XCAPE_1200_MIRROR(
+        "morini_xcape_1200_mirror",
+        "X-Cape 1200 (mirror)",
+        "Same dash, asked for plain mirroring instead of the navigation display mode"
     ),
-    MORINI_XCAPE_1200_C(
-        "morini_xcape_1200_c",
-        "X-Cape 1200 (test C)",
-        "Test B plus the frame number and size written into every video frame header"
-    ),
-    MORINI_XCAPE_1200_D(
-        "morini_xcape_1200_d",
-        "X-Cape 1200 (test D)",
-        "Only the frame number and size added; frame tagging left as the standard profile"
+    MORINI_XCAPE_1200_JPEG(
+        "morini_xcape_1200_jpeg",
+        "Moto Morini X-Cape 1200 (JPEG)",
+        "Sends still images instead of video, the way the bike's own app does. Try this if the dash stays black."
     ),
     MOTO_HUB_SIMULATOR("moto_hub_simulator", "MOTO-HUB Simulator", "Development simulator profile");
 
@@ -66,11 +66,11 @@ enum class ProfileOverride(
         CL_C450 -> TBoxModelProfile.CL_C450
         ZONTES_368G_TEST -> TBoxModelProfile.ZONTES_368G_TEST
         ZONTES_368G_TEST_B -> TBoxModelProfile.ZONTES_368G_TEST_B
+        VOGE_TEST -> TBoxModelProfile.VOGE_TEST
         KOVE_800X -> TBoxModelProfile.KOVE_800X
         MORINI_XCAPE_1200 -> TBoxModelProfile.MORINI_XCAPE_1200
-        MORINI_XCAPE_1200_B -> TBoxModelProfile.MORINI_XCAPE_1200_B
-        MORINI_XCAPE_1200_C -> TBoxModelProfile.MORINI_XCAPE_1200_C
-        MORINI_XCAPE_1200_D -> TBoxModelProfile.MORINI_XCAPE_1200_D
+        MORINI_XCAPE_1200_MIRROR -> TBoxModelProfile.MORINI_XCAPE_1200_MIRROR
+        MORINI_XCAPE_1200_JPEG -> TBoxModelProfile.MORINI_XCAPE_1200_JPEG
         MOTO_HUB_SIMULATOR -> TBoxModelProfile.MOTO_HUB_SIMULATOR
     }
 

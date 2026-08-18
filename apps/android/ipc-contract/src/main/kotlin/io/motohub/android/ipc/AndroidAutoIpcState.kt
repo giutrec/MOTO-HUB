@@ -31,11 +31,32 @@ object IpcBridgeContract {
      *
      * 1: everything up to clearDiagnosticLog(), which had no version call.
      * 2: connectOverFormedGroup().
+     * 3: getLastConnectFailure() + getLastConnectFailureStage().
      */
-    const val CONTRACT_VERSION = 2
+    const val CONTRACT_VERSION = 3
 
     /** First [CONTRACT_VERSION] whose Core implements connectOverFormedGroup(). */
     const val CONTRACT_VERSION_FORMED_GROUP = 2
+
+    /** First [CONTRACT_VERSION] whose Core can say why a connect failed, and at which stage. */
+    const val CONTRACT_VERSION_CONNECT_FAILURE_REASON = 3
+
+    /**
+     * Which half of Core's connect produced the last failure, answered by
+     * getLastConnectFailureStage(). The distinction is what keeps help for a busy EasyConn session
+     * off a failure that never reached one: below [CONNECT_STAGE_DISCOVERY] no session existed for
+     * another app to be holding, so nothing about another app can be the explanation.
+     */
+    const val CONNECT_STAGE_UNKNOWN = 0
+
+    /** The phone never got a usable link to the dash: Wi-Fi join, P2P group, or routing. */
+    const val CONNECT_STAGE_NETWORK = 1
+
+    /** The link was up and the dash did not answer as an EasyConn (or other family) host. */
+    const val CONNECT_STAGE_DISCOVERY = 2
+
+    /** Core refused before trying: it is already driving this dash for someone else. */
+    const val CONNECT_STAGE_REFUSED = 3
 
     const val CORE_PACKAGE_NAME = "io.motohub.android"
     const val CORE_MAIN_ACTIVITY_CLASS_NAME = "io.motohub.android.MainActivity"

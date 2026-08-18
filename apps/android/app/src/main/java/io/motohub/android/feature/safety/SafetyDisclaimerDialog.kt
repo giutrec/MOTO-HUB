@@ -3,12 +3,11 @@ package io.motohub.android.feature.safety
 import io.motohub.android.i18n.motoHubText
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -23,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
+import io.motohub.android.ui.components.MotoHubDialogBody
 
 @Composable
 fun SafetyDisclaimerDialog(
@@ -36,36 +36,35 @@ fun SafetyDisclaimerDialog(
             dismissOnBackPress = false,
             dismissOnClickOutside = false
         ),
-        title = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+        // The badge lives in the icon slot rather than in the title: Material 3 measures the title
+        // before the body, so anything oversized up here is height stolen from the warning itself.
+        icon = {
+            Surface(
+                modifier = Modifier.size(56.dp),
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.16f)
             ) {
-                Surface(
-                    modifier = Modifier.size(68.dp),
-                    shape = androidx.compose.foundation.shape.CircleShape,
-                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.16f)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = "⚠",
-                            color = MaterialTheme.colorScheme.error,
-                            fontSize = 40.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "⚠",
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
-                Text(
-                    text = "SAFETY WARNING",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
             }
         },
+        title = {
+            Text(
+                text = "SAFETY WARNING",
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            MotoHubDialogBody(spacing = 14.dp) {
                 Text(
                     text = "Riding requires your full attention. Never interact with MOTO-HUB, " +
                         "Android Auto, navigation, mirroring, trip recording, or any on-screen " +

@@ -10,6 +10,8 @@
     <string name="language_italian">Italiano</string>
     <string name="language_portuguese">Português</string>
     <string name="language_korean">한국어 (대한민국)</string>
+    <string name="language_french">Français</string>
+    <string name="language_spanish">Español</string>
     <string name="language_title">언어</string>
     <string name="language_description">MOTO-HUB에서 사용하는 언어를 선택하세요</string>
     <string name="language_detail_description">MOTO-HUB는 기본적으로 전화 언어를 따릅니다. 이 앱에 대해 재정의하려면 아래에서 언어를 선택하세요.</string>
@@ -1270,6 +1272,288 @@
     <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
     <string name="legacy_use_these_details_52f852ac">이 정보 사용</string>
 
+    <!-- ===========================================================         Catalogue sweep, 2026-08-13: strings this worktree draws but had
+         no identifier for. Values come from the pro-poc catalogues, where
+         the same source strings are already translated.
+         ================================================================== -->
+
+    <!-- Source: MainActivity.kt -->
+    <string name="legacy_unable_to_open_discord_50e2e02e">Discord를 열 수 없습니다</string>
+
+    <!-- Source: feature/about/AboutScreen.kt -->
+    <string name="legacy_d_taps_away_from_the_prototype_779bf960">프로토타입까지 %d번 남음</string>
+    <string name="legacy_community_source_fe28bfcc">커뮤니티 및 소스</string>
+    <string name="legacy_discord_c6d7d50c">Discord</string>
+    <string name="legacy_github_7f258fe3">GitHub</string>
+    <string name="legacy_map_rendering_by_maplibre_native_bsd_2_clause_ve_cb6afe3f">지도 렌더링: MapLibre Native(BSD-2-Clause). 벡터 타일: OpenFreeMap, OpenMapTiles 스키마 기준. 래스터 타일: CARTO. 주소 검색: Photon. 경로 안내: Valhalla(Stadia Maps 또는 FOSSGIS 데모 서버 호스팅). 장소 정보: Overpass. 날씨: Open-Meteo. 연료 가격은 스페인 Ministerio para la Transición Ecológica, 포르투갈 DGEG, 프랑스 Ministère de l\'Économie, 이탈리아 MIMIT가 공개 데이터로 제공합니다. DGEG 데이터는 상업적으로 사용할 수 없습니다.</string>
+    <string name="legacy_maps_data_b256210d">지도 및 데이터</string>
+    <string name="legacy_maps_addresses_and_routes_are_built_on_data_by_o_f0b02b91">지도, 주소, 경로는 © OpenStreetMap contributors의 데이터를 바탕으로 하며 ODbL 라이선스를 따릅니다.</string>
+    <string name="legacy_prototype_unlocked_856a4841">프로토타입 잠금 해제됨</string>
+
+    <!-- Source: feature/androidauto/AndroidAutoHelpScreen.kt -->
+    <string name="legacy_a_notification_confirms_the_server_is_running_le_eacf82e">알림이 서버 실행 중임을 알려줍니다. 켜 둔 채로 두세요. 직접 끄거나 휴대폰을 재시작할 때까지 유지됩니다.</string>
+    <string name="legacy_android_auto_17_4_removed_the_way_an_app_can_ask_890c8f24">Android Auto 17.4에서 앱이 투사를 요청하는 방법이 사라졌습니다. MOTO-HUB는 계속 시도하며 이전 버전에서는 동작합니다 — 되지 않을 때는 Android Auto의 개발자 메뉴에서 직접 시작할 수 있습니다. 따로 설치할 것은 없습니다.</string>
+    <string name="legacy_android_auto_does_not_start_2266b70e">Android Auto가 시작되지 않음</string>
+    <string name="legacy_every_time_android_auto_will_not_start_18ff3ab9">ANDROID AUTO가 시작되지 않을 때마다</string>
+    <string name="legacy_go_back_to_moto_hub_and_start_android_auto_it_co_ff8cc50d">MOTO-HUB로 돌아가 Android Auto를 시작하세요. 몇 초 안에 스스로 연결되며, 더 누를 것은 없습니다.</string>
+    <string name="legacy_in_android_auto_s_developer_settings_open_the_me_1ea3a8cf">Android Auto 개발자 설정에서 오른쪽 위 ⋮ 메뉴를 열고 \"헤드 유닛 서버 시작\"을 선택하세요. 아래 설정 목록이 아니라 그 메뉴 안에 있습니다.</string>
+    <string name="legacy_in_developer_settings_turn_on_add_new_cars_to_an_19f79566">개발자 설정에서 \"Android Auto에 새 차량 추가\"를 켜세요(구버전에서는 \"알 수 없는 소스\").</string>
+    <string name="legacy_jumps_straight_to_the_app_where_the_menu_above_l_7c8b2093">위 메뉴가 있는 앱으로 바로 이동합니다</string>
+    <string name="legacy_normally_moto_hub_waits_and_asks_android_auto_to_6c183bab">보통은 MOTO-HUB가 기다리다가 Android Auto에 연결을 요청합니다. 17.4 버전은 이 앱뿐 아니라 같은 종류의 모든 앱에 대해 그 길을 막았습니다. 헤드 유닛 서버는 방향을 뒤집어 Android Auto가 기다리고 MOTO-HUB가 연결하게 하며, 이는 구글이 자체 테스트 도구를 위해 열어 둔 길입니다.</string>
+    <string name="legacy_one_time_setup_ca24c531">최초 1회 설정</string>
+    <string name="legacy_open_android_auto_settings_48a5120d">Android Auto 설정 열기</string>
+    <string name="legacy_open_the_android_auto_app_scroll_to_the_bottom_a_69ae9e53">Android Auto 앱을 열고 맨 아래로 내려가 \"버전\"을 열 번 누르세요. 개발자 설정이 나타납니다.</string>
+    <string name="legacy_why_14fa8">이유</string>
+
+    <!-- Source: feature/controls/BluetoothStatus.kt -->
+    <string name="legacy_allow_bluetooth_access_so_the_app_can_see_whethe_8754f4c2">앱이 모터사이클 연결 여부를 확인할 수 있도록 Bluetooth 접근을 허용하세요.</string>
+    <string name="legacy_bluetooth_is_off_turn_it_on_then_pair_the_motorc_5375bc65">Bluetooth가 꺼져 있습니다 — 켠 다음 모터사이클을 페어링하세요.</string>
+    <string name="legacy_connected_now_1_s_if_that_is_the_motorcycle_the__cd016af1">현재 연결됨: %1$s. 이것이 모터사이클이라면 핸들바 버튼이 휴대폰에 전달될 수 있습니다.</string>
+    <string name="legacy_no_audio_device_is_connected_right_now_with_the__7d4f4d3e">현재 연결된 오디오 기기가 없습니다. 모터사이클을 켜면 계기판이 여기에 표시됩니다 — 계속 표시되지 않으면 Bluetooth 설정에서 페어링하세요.</string>
+    <string name="legacy_this_phone_has_no_bluetooth_b42f7e85">이 휴대폰에는 Bluetooth가 없습니다.</string>
+
+    <!-- Source: feature/controls/HandlebarMappingScreen.kt -->
+    <string name="legacy_a_button_the_app_has_not_been_taught_yet_53060697">앱이 아직 학습하지 않은 버튼</string>
+    <string name="legacy_a_single_press_acts_immediately_instead_of_waiti_ebd37a80">한 번 누르면 두 번 누르기 대기 시간을 기다리지 않고 즉시 실행됩니다. 두 번 누르기도 계속 작동하며, 한 번 누르기가 먼저 실행될 뿐입니다.</string>
+    <string name="legacy_allow_bluetooth_bbde9a57">Bluetooth 허용</string>
+    <string name="legacy_bluetooth_settings_ed5eb975">Bluetooth 설정</string>
+    <string name="legacy_checking_bluetooth_ce222d3e">Bluetooth 확인 중…</string>
+    <string name="legacy_choose_what_this_press_does_4e74fce9">이 누르기의 동작을 선택하세요.</string>
+    <string name="legacy_done_1_d_presses_learned_dd4b86bd">완료 - %1$d개의 누르기를 학습했습니다.</string>
+    <string name="legacy_double_press_window_a8b0763c">두 번 누르기 인식 시간</string>
+    <string name="legacy_every_card_now_describes_your_handlebar_buttons__f70bd7b3">이제 각 카드가 사용자의 핸들바를 설명합니다. 없음으로 표시한 버튼은 사라졌습니다.</string>
+    <string name="legacy_finish_7d6e78b3">마침</string>
+    <string name="legacy_handlebar_7b449ccb">핸들바</string>
+    <string name="legacy_hold_gestures_a5df4e6b">길게 누르기 동작</string>
+    <string name="legacy_hold_time_bba08d6e">길게 누르기 시간</string>
+    <string name="legacy_how_long_the_app_waits_before_deciding_a_press_w_fbe08ef2">앱이 누르기를 두 번 누르기 또는 길게 누르기로 판단하기까지 기다리는 시간입니다.</string>
+    <string name="legacy_motorcycle_bluetooth_88c59adf">모터사이클 Bluetooth</string>
+    <string name="legacy_not_detected_yet_d1e8f877">아직 감지되지 않음</string>
+    <string name="legacy_not_on_my_bike_49509421">내 바이크에 없음</string>
+    <string name="legacy_nothing_happens_some_dashboards_keep_a_button_fo_c80119d0">아무 일도 일어나지 않나요? 일부 계기판은 버튼을 자체적으로 사용하고 휴대폰에는 아무것도 보내지 않습니다 — CFMOTO CFDL16에서는 로커를 짧게 누를 때가 정확히 그렇습니다. 없음으로 표시하면 더 이상 공간을 차지하지 않습니다.</string>
+    <string name="legacy_on_the_motorcycle_do_this_5d34555e">모터사이클에서 다음을 실행하세요</string>
+    <string name="legacy_one_card_per_button_with_what_a_press_a_double_p_e88303f5">버튼마다 카드가 하나씩 있으며, 누르기·두 번 누르기·길게 누르기가 각각 무엇을 하는지 보여줍니다. 핸들바를 학습시키면 앱이 실제로 어떤 버튼이 있는지 알게 됩니다.</string>
+    <string name="legacy_press_a_handlebar_button_fd958503">핸들바 버튼을 누르세요</string>
+    <string name="legacy_reset_actions_to_defaults_95ecb43">동작을 기본값으로 재설정</string>
+    <string name="legacy_skip_27599f">건너뛰기</string>
+    <string name="legacy_snappy_singles_330a9d7e">빠른 한 번 누르기</string>
+    <string name="legacy_step_1_d_of_2_d_72bf41f6">%2$d단계 중 %1$d단계</string>
+    <string name="legacy_stop_here_d51e892e">여기서 중단</string>
+    <string name="legacy_teach_my_handlebar_51393162">내 핸들바 학습시키기</string>
+    <string name="legacy_timing_937fe44a">타이밍</string>
+    <string name="legacy_turn_off_if_your_handlebar_needs_a_long_physical_c92718d1">핸들바가 클릭할 때마다 물리적으로 길게 눌러야 한다면 끄세요 — 그렇지 않으면 그 누르기가 길게 누르기로 처리됩니다.</string>
+    <string name="legacy_controls_fd1b9add">‹ 컨트롤</string>
+    <string name="legacy_handlebar_c1b6ada4">‹ 핸들바</string>
+
+    <!-- Source: feature/garage/GarageScreen.kt -->
+    <string name="legacy_add_your_first_motorcycle_to_get_rolling_b8e9f267">첫 번째 모터사이클을 추가하고 시작하세요.</string>
+    <string name="legacy_no_motorcycle_no_problem_4346def1">모터사이클이 없나요? 괜찮습니다</string>
+
+    <!-- Source: feature/home/CoreAvailability.kt -->
+    <string name="legacy_advanced_needs_moto_hub_core_installed_and_paire_722fef7d">Advanced를 사용하려면 MOTO-HUB (Core)가 설치되어 있고 T-Box와 페어링되어 있어야 연결, 미러링 또는 Android Auto 실행이 가능합니다.</string>
+    <string name="legacy_couldn_t_open_the_browser_3e0fae25">브라우저를 열 수 없습니다.</string>
+    <string name="legacy_download_moto_hub_core_976f62e2">MOTO-HUB Core 다운로드</string>
+    <string name="legacy_moto_hub_core_not_found_b76c3f4f">MOTO-HUB CORE를 찾을 수 없음</string>
+
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_android_auto_17_4_removed_the_way_apps_ask_it_to_b5455068">Android Auto 17.4에서 앱이 투사를 요청하는 방법이 사라졌습니다. Android Auto의 개발자 메뉴에서는 여전히 시작할 수 있습니다.</string>
+    <string name="legacy_one_possible_cause_the_official_cfmoto_app_is_in_b6013d8d">원인 가능성 하나: 공식 CFMOTO 앱이 설치되어 있으면 백그라운드에서도 T-Box 연결을 붙잡고 있을 수 있습니다. 연결이 계속 실패하면 앱 정보 페이지에서 강제 종료한 뒤 다시 시도하세요.</string>
+    <string name="legacy_open_cfmoto_app_info_4af1a737">CFMOTO 앱 정보 열기</string>
+    <string name="legacy_retry_connection_54743f76">연결 다시 시도</string>
+    <string name="legacy_some_dashboards_never_broadcast_a_network_of_the_787ecd2c">자체 네트워크를 전혀 내보내지 않는 계기판도 있습니다. 계기판에 표시된 Ssid와 비밀번호로 휴대폰이 만든 핫스팟에 접속합니다. \"Android 핫스팟을 켜세요\"라고 나온다면 그렇게 해 보세요.</string>
+    <string name="legacy_the_official_cfmoto_app_is_installed_and_may_be__461e26a6">공식 CFMOTO 앱이 설치되어 있어 T-Box를 붙잡고 있을 수 있습니다. 앱 정보 페이지에서 강제 종료한 뒤 다시 시도하세요.</string>
+    <string name="legacy_try_my_phone_hosts_the_hotspot_d4f6db66">시도: 내 휴대폰이 핫스팟을 제공</string>
+
+    <!-- Source: feature/home/HubViewModel.kt -->
+    <string name="legacy_network_connected_pairing_over_bluetooth_and_wai_5b4c6259">네트워크 연결됨. Bluetooth로 페어링하고 계기판을 기다리는 중입니다.</string>
+
+    <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
+    <string name="legacy_altitude_ft_89feab0c">고도 FT</string>
+    <string name="legacy_altitude_m_caa51e4f">고도 M</string>
+    <string name="legacy_distance_ft_552284d9">거리 FT</string>
+    <string name="legacy_distance_km_5522856d">거리 KM</string>
+    <string name="legacy_distance_m_a7e856e2">거리 M</string>
+    <string name="legacy_distance_mi_552285a7">거리 MI</string>
+    <string name="legacy_max_km_h_45403037">최고 KM/H</string>
+    <string name="legacy_max_mph_5d129e29">최고 MPH</string>
+
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_auto_connect_and_recovery_57ed0872">자동 연결 및 복구</string>
+    <string name="legacy_auto_recover_stalled_android_auto_streams_bd3e2d8e">멈춘 Android Auto 스트림 자동 복구</string>
+    <string name="legacy_button_mapping_815600">버튼 매핑</string>
+    <string name="legacy_buttons_control_android_auto_3dc44642">버튼으로 Android Auto 조작</string>
+    <string name="legacy_drive_android_auto_with_the_motorcycle_s_buttons_ec16509d">오토바이 버튼으로 Android Auto 조작</string>
+    <string name="legacy_handlebar_buttons_47b4fd2c">핸들 버튼</string>
+    <string name="legacy_managed_by_the_companion_app_its_controls_screen_9ad80a75">컴패니언 앱이 관리합니다. 세션이 시작될 때마다 그 앱의 컨트롤 화면이 자체 핸들 설정을 다시 적용해 여기 설정을 덮어씁니다. 핸들은 거기서 설정하세요.</string>
+    <string name="legacy_music_volume_9fa56d95">음악 볼륨</string>
+    <string name="legacy_off_means_the_mode_picker_stays_exactly_as_befor_c93efb5c">끄면 이전과 똑같이 모드 선택 화면이 유지됩니다.</string>
+    <string name="legacy_on_9ff">켜짐</string>
+    <string name="legacy_put_a_screen_on_the_tft_as_soon_as_the_motorcycl_60bf969c">오토바이가 연결되는 즉시 TFT에 화면 띄우기</string>
+    <string name="legacy_requires_the_phone_paired_to_the_motorcycle_s_bl_dda6960a">오토바이 Bluetooth에 휴대폰이 페어링되어 있어야 합니다. 음악은 계속 재생되지만, 세션이 진행되는 동안에는 그 버튼을 가져다 씁니다.</string>
+    <string name="legacy_set_the_dash_clock_over_bluetooth_experimental_3431b284">Bluetooth로 계기판 시계 맞추기(실험적)</string>
+    <string name="legacy_settings_595d2043">설정</string>
+    <string name="legacy_some_dashboards_ask_for_the_time_over_bluetooth__b44ce43b">일부 계기판은 시간을 Wi-Fi가 아니라 Bluetooth로 물어보며, 없으면 00:00에 머뭅니다. Android Bluetooth 설정에서 오토바이가 이미 이 휴대폰과 페어링되어 있어야 합니다. 기본값은 꺼짐이며, MOTO-HUB는 계기판 고유 프로토콜로 묻는 기기에만 응답합니다.</string>
+    <string name="legacy_some_dashboards_forget_settings_like_the_clock_w_76d95842">일부 계기판은 Wi-Fi Direct 연결이 완전히 끊기면 시계 같은 설정을 잊어버립니다. 앱을 나가거나 Wi-Fi를 끌 때까지 휴대폰을 오토바이 네트워크에 붙여 둡니다. 기본값은 꺼짐이며, 연결 해제 후 계기판이 시간을 잃는 경우에만 켜세요.</string>
+    <string name="legacy_start_automatically_2cb44c45">자동으로 시작</string>
+    <string name="legacy_start_on_connect_94487a47">연결되면 시작</string>
+    <string name="legacy_stay_linked_to_the_bike_s_wi_fi_after_disconnect_81b0e941">연결 해제 후에도 오토바이 Wi-Fi 유지</string>
+    <string name="legacy_the_motorcycle_s_buttons_reach_the_phone_over_bl_356cbf0d">오토바이 버튼은 Bluetooth 미디어 키로 휴대폰에 전달됩니다. 세션이 스트리밍 중일 때 MOTO-HUB가 이를 가져와 음악 플레이어 대신 Android Auto 내비게이션을 조작할 수 있습니다.</string>
+    <string name="legacy_what_each_press_double_press_and_hold_does_97201ad9">한 번, 두 번, 길게 누를 때의 동작</string>
+    <string name="legacy_what_to_do_when_android_auto_refuses_to_project_fa692d1b">Android Auto가 투사를 거부할 때 할 일</string>
+    <string name="legacy_what_to_start_5b78fc39">무엇을 시작할지</string>
+    <string name="legacy_while_capture_is_on_the_volume_buttons_navigate__9e410bf">캡처가 켜져 있는 동안에는 볼륨 버튼이 볼륨 대신 내비게이션을 조작합니다 — 여기서 듣는 크기를 정하세요.</string>
+    <string name="legacy_with_this_on_moto_hub_skips_the_what_should_i_sh_498b0614">이 설정을 켜면 MOTO-HUB는 \"무엇을 표시할까요?\" 화면을 건너뛰고, 오토바이 연결이 되는 즉시 선택한 화면을 TFT에 띄웁니다. 앱 실행당 한 번만 동작하며, 화면을 끄면 다시 사용자가 정합니다.</string>
+
+    <!-- Source: ui/components/SystemKillNotice.kt -->
+    <string name="legacy_dismiss_c6dc4a6a">닫기</string>
+    <string name="legacy_stopped_by_your_phone_37b2b157">휴대폰에 의해 중지됨</string>
+    <string name="legacy_your_last_session_ended_at_1_s_because_the_phone_8386f49c">마지막 세션은 %1$s에 종료되었습니다. 앱의 오류가 아니라 휴대폰이 %2$s을(를) 종료했기 때문입니다.</string>
+
+    <!-- ==================================================================
+         Catalogue sweep, 2026-08-13 (second pass): source strings that sit
+         inside an if/when/arrayOf within the lookup call.
+         ================================================================== -->
+
+    <!-- Source: feature/ai/AiSettingsScreen.kt -->
+    <string name="legacy_api_key_fb0d9b39">API 키</string>
+    <string name="legacy_replace_api_key_d64eadad">API 키 교체</string>
+
+    <!-- Source: feature/androidauto/AndroidAutoPreviewScreen.kt -->
+    <string name="legacy_hide_controls_2dc943b4">컨트롤 숨기기</string>
+
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_1_d_rpm_2_d_km_h_3_d_c_coolant_60ed46da">%1$d rpm · %2$d km/h · 냉각수 %3$d °C</string>
+    <string name="legacy_obd_adapter_connected_29e365e9">OBD 어댑터 연결됨</string>
+    <string name="legacy_saved_4bf7e67">저장됨</string>
+    <string name="legacy_the_dashboard_shows_why_on_the_motorcycle_442e8daa">이유는 오토바이 계기판에 표시됩니다.</string>
+    <string name="legacy_waiting_for_the_obd_adapter_b3b01207">OBD 어댑터를 기다리는 중</string>
+
+    <!-- Source: feature/controls/HandlebarMappingScreen.kt -->
+    <string name="legacy_listening_2ece009b">대기 중</string>
+    <string name="legacy_received_d3a64e01">수신됨</string>
+    <string name="legacy_teach_again_4fb10bd5">다시 학습</string>
+
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_bluetooth_is_turned_off_so_the_obd_adapter_canno_5a8640c">Bluetooth가 꺼져 있어 OBD 어댑터에 연결할 수 없습니다.</string>
+    <string name="legacy_customizable_vector_map_rendered_on_the_tft_bfa6e220">TFT에 그려지는 사용자 지정 벡터 지도</string>
+    <string name="legacy_gps_following_8ad5867b">GPS 따라가기</string>
+    <string name="legacy_moto_hub_needs_bluetooth_access_to_reach_the_obd_af681be3">OBD 어댑터에 연결하려면 MOTO-HUB에 Bluetooth 권한이 필요합니다.</string>
+    <string name="legacy_no_map_live_engine_data_from_a_paired_elm327_ada_8ecf531c">지도 없음: 페어링된 ELM327 어댑터에서 받는 실시간 엔진 데이터</string>
+    <string name="legacy_no_paired_obd_adapter_found_pair_the_elm327_dong_90029f7c">페어링된 OBD 어댑터가 없습니다. ELM327 동글을 먼저 페어링하세요.</string>
+    <string name="legacy_restore_gps_76fc23d8">GPS로 복귀</string>
+
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_mute_24c639">음소거</string>
+    <string name="legacy_voice_on_8e4723ad">음성 켜기</string>
+
+    <!-- Source: feature/obd/ObdFuelAirScreen.kt -->
+    <string name="legacy_the_ecu_is_adding_fuel_steadily_worth_a_look_if__da08dd7">ECU가 연료를 꾸준히 늘리고 있습니다. 계속 올라가면 살펴볼 만합니다.</string>
+    <string name="legacy_the_ecu_is_taking_fuel_away_steadily_worth_a_loo_b2e06214">ECU가 연료를 꾸준히 줄이고 있습니다. 계속 내려가면 살펴볼 만합니다.</string>
+
+    <!-- Source: feature/obd/ObdFullScanScreen.kt -->
+    <string name="legacy_last_scan_1c6351c7">마지막 스캔</string>
+    <string name="legacy_run_full_scan_62e71f9">전체 스캔 실행</string>
+    <string name="legacy_scanning_f99dc8b1">스캔 중</string>
+    <string name="legacy_scanning_b757d75">스캔 중…</string>
+
+    <!-- Source: feature/obd/ObdHubScreen.kt -->
+    <string name="legacy_bluetooth_is_turned_off_92ceda3f">Bluetooth가 꺼져 있습니다.</string>
+    <string name="legacy_connected_and_reading_1e53c68c">연결되어 읽는 중</string>
+    <string name="legacy_connecting_ca35204e">연결 중…</string>
+    <string name="legacy_moto_hub_needs_bluetooth_access_to_reach_the_ada_8763b3f4">어댑터에 연결하려면 MOTO-HUB에 Bluetooth 권한이 필요합니다.</string>
+    <string name="legacy_no_paired_obd_adapter_found_72c35314">페어링된 OBD 어댑터가 없습니다.</string>
+    <string name="legacy_not_connected_273cf5d2">연결되지 않음.</string>
+
+    <!-- Source: feature/ridedashboard/widget/AltitudeWidget.kt -->
+    <string name="legacy_1h_af24">-1시간</string>
+    <string name="legacy_climbing_6536490d">상승 중</string>
+    <string name="legacy_descending_da6096f8">하강 중</string>
+    <string name="legacy_gnss_live_7bc47fe5">GNSS 수신 중</string>
+    <string name="legacy_level_44fa364">수평</string>
+    <string name="legacy_no_fix_8982dd16">수신 없음</string>
+    <string name="legacy_vertical_speed_427682fd">수직 속도</string>
+
+    <!-- Source: feature/ridedashboard/widget/BatteryWidget.kt -->
+    <string name="legacy_battery_level_508e0b71">배터리 잔량</string>
+    <string name="legacy_charging_843f5271">충전 중</string>
+    <string name="legacy_external_power_41cdb450">외부 전원</string>
+    <string name="legacy_hot_1182d">뜨거움</string>
+    <string name="legacy_low_power_483394f9">배터리 부족</string>
+    <string name="legacy_no_sensor_69b15af9">센서 없음</string>
+    <string name="legacy_normal_8999b0e7">정상</string>
+    <string name="legacy_off_1314f">꺼짐</string>
+    <string name="legacy_warm_288a85">따뜻함</string>
+
+    <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
+    <string name="legacy_east_205bfd">동</string>
+    <string name="legacy_glare_risk_8e426920">눈부심 위험</string>
+    <string name="legacy_gnss_stale_fd32d3a0">GNSS 오래됨</string>
+    <string name="legacy_ne_9b7">북동</string>
+    <string name="legacy_no_gnss_a6d94c86">GNSS 없음</string>
+    <string name="legacy_north_47050e5">북</string>
+    <string name="legacy_nw_9c9">북서</string>
+    <string name="legacy_se_a52">남동</string>
+    <string name="legacy_south_4b6d1ad">남</string>
+    <string name="legacy_sun_tracking_5fd65e2b">태양 추적 중</string>
+    <string name="legacy_sw_a64">남서</string>
+    <string name="legacy_west_2899af">서</string>
+
+    <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
+    <string name="legacy_off_for_1_s_a8aabb23">%1$s에서 꺼짐</string>
+    <string name="legacy_one_widget_pinned_on_1_s_9ab92ad6">%1$s에 위젯 1개 고정</string>
+    <string name="legacy_rotating_on_1_s_c5e75b74">%1$s에서 순환 중</string>
+    <string name="legacy_this_panel_cycles_through_the_1_d_ticked_widgets_3a2b2d0e">이 패널은 선택한 위젯 %1$d개를 번갈아 보여줍니다.</string>
+    <string name="legacy_this_panel_shows_that_one_widget_and_never_rotat_f3acc606">이 패널은 그 위젯 하나만 보여주며 순환하지 않습니다. 하나 더 선택하면 캐러셀이 시작됩니다.</string>
+    <string name="legacy_tick_widgets_below_to_build_this_panel_s_carouse_ab0f3111">아래에서 위젯을 선택해 이 패널의 캐러셀을 구성하세요. 패널마다 따로 설정됩니다.</string>
+
+    <!-- Source: feature/ridedashboard/widget/SatelliteWidget.kt -->
+    <string name="legacy_2d_fix_weak_geometry_e5b0cd1f">2D 측위  •  위성 배치 불량</string>
+    <string name="legacy_3d_fix_navigation_ready_bff99e13">3D 측위  •  내비게이션 준비</string>
+    <string name="legacy_scan_26be7d">탐색</string>
+    <string name="legacy_searching_for_satellites_f009ee35">위성을 찾는 중</string>
+
+    <!-- Source: feature/ridedashboard/widget/SpeedGaugeWidget.kt -->
+    <string name="legacy_gnss_ok_35ac4b15">GNSS 양호</string>
+    <string name="legacy_n_4e">북</string>
+    <string name="legacy_w_57">서</string>
+
+    <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
+    <string name="legacy_session_live_5f7f2456">세션 진행 중</string>
+
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_capture_84285f26">측정</string>
+    <string name="legacy_capturing_561c2223">측정 중…</string>
+    <string name="legacy_recalibrate_ceebf5d4">다시 보정</string>
+
+    <!-- Source: feature/trips/TripLibraryUi.kt -->
+    <string name="legacy_enhanced_9c6c8376">전체 기록</string>
+    <string name="legacy_gps_only_e6f03982">GPS만</string>
     <!-- Source: feature/controls/HandlebarHidCaptureService.kt -->
     <string name="handlebar_hid_capture_description">핸들바 버튼 설정에서 HID 모드가 선택된 경우, MOTO-HUB가 블루투스 HID 핸들바 리모컨의 D패드 입력을 읽을 수 있도록 합니다.</string>
+
+    <!-- ==================================================================
+         Handlebar HID mode, phone-only Android Auto and the teach
+         prerequisite dialog (PR #8, rebased 2026-08-18).
+         ================================================================== -->
+    <string name="legacy_android_auto_isn_t_running_9f167e30">Android Auto가 실행 중이 아닙니다</string>
+    <string name="legacy_teaching_the_handlebar_needs_a_live_android_auto_697217d0">핸들 버튼을 학습하려면 입력을 감지할 수 있는 Android Auto 세션이 실행 중이어야 합니다. 모터사이클에 연결하거나, T-Box 없이 이 휴대폰에서 시작하세요.</string>
+    <string name="legacy_connect_to_1_s_579387aa">%1$s에 연결</string>
+    <string name="legacy_start_on_this_phone_no_t_box_f1bcc79f">이 휴대폰에서 시작 (T-Box 없이)</string>
+    <string name="legacy_bluetooth_is_off_turn_it_on_then_pair_the_remote_356459fc">블루투스가 꺼져 있습니다 — 켠 다음 리모컨을 키보드로 페어링하세요.</string>
+    <string name="legacy_allow_bluetooth_access_so_the_app_can_read_the_r_bf160fa2">앱이 리모컨의 버튼 입력을 읽을 수 있도록 블루투스 접근을 허용하세요.</string>
+    <string name="legacy_bluetooth_is_on_a_hid_remote_doesn_t_show_up_her_77795af8">블루투스가 켜져 있습니다. HID 리모컨은 연결된 기기로 여기에 표시되지 않습니다 — 입력이 계속 인식되지 않으면 시스템 블루투스 설정에서 페어링되어 있는지, 접근성이 켜져 있는지 확인하세요.</string>
+    <string name="legacy_or_right_now_without_the_t_box_21ba0502">또는 T-BOX 없이 지금 바로</string>
+    <string name="legacy_android_auto_straight_to_your_phone_f0cc540c">Android Auto — 휴대폰에서 바로</string>
+    <string name="legacy_input_protocol_8ff4fe4e">입력 프로토콜</string>
+    <string name="legacy_most_dashboards_send_buttons_as_avrcp_media_keys_6e1dd82c">대부분의 계기판은 버튼을 AVRCP 미디어 키로 보냅니다 — AVRCP로 두세요. 리모컨이 블루투스 키보드로 페어링되고 아래에 입력이 전혀 표시되지 않을 때만 HID를 선택하세요.</string>
+    <string name="legacy_hid_mode_also_needs_moto_hub_s_accessibility_ser_c0cdf4cc">HID 모드에는 MOTO-HUB의 접근성 서비스도 켜져 있어야 하며, 그렇지 않으면 입력이 감지되지 않습니다.</string>
+    <string name="legacy_open_accessibility_settings_a01c954b">접근성 설정 열기</string>
+    <string name="legacy_turn_on_moto_hub_so_handlebar_presses_reach_the__b41c5310">어느 화면에서든 핸들 입력이 앱에 전달되도록 MOTO-HUB를 켜세요</string>
+    <string name="legacy_was_moto_hub_s_switch_greyed_out_android_blocks__b5233420">MOTO-HUB의 스위치가 회색으로 표시되었나요? Android는 스토어에서 설치하지 않은 앱에 대해 이를 차단하며, MOTO-HUB는 GitHub에서 내려받습니다. 앱 정보를 열고 오른쪽 위의 ⋮ 를 누른 뒤 \"제한된 설정 허용\"을 선택하고, 돌아와서 스위치를 켜세요.</string>
+    <string name="legacy_open_app_info_7c77c863">앱 정보 열기</string>
+    <string name="legacy_where_allow_restricted_settings_lives_8f29fea1">\"제한된 설정 허용\"이 있는 곳</string>
+    <string name="legacy_avrcp_media_keys_f50e20c7">AVRCP (미디어 키)</string>
+    <string name="legacy_hid_d_pad_a247f04a">HID (D-패드)</string>
+    <string name="legacy_default_the_dashboard_sends_bluetooth_media_key__ccbdfbf7">기본값. 계기판이 재생/일시정지, 트랙, 볼륨에 대한 블루투스 미디어 키 명령을 보냅니다.</string>
+    <string name="legacy_for_remotes_that_pair_as_a_bluetooth_keyboard_an_25055a66">블루투스 키보드로 페어링되어 D-패드 입력을 보내는 리모컨용. 아래에서 MOTO-HUB의 접근성 서비스를 켜야 합니다.</string>
 </resources>

@@ -41,5 +41,17 @@ data class AndroidAutoSettingsParcel(
     val handlebarHoldsEnabled: Boolean = true,
     /** "pressId=storedValue" pairs joined by ',' (PhysicalPress ids; the value is a
      *  HandlebarGesture id, the `__missing__` marker, or "" for an unbound press). */
-    val handlebarCalibration: String = ""
+    val handlebarCalibration: String = "",
+    /**
+     * The Bluetooth dash-clock channel, which runs in CORE because that is where the T-Box
+     * transport lives - so a rider who flips it in the companion app is configuring a process that
+     * never reads it. Mirrored here for the same reason the handlebar block above is.
+     *
+     * [bluetoothClockSyncProvided] is not ceremony: CORE ships this toggle in its own settings
+     * too, so a caller that predates these fields would deserialize `false` and silently switch
+     * off a rider who had enabled it in CORE directly. The gate keeps an old companion from
+     * overwriting a choice it does not know about.
+     */
+    val bluetoothClockSyncProvided: Boolean = false,
+    val bluetoothClockSync: Boolean = false
 ) : Parcelable

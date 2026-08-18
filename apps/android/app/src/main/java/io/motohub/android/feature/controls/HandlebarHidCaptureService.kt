@@ -8,6 +8,7 @@ import android.content.Intent
 import android.provider.Settings
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
+import android.net.Uri
 import io.motohub.android.session.ProjectionEventLog
 
 /**
@@ -33,7 +34,11 @@ class HandlebarHidCaptureService : AccessibilityService() {
 
     override fun onServiceConnected() {
         serviceInfo = AccessibilityServiceInfo().apply {
-            eventTypes = AccessibilityEvent.TYPES_ALL_MASK
+            // No event types at all: key filtering comes from FLAG_REQUEST_FILTER_KEY_EVENTS
+            // (plus canRequestFilterKeyEvents in the XML), never from eventTypes. Subscribing to
+            // any would hand this service the screen's content for no reason - it needs to read
+            // nothing but hardware keycodes. See handlebar_hid_capture_service.xml.
+            eventTypes = 0
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
             flags = AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
             notificationTimeout = 0
@@ -95,6 +100,31 @@ class HandlebarHidCaptureService : AccessibilityService() {
                 Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
             ) ?: return false
             return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
+        }
+
+        /**
+         * Deep-links to this app's own App info page, where Android 13+ hides the second half of
+         * granting an Accessibility Service to an app that did not come from a store.
+         *
+         * MOTO-HUB is installed from a GitHub download, and updates itself through an
+         * ACTION_VIEW install - neither is a store, so Android marks the Accessibility toggle a
+         * "restricted setting" and greys it out. The rider has to open App info, then the ⋮ menu,
+         * then "Allow restricted settings" before the toggle in [openAccessibilitySettings] can
+         * be flipped at all. There is no API to ask whether that gate is currently blocking, and
+         * none to lift it - so the settings screen watches [isEnabled] instead and offers this
+         * once the rider comes back from Accessibility settings without the service on.
+         *
+         * (A phone that installed MOTO-HUB over adb is exempt from the gate, which is why this
+         * never showed up in development.)
+         */
+        fun openAppInfo(context: Context) {
+            runCatching {
+                context.startActivity(
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                        .setData(Uri.fromParts("package", context.packageName, null))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }
         }
     }
 }

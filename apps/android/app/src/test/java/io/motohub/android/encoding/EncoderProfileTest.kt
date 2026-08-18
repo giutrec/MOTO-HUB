@@ -25,6 +25,47 @@ class EncoderProfileTest {
     }
 
     @Test
+    fun `a GOP this codec cannot repair falls back to all-intra`() {
+        // Without intra refresh nothing repairs the picture between keyframes, so every frame the
+        // link drops smears the TFT until the next IDR - green macroblocks on a CFMOTO MTX800,
+        // while Android Auto's all-intra stream on the same phone stayed clean.
+        assertEquals(
+            0,
+            effectiveKeyframeIntervalSeconds(
+                requestedSeconds = 1,
+                plainGopWithoutIntraRefresh = false,
+                intraRefreshAvailable = false
+            )
+        )
+    }
+
+    @Test
+    fun `a GOP backed by intra refresh is kept`() {
+        assertEquals(
+            1,
+            effectiveKeyframeIntervalSeconds(
+                requestedSeconds = 1,
+                plainGopWithoutIntraRefresh = false,
+                intraRefreshAvailable = true
+            )
+        )
+    }
+
+    @Test
+    fun `a profile that refused intra refresh keeps its plain GOP`() {
+        // Yunmo splits real keyframes into three wire frames and KOVE's decoder froze on refresh:
+        // those GOPs are deliberate, not a codec capability the encoder gets to second-guess.
+        assertEquals(
+            2,
+            effectiveKeyframeIntervalSeconds(
+                requestedSeconds = 2,
+                plainGopWithoutIntraRefresh = true,
+                intraRefreshAvailable = false
+            )
+        )
+    }
+
+    @Test
     fun `negotiated T-Box profile defaults to the all-intra stream`() {
         // AA projection and mirroring pace frames by dropping encoder output, which is only
         // decodable on an all-intra stream; GOP encoding is an explicit per-session opt-in.

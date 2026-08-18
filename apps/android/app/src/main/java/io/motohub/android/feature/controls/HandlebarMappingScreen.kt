@@ -22,15 +22,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -50,10 +49,13 @@ import io.motohub.android.androidauto.AndroidAutoRuntime
 import io.motohub.android.androidauto.AndroidAutoRuntimeState
 import io.motohub.android.data.MotorcycleProfileStore
 import io.motohub.android.i18n.motoHubText
+import io.motohub.android.ui.components.MotoHubDialogBody
 import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.session.ProjectionEventLog
+import androidx.compose.foundation.layout.fillMaxSize
 import io.motohub.android.ui.components.MonoLabel
 import io.motohub.android.ui.components.MotoHubDetailScreen
+import io.motohub.android.ui.components.ScreenSlideTransition
 import io.motohub.android.ui.components.ToggleRow
 import io.motohub.android.ui.theme.MotoHubFavorite
 import io.motohub.android.ui.theme.MotoHubLive
@@ -109,43 +111,120 @@ fun HandlebarMappingScreen(
     BackHandler(enabled = calibrating) { calibrating = false }
     BackHandler(enabled = editing != null) { editing = null }
 
-    if (calibrating) {
-        HandlebarCalibrationScreen(
-            onDone = {
-                revision++
-                calibrating = false
-                // The taught set may have just changed whether volume presses exist on this
-                // handlebar — a live capture must re-decide the volume pin NOW, not at the
-                // next session (stale pin = phone volume keys acting as handlebar presses).
-                MediaButtonBridge.refreshVolumeGestureUse()
-            }
-        )
-        return
-    }
-
     val pressBeingEdited = editing
-    if (pressBeingEdited != null) {
-        val gesture = HandlebarCalibration.gestureFor(context, pressBeingEdited)
-        if (gesture != null) {
-            HandlebarActionPicker(
-                title = pressBeingEdited.label,
-                current = HandlebarControlStore.action(context, gesture),
+    val editingGesture = pressBeingEdited?.let { HandlebarCalibration.gestureFor(context, it) }
+    // A press with nothing taught for it yet cannot be edited - drop back to the list rather
+    // than open a picker for a gesture that does not exist.
+    if (pressBeingEdited != null && editingGesture == null) editing = null
+
+    val screenState = when {
+        calibrating -> HandlebarScreenState.Calibrating
+        pressBeingEdited != null && editingGesture != null ->
+            HandlebarScreenState.Editing(pressBeingEdited, editingGesture)
+        else -> HandlebarScreenState.List
+    }
+    ScreenSlideTransition(
+        screen = screenState,
+        isBase = { it is HandlebarScreenState.List },
+        modifier = Modifier.fillMaxSize()
+    ) { shown ->
+        when (shown) {
+            HandlebarScreenState.Calibrating -> HandlebarCalibrationScreen(
+                onDone = {
+                    revision++
+                    calibrating = false
+                    // The taught set may have just changed whether volume presses exist on this
+                    // handlebar — a live capture must re-decide the volume pin NOW, not at the
+                    // next session (stale pin = phone volume keys acting as handlebar presses).
+                    MediaButtonBridge.refreshVolumeGestureUse()
+                }
+            )
+            is HandlebarScreenState.Editing -> HandlebarActionPicker(
+                title = shown.press.label,
+                current = HandlebarControlStore.action(context, shown.gesture),
                 onPicked = { action ->
-                    HandlebarControlStore.setAction(context, gesture, action)
+                    HandlebarControlStore.setAction(context, shown.gesture, action)
                     ProjectionEventLog.record(
                         "CONTROLS",
-                        "Handlebar ${pressBeingEdited.id} (${gesture.id}) -> ${action.id}"
+                        "Handlebar ${shown.press.id} (${shown.gesture.id}) -> ${action.id}"
                     )
                     revision++
                     editing = null
                 },
                 onBack = { editing = null }
             )
-            return
+            HandlebarScreenState.List -> HandlebarListContent(
+                context = context,
+                backLabel = backLabel,
+                onBack = onBack,
+                revision = revision,
+                litGesture = litGesture,
+                onTeach = {
+                    // The wizard only ever sees a press through a live capture (MediaButtonBridge
+                    // captureActive), so with no Android Auto session at all there is nothing to
+                    // teach from and it would just sit there looking broken. Asked before it
+                    // opens rather than inside it, so the rider is never left guessing why
+                    // nothing on the motorcycle does anything once it has.
+                    val sessionRunning = androidAutoState is AndroidAutoRuntimeState.Streaming ||
+                        androidAutoState is AndroidAutoRuntimeState.ReceiverReady ||
+                        androidAutoState is AndroidAutoRuntimeState.Preparing
+                    if (sessionRunning) calibrating = true else showTeachPrerequisiteDialog = true
+                },
+                onEdit = { editing = it },
+                onReset = {
+                    HandlebarControlStore.reset(context)
+                    revision++
+                    ProjectionEventLog.record("CONTROLS", "Handlebar mapping reset to defaults.")
+                }
+            )
         }
-        editing = null
     }
+    if (showTeachPrerequisiteDialog) {
+        HandlebarTeachPrerequisiteDialog(
+            motorcycles = remember { MotorcycleProfileStore(context).loadAll() },
+            onConnect = { profile ->
+                ProjectionEventLog.record(
+                    "CONTROLS",
+                    "Handlebar teach requested a connect to ${profile.ssid} to get a live session."
+                )
+                HandlebarTeachPrerequisiteRequest.publish(
+                    HandlebarTeachPrerequisiteRequest.Choice.Connect(profile.id)
+                )
+                awaitingSessionForTeach = true
+                showTeachPrerequisiteDialog = false
+            },
+            onPhoneOnly = {
+                ProjectionEventLog.record(
+                    "CONTROLS",
+                    "Handlebar teach requested a phone-only Android Auto session."
+                )
+                HandlebarTeachPrerequisiteRequest.publish(HandlebarTeachPrerequisiteRequest.Choice.PhoneOnly)
+                awaitingSessionForTeach = true
+                showTeachPrerequisiteDialog = false
+            },
+            onDismiss = { showTeachPrerequisiteDialog = false }
+        )
+    }
+}
 
+/** The list's own destinations - a screen key for [ScreenSlideTransition], not shared state. */
+private sealed interface HandlebarScreenState {
+    data object List : HandlebarScreenState
+    data object Calibrating : HandlebarScreenState
+    data class Editing(val press: PhysicalPress, val gesture: HandlebarGesture) : HandlebarScreenState
+}
+
+@Composable
+private fun HandlebarListContent(
+    context: android.content.Context,
+    backLabel: String,
+    onBack: () -> Unit,
+    revision: Int,
+    litGesture: HandlebarGesture?,
+    onTeach: () -> Unit,
+    onEdit: (PhysicalPress) -> Unit,
+    onReset: () -> Unit
+) {
     MotoHubDetailScreen(
         title = motoHubText("Handlebar"),
         backLabel = backLabel,
@@ -167,21 +246,7 @@ fun HandlebarMappingScreen(
         LiveCaptureBanner(litGesture)
 
         Button(
-            onClick = {
-                // Calibration only ever sees anything through a live capture (MediaButtonBridge
-                // captureActive) - with no Android Auto session at all there is nothing to
-                // teach from, and the wizard would just sit there looking broken. Checked here
-                // rather than inside the wizard so the rider is asked before it opens, not left
-                // to guess why nothing on the motorcycle does anything once it has.
-                val sessionRunning = androidAutoState is AndroidAutoRuntimeState.Streaming ||
-                    androidAutoState is AndroidAutoRuntimeState.ReceiverReady ||
-                    androidAutoState is AndroidAutoRuntimeState.Preparing
-                if (sessionRunning) {
-                    calibrating = true
-                } else {
-                    showTeachPrerequisiteDialog = true
-                }
-            },
+            onClick = onTeach,
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(16.dp)
         ) {
@@ -192,50 +257,19 @@ fun HandlebarMappingScreen(
                 fontWeight = FontWeight.Bold
             )
         }
-        if (showTeachPrerequisiteDialog) {
-            HandlebarTeachPrerequisiteDialog(
-                motorcycles = remember { MotorcycleProfileStore(context).loadAll() },
-                onConnect = { profile ->
-                    ProjectionEventLog.record(
-                        "CONTROLS",
-                        "Handlebar teach requested a connect to ${profile.ssid} to get a live session."
-                    )
-                    HandlebarTeachPrerequisiteRequest.publish(
-                        HandlebarTeachPrerequisiteRequest.Choice.Connect(profile.id)
-                    )
-                    awaitingSessionForTeach = true
-                    showTeachPrerequisiteDialog = false
-                },
-                onPhoneOnly = {
-                    ProjectionEventLog.record(
-                        "CONTROLS",
-                        "Handlebar teach requested a phone-only Android Auto session."
-                    )
-                    HandlebarTeachPrerequisiteRequest.publish(HandlebarTeachPrerequisiteRequest.Choice.PhoneOnly)
-                    awaitingSessionForTeach = true
-                    showTeachPrerequisiteDialog = false
-                },
-                onDismiss = { showTeachPrerequisiteDialog = false }
-            )
-        }
-
         HandlebarCalibration.presentButtons(context).forEach { button ->
             ButtonCard(
                 button = button,
                 revision = currentRevision,
                 litGesture = litGesture,
-                onEdit = { editing = it }
+                onEdit = onEdit
             )
         }
 
         HandlebarTimingSection()
 
         OutlinedButton(
-            onClick = {
-                HandlebarControlStore.reset(context)
-                revision++
-                ProjectionEventLog.record("CONTROLS", "Handlebar mapping reset to defaults.")
-            },
+            onClick = onReset,
             modifier = Modifier.fillMaxWidth()
         ) { Text(motoHubText("Reset actions to defaults")) }
     }
@@ -256,52 +290,48 @@ private fun HandlebarTeachPrerequisiteDialog(
     onPhoneOnly: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Text(
-                    motoHubText("Android Auto isn't running"),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+    // Same AlertDialog shape as every other dialog in the app, body wrapped in MotoHubDialogBody
+    // so a rider with several saved motorcycles - or a large system font - can still scroll to
+    // the last option instead of having it clipped away.
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(motoHubText("Android Auto isn't running")) },
+        text = {
+            MotoHubDialogBody {
                 Text(
                     motoHubText(
                         "Teaching the handlebar needs a live Android Auto session to capture " +
                             "presses. Connect to the motorcycle, or start it on this phone " +
                             "without a T-Box."
                     ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaterialTheme.typography.bodyMedium
                 )
-                if (motorcycles.isNotEmpty()) {
-                    HorizontalDivider()
-                    motorcycles.forEach { profile ->
-                        OutlinedButton(
-                            onClick = { onConnect(profile) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                motoHubText(
-                                    "Connect to %1\$s",
-                                    profile.displayName?.takeIf(String::isNotBlank) ?: profile.ssid
-                                )
+                motorcycles.forEach { profile ->
+                    OutlinedButton(
+                        onClick = { onConnect(profile) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            motoHubText(
+                                "Connect to %1\$s",
+                                profile.displayName?.takeIf(String::isNotBlank) ?: profile.ssid
                             )
-                        }
+                        )
                     }
                 }
-                HorizontalDivider()
-                Button(onClick = onPhoneOnly, modifier = Modifier.fillMaxWidth()) {
-                    Text(motoHubText("Start on this phone (no T-Box)"), fontWeight = FontWeight.Bold)
-                }
-                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                    Text(motoHubText("Cancel"))
-                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onPhoneOnly) {
+                Text(motoHubText("Start on this phone (no T-Box)"))
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) {
+                Text(motoHubText("Cancel"))
             }
         }
-    }
+    )
 }
 
 /**

@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import io.motohub.android.session.ProjectionRuntime
 import io.motohub.android.session.ProjectionRuntimeState
 import io.motohub.android.session.ProjectionEventLog
+import io.motohub.android.tbox.ThinkerRideProtocol
 import io.motohub.android.tbox.TBoxSessionRegistry
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -146,6 +147,17 @@ class NetworkDiagnosticsViewModel(application: Application) : AndroidViewModel(a
                 NetworkDiagnosticStatus.SKIPPED,
                 "T-Box not discovered. First tap CONNECT AND FIND T-BOX."
             )
+        // On ThinkerRide the roles are inverted: the phone runs the servers and the dash dials
+        // in, so the registry's "host" is this phone. Probing it proved nothing (it always
+        // passed, by connecting to ourselves) and the transport counted the probe as the dash
+        // arriving on the video channel.
+        if (handle.host.packageName == ThinkerRideProtocol.PACKAGE_TAG) {
+            return check(
+                NetworkDiagnosticId.TBOX_TCP,
+                NetworkDiagnosticStatus.SKIPPED,
+                "This dashboard connects to the phone, so there is no port on it to probe."
+            )
+        }
         val network = handle.networkConnector.currentNetwork()
             ?: return check(
                 NetworkDiagnosticId.TBOX_TCP,

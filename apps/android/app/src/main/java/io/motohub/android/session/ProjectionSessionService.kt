@@ -21,6 +21,8 @@ import androidx.core.content.ContextCompat
 import io.motohub.android.R
 import io.motohub.android.encoding.AdaptiveVideoController
 import io.motohub.android.encoding.AvcEncoder
+import io.motohub.android.encoding.EncoderProfile
+import io.motohub.android.encoding.JpegDisplaySource
 import io.motohub.android.encoding.VideoBackpressureGuard
 import io.motohub.android.androidauto.DisplayGeometry
 import io.motohub.android.androidauto.TBoxDisplayGeometryStore
@@ -28,9 +30,11 @@ import io.motohub.android.feature.settings.MotoHubSettings
 import io.motohub.android.tbox.TBoxEvent
 import io.motohub.android.tbox.TBoxLinkResolver
 import io.motohub.android.tbox.TBoxModelProfile
+import io.motohub.android.tbox.TBoxTransportFamily
 import io.motohub.android.tbox.ProfileOverride
 import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxNetworkEvent
+import io.motohub.android.tbox.SelectingTBoxTransport
 import io.motohub.android.tbox.TBoxSessionHandle
 import io.motohub.android.tbox.TBoxSessionRegistry
 import io.motohub.android.tbox.TBoxStreamingLocks
@@ -54,6 +58,8 @@ class ProjectionSessionService : Service() {
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var encoder: AvcEncoder? = null
+    /** Set only on the JPEG-stills path; null for every dash that receives video. */
+    private var jpegSource: JpegDisplaySource? = null
     private val adaptiveVideoController = AdaptiveVideoController(this, ::log)
     private var adaptiveJob: Job? = null
     private val streamingLocks = TBoxStreamingLocks(this, "Mirroring")
@@ -192,7 +198,25 @@ class ProjectionSessionService : Service() {
             bitRate = quality.bitrateFor(
                 modelProfile.encoderBitRate ?: configuration.encoderProfile.bitRate
             ),
-            keyframeIntervalSeconds = modelProfile.encoderKeyframeIntervalSeconds
+            keyframeIntervalSeconds = modelProfile.encoderKeyframeIntervalSeconds,
+            // Yunmo's split framing needs real keyframes to split; intra refresh would make them
+            // rare. A profile can also demand plain IDRs for its decoder's sake (KOVE froze on
+            // intra refresh); every other EasyConn dash keeps intra refresh.
+            plainGopWithoutIntraRefresh =
+                modelProfile.encoderPlainGopWithoutIntraRefresh ||
+                    modelProfile.transportFamily == TBoxTransportFamily.YUNMO,
+            // ThinkerRide's video header declares the exact stream size; encode precisely that
+            // instead of the 16-aligned canvas, like the reference app does.
+            width = if (modelProfile.encoderUsesExactVideoArea) {
+                configuration.rawArea.width
+            } else {
+                configuration.encoderProfile.width
+            },
+            height = if (modelProfile.encoderUsesExactVideoArea) {
+                configuration.rawArea.height
+            } else {
+                configuration.encoderProfile.height
+            }
         )
         ProjectionEventLog.record("T-BOX", "Handshake completed.")
         if (configuration.source == TBoxVideoAreaSource.LIVE) {
@@ -229,6 +253,17 @@ class ProjectionSessionService : Service() {
             // thread is the right place to receive it.
             projection.registerCallback(projectionCallback, mainHandler)
             backpressureGuard = VideoBackpressureGuard()
+
+            // The one dash that is fed stills instead of video. Everything below this block - the
+            // encoder, its surface, the adaptive controller - is the path every other motorcycle
+            // takes, unchanged; this branch returns before reaching any of it. `encoder` stays null,
+            // which every later call site already tolerates (`encoder?.`, and the adaptive
+            // controller's onTick returns immediately on a null encoder).
+            if (modelProfile.yunmoJpegVideo) {
+                startJpegCapture(projection, profile, modelProfile, handle)
+                return
+            }
+
             val activeEncoder = AvcEncoder(
                 profile = profile,
                 onAccessUnit = { accessUnit ->
@@ -485,6 +520,8 @@ class ProjectionSessionService : Service() {
         virtualDisplay = null
         encoder?.stop()
         encoder = null
+        jpegSource?.stop()
+        jpegSource = null
         adaptiveVideoController.reset()
         mediaProjection?.unregisterCallback(projectionCallback)
         if (stopProjection) mediaProjection?.stop()
@@ -602,7 +639,11 @@ class ProjectionSessionService : Service() {
     }
 
     private fun Intent.parcelableIntent(key: String): Intent? =
-        getParcelableExtra(key, Intent::class.java)
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            getParcelableExtra(key, Intent::class.java)
+        } else {
+            @Suppress("DEPRECATION") getParcelableExtra(key) as? Intent
+        }
 
     companion object {
         private const val SESSION_CONSUMER = "mirroring"
@@ -647,5 +688,61 @@ class ProjectionSessionService : Service() {
                 Intent(context, ProjectionSessionService::class.java).setAction(ACTION_RESTORE_DISPLAY)
             )
         }
+    }
+
+    /**
+     * Captures the display as JPEG stills for a profile that asks for them, and hands each one to
+     * the Yunmo transport.
+     *
+     * Split out rather than inlined so the encoder path above reads exactly as it did before. The
+     * two share only the media projection and the virtual-display call; there is no encoder here,
+     * no bitrate to adapt and no access units, so none of the surrounding machinery applies.
+     */
+    private fun startJpegCapture(
+        projection: android.media.projection.MediaProjection,
+        profile: EncoderProfile,
+        modelProfile: TBoxModelProfile,
+        handle: TBoxSessionHandle
+    ) {
+        val transport = handle.transport
+        val source = JpegDisplaySource(
+            width = profile.width,
+            height = profile.height,
+            frameRate = profile.frameRate,
+            onFrame = { jpeg, frameId ->
+                val accepted = (transport as? SelectingTBoxTransport)
+                    ?.offerJpegFrame(jpeg, frameId) ?: false
+                if (accepted) {
+                    val sent = framesAccepted.incrementAndGet()
+                    if (sent == 1L || sent % FRAME_LOG_INTERVAL == 0L) {
+                        ProjectionEventLog.record("JPEG", "Stills sent to the dashboard: $sent.")
+                    }
+                }
+                accepted
+            },
+            onFailure = { failure ->
+                serviceScope.launch { if (!stopping) fail("JPEG capture stopped: ${failure.message}") }
+            }
+        )
+        source.start()
+        val surface = source.surface ?: error("JPEG capture has no surface")
+        jpegSource = source
+        mediaProjection = projection
+        virtualDisplay = projection.createVirtualDisplay(
+            "MOTO-HUB capture",
+            profile.width,
+            profile.height,
+            modelProfile.virtualDisplayDpi ?: resources.displayMetrics.densityDpi,
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+            surface,
+            null,
+            null
+        ) ?: error("Virtual display was not created")
+        ProjectionRuntime.publish(ProjectionRuntimeState.Streaming)
+        ProjectionEventLog.record(
+            "SERVICE",
+            "Android capture and streaming are active (JPEG stills, ${profile.width}x${profile.height})."
+        )
+        scheduleAutoDim()
     }
 }

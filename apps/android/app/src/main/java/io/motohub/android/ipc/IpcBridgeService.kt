@@ -183,6 +183,13 @@ class IpcBridgeService : Service() {
 
         override fun getContractVersion(): Int = IpcBridgeContract.CONTRACT_VERSION
 
+        // Read after a false connect(), so the caller can put Core's own reason in front of its
+        // rider instead of "Core failed to connect to the T-Box" plus whichever help it happens
+        // to have. Not cleared here: the caller may ask more than once (log it, then show it).
+        override fun getLastConnectFailure(): String? = CoreConnectFailureRecord.reason()
+
+        override fun getLastConnectFailureStage(): Int = CoreConnectFailureRecord.stage()
+
         // The caller formed the Wi-Fi Direct group in its own process and passes the addresses it
         // resolved there, because this one cannot resolve them for a group it did not form. Bad
         // addresses are refused here rather than deep in the connect: a caller that cannot say
@@ -660,6 +667,25 @@ class IpcBridgeService : Service() {
                         "Handlebar configuration mirrored from companion: " +
                             "enabled=${settings.handlebarControlsEnabled}."
                     )
+                }
+            }
+            // The Bluetooth dash-clock channel lives here in Core, so the companion's copy of the
+            // switch has to be mirrored or flipping it there configures a process that never reads
+            // it. Gated like the handlebar block: Core offers this toggle in its own settings too,
+            // and a caller that predates the field would otherwise push a default `false` over a
+            // rider's own choice.
+            if (settings.bluetoothClockSyncProvided) {
+                runCatching {
+                    MotoHubSettings.setBluetoothClockSync(ctx, settings.bluetoothClockSync)
+                    ProjectionEventLog.record(
+                        "IPC_AA",
+                        "Bluetooth dash-clock sync mirrored from companion: " +
+                            "enabled=${settings.bluetoothClockSync}."
+                    )
+                    // The transport already decided about this channel when it connected, seconds
+                    // before this parcel arrived, so acting on the value now is what makes the
+                    // rider's first ride after enabling behave like every later one.
+                    io.motohub.android.tbox.EcBtpClockChannel.refresh(ctx)
                 }
             }
             ProjectionEventLog.record("IPC_AA", "Applied companion Android Auto settings snapshot.")

@@ -133,11 +133,7 @@ class YunmoTransport(context: Context) : TBoxTransport {
             val mapNav = profile?.yunmoMapNavExperiment == true
 
             teardownSession()
-            val created = Session(
-                mapNavMode = mapNav,
-                typedMediaHeader = profile?.yunmoTypedMediaHeader == true,
-                frameMetadata = profile?.yunmoFrameMetadata == true
-            )
+            val created = Session(mapNavMode = mapNav)
             synchronized(sessionLock) { session = created }
             try {
                 created.connect(activeLink, host)
@@ -151,13 +147,6 @@ class YunmoTransport(context: Context) : TBoxTransport {
                 // reply the dash is not going to send yet, then fall back to the profile geometry
                 // and encode a 1024x464 panel at 800x480. A dash that does answer immediately is
                 // unaffected: the reply is collected by the receive loop either way.
-                // Names the header variant in the log, so a field report saying "test C painted"
-                // can be matched to the wire settings without trusting anyone's memory.
-                created.phase(
-                    "header variant: media type=" +
-                        (if (created.typedMediaHeader) "derived per frame" else "fixed 2") +
-                        ", frame id/size=" + (if (created.frameMetadata) "written" else "zero")
-                )
                 created.sendDimQuery()
                 created.beginMode()
                 val report = created.awaitDimensions()
@@ -184,6 +173,18 @@ class YunmoTransport(context: Context) : TBoxTransport {
                 throw failure
             }
         }
+    }
+
+    /**
+     * Offers one JPEG still, for the profile that captures instead of encoding.
+     *
+     * Deliberately NOT part of [TBoxTransport]: no other transport has any use for it, and adding
+     * it to the interface would force EasyConn and ThinkerRide to carry a method about a format
+     * they never speak. The session service reaches it through [SelectingTBoxTransport].
+     */
+    fun offerJpegFrame(jpeg: ByteArray, frameId: Int): Boolean {
+        val active = session ?: return false
+        return active.offerJpegFrame(jpeg, frameId)
     }
 
     override fun offerAccessUnit(avcc: ByteArray): Boolean {
@@ -218,11 +219,7 @@ class YunmoTransport(context: Context) : TBoxTransport {
     }
 
     /** Everything owned by one dash connection, torn down as a unit. */
-    private inner class Session(
-        private val mapNavMode: Boolean,
-        val typedMediaHeader: Boolean,
-        val frameMetadata: Boolean
-    ) {
+    private inner class Session(private val mapNavMode: Boolean) {
         val fatalReported = AtomicBoolean(false)
         private val running = AtomicBoolean(false)
 
@@ -349,40 +346,36 @@ class YunmoTransport(context: Context) : TBoxTransport {
         }
 
         /**
-         * Enters the negotiated display mode.
+         * Enters the negotiated display mode, re-sending the request until the dash confirms.
          *
-         * The state-6 echo used to be a hard gate here, on the reasoning that neither a live
-         * socket nor an ack proves the dash is actually showing the full-screen map. That reasoning
-         * still holds, but the gate was the wrong lever: the OEM app does not send `A0 cmd=6` at
-         * all on this path and waits for no echo — it goes straight from the size query to
-         * encoding. Blocking on an echo the OEM never asks for meant a dash that behaves exactly
-         * like the OEM expects would time out and the session would abort without ever encoding a
-         * frame. So the request is still sent (harmless, and firmware that does echo confirms
-         * faster), but its absence is now a logged warning, not a failure.
-         *
-         * Whether the TFT actually paints remains the rider's business — see the hint carried in
-         * the no-echo phase line, and [YunmoProtocol.DISP_SIMPLE_NAVI] for the dash telling us
-         * mid-session that it switched away from the map.
+         * The OEM app sends this command through the *synchronous* form of its own send helper
+         * (`Trans_Ins(160, {6}, 1)` — the three-argument overload sets its `z` flag), which waits
+         * for the dash's reply and re-sends up to three times if none arrives. The dash answers
+         * ours around two seconds later, which is the same order as that timeout, so the OEM very
+         * likely sends this command more than once in practice. Sending it once and moving on was
+         * a difference from the OEM we could see in its source, so it is worth removing.
          */
         fun beginMode() {
-            if (mapNavMode) {
-                write(YunmoProtocol.mapNaviFrame())
-                phase("map-nav requested (A0 cmd=6)")
-                awaitMapNav()
-                frameId.set(0)
-                unackedSinceAck = 0
-                if (mapNavConfirmed) {
-                    phase("map-nav confirmed by dash")
-                } else {
-                    phase(
-                        "map-nav not echoed within ${MAP_NAV_TIMEOUT_MS}ms - streaming anyway " +
-                            "(the OEM app does not echo either). If the TFT stays black, select " +
-                            "the full-screen map view in the dash menu before connecting."
-                    )
-                }
-            } else {
+            if (!mapNavMode) {
                 YunmoProtocol.startMirrorFrames().forEach { write(it) }
                 phase("mirror requested (B0/A0 cmd=7)")
+                return
+            }
+            repeat(MODE_REQUEST_ATTEMPTS) { attempt ->
+                if (mapNavConfirmed || !running.get()) return@repeat
+                write(YunmoProtocol.mapNaviFrame())
+                phase("map-nav requested (A0 cmd=6), attempt ${attempt + 1}/$MODE_REQUEST_ATTEMPTS")
+                awaitMapNav()
+            }
+            if (!mapNavConfirmed) {
+                // The counter is normally reset by the confirmation itself; do it here only
+                // when none arrived, so a silent dash still starts from a known state.
+                frameId.set(0)
+                unackedSinceAck = 0
+                phase(
+                    "map-nav not confirmed after $MODE_REQUEST_ATTEMPTS attempts - streaming " +
+                        "anyway. If the TFT stays black, try the mirror profile variant instead."
+                )
             }
         }
 
@@ -415,6 +408,28 @@ class YunmoTransport(context: Context) : TBoxTransport {
             } catch (_: RejectedExecutionException) {
                 // A frame is already queued behind a slow socket; drop this one instead of
                 // building latency. VideoBackpressureGuard turns a persistent streak into a stop.
+                false
+            }
+        }
+
+        fun offerJpegFrame(jpeg: ByteArray, frameId: Int): Boolean {
+            if (!running.get()) return false
+            // The dash draws its own arrows in SimpleNavi and discards whatever arrives; skipping
+            // keeps the capture draining so the resume is immediate.
+            if (simpleNaviActive) return true
+            return try {
+                frameExecutor.execute {
+                    try {
+                        if (!waitForSendWindow() || !running.get()) return@execute
+                        write(YunmoProtocol.encodeJpegEx(jpeg, frameId))
+                        phaseOnce("jpeg") { "first JPEG still out (${jpeg.size}b, id=$frameId)" }
+                        unackedSinceAck++
+                    } catch (failure: IOException) {
+                        reportFatal("The dashboard video connection dropped: ${failure.message}")
+                    }
+                }
+                true
+            } catch (_: RejectedExecutionException) {
                 false
             }
         }
@@ -484,19 +499,8 @@ class YunmoTransport(context: Context) : TBoxTransport {
          */
         private fun writeFrame(accessUnit: ByteArray) {
             val id = frameId.getAndIncrement()
-            val mediaType = if (typedMediaHeader) {
-                YunmoProtocol.mediaTypeFor(accessUnit)
-            } else {
-                YunmoProtocol.MEDIA_TYPE_LEGACY
-            }
-            val frame = YunmoProtocol.encodeH264Ex(
-                accessUnit,
-                canvasWidth,
-                canvasHeight,
-                id,
-                mediaType = mediaType,
-                omitMeta = !frameMetadata
-            )
+            // Fixed media type 2, metadata left zero — the exact header the OEM app writes.
+            val frame = YunmoProtocol.encodeH264Ex(accessUnit, canvasWidth, canvasHeight, id)
             write(frame)
         }
 
@@ -541,17 +545,25 @@ class YunmoTransport(context: Context) : TBoxTransport {
                             pendingDim = dimension
                             phase("dash reported ${dimension.reportedWidth}x${dimension.reportedHeight}")
                             synchronized(dimLock) { dimLock.notifyAll() }
-                        } else if (frame.payload.isEmpty()) {
-                            // The OEM's `CTRL_RX a=51 b=0`, confirmed on our own wire: an empty OK
-                            // right after the canvas report. In the OEM capture this is what the
-                            // app answers with its 0xA1..0xAA control burst before the TFT paints.
-                            // We do not send that burst - its payloads have never been captured -
-                            // so this is recorded as the point where our flow and the OEM's part.
-                            phaseOnce("state-confirm") {
-                                "dash sent the empty OK state confirmation (0x33) - the point where " +
-                                    "the OEM app answers with its 0xA1..0xAA control burst, which we " +
-                                    "do not reproduce"
+                        } else if (frame.command == YunmoProtocol.CMD_OK_B && mapNavMode) {
+                            // THIS is the map-nav confirmation, and we spent days looking for it in
+                            // the wrong shape. The OEM app's listener keys on the command byte alone
+                            // (`i == 51`, GoogleMediaCodecH264LiveThread) and answers it by entering
+                            // map-nav and calling ResetFrameID; it never waits for an inbound A0{6},
+                            // which is what this transport used to look for and never saw. The dash
+                            // had been answering all along, ~2s after the request and well inside
+                            // our own timeout, under a command we were logging and discarding.
+                            //
+                            // The frame counter resets HERE rather than when the request was sent:
+                            // the OEM resets on the dash's confirmation, so the first frame the dash
+                            // sees numbered zero is the first one it was actually ready for.
+                            if (!mapNavConfirmed) {
+                                mapNavConfirmed = true
+                                frameId.set(0)
+                                unackedSinceAck = 0
+                                phase("dash confirmed map-nav (0x33) - frame counter reset")
                             }
+                            synchronized(ackLock) { ackLock.notifyAll() }
                         } else {
                             logUnrecognised(frame, "OK frame that is not a canvas report")
                         }
@@ -656,6 +668,9 @@ class YunmoTransport(context: Context) : TBoxTransport {
 
         const val DIM_TIMEOUT_MS = 5_000L
         const val MAP_NAV_TIMEOUT_MS = 2_500L
+
+        /** Matches the OEM's own retry count for the synchronous form of this command. */
+        const val MODE_REQUEST_ATTEMPTS = 3
         const val SEND_WINDOW_TIMEOUT_MS = 2_000L
 
         /** Roughly every few seconds at this dash's frame rate; enough to show acks still flow. */

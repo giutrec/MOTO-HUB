@@ -133,6 +133,26 @@ class TBoxNetworkConnector(context: Context) {
      */
     @Volatile
     private var processBindingSuspended = false
+
+    /**
+     * Set when Android refused the process binding AND a VPN was demonstrably holding the route to
+     * the dash; null otherwise, including when the binding was refused for some other reason.
+     *
+     * The refusal itself no longer fails the connection - see `onLinkPropertiesChanged` - so this
+     * exists for the failure that may come *later*: if the dash then turns out to be unreachable,
+     * whoever reports that has the one sentence that explains why, instead of a timeout that
+     * looks like a dash which is switched off.
+     */
+    @Volatile
+    private var processBindingRefusal: String? = null
+
+    /**
+     * The VPN diagnosis behind a refused process binding, when there is one. Null means nothing
+     * observed points at a VPN - which is not the same as "no VPN is installed", and is
+     * deliberately not reported as one.
+     */
+    fun vpnRoutingDiagnosis(): String? = processBindingRefusal
+
     @Volatile
     private var rejoinJob: Job? = null
 
@@ -217,8 +237,9 @@ class TBoxNetworkConnector(context: Context) {
                 throw cancelled
             } catch (failure: Throwable) {
                 ProjectionEventLog.error("NETWORK", "T-Box AP request failed.", failure)
-                // activeVpnLabel() omitted here: merely having a VpnService-based app present isn't evidence this failure caused it.
-                val vpnMessage = TBoxVpnDiagnostics.userFacingMessage(failure, activeVpnLabel = null)
+                // routing omitted here: there is no granted network to test a VPN's routes against,
+                // so only the error itself can carry the evidence.
+                val vpnMessage = TBoxVpnDiagnostics.userFacingMessage(failure, routing = null)
                 Result.failure(vpnMessage?.let { IllegalStateException(it, failure) } ?: failure)
             }
         }
@@ -231,26 +252,28 @@ class TBoxNetworkConnector(context: Context) {
         // is already there instead: first the granted network, then the still-pending request.
         if (activeProfile?.ssid == profile.ssid) {
             activeNetwork?.let { existing ->
-                val rebindFailure = runCatching {
-                    if (!processBindingSuspended && processBoundNetwork == null) {
-                        check(connectivityManager.bindProcessToNetwork(existing)) {
-                            "Android cannot restore the binding to the T-Box network."
-                        }
+                // A refused binding is not a reason to throw this network away and start the join
+                // again - the sockets are bound to the network itself, not to the process route.
+                // It used to be, and on a phone whose VPN refuses every binding that turned one
+                // reusable network into an endless re-request loop.
+                if (!processBindingSuspended && processBoundNetwork == null) {
+                    if (runCatching { connectivityManager.bindProcessToNetwork(existing) }
+                            .getOrDefault(false)
+                    ) {
                         processBoundNetwork = existing
+                    } else {
+                        ProjectionEventLog.warning(
+                            "NETWORK",
+                            "Reusing the active T-Box network $existing unbound: Android refused to " +
+                                "restore the process binding."
+                        )
                     }
-                }.exceptionOrNull()
-                if (rebindFailure == null) {
-                    ProjectionEventLog.record(
-                        "NETWORK",
-                        "Reusing the active T-Box network $existing for ${profile.ssid}."
-                    )
-                    return Result.success(existing)
                 }
-                ProjectionEventLog.warning(
+                ProjectionEventLog.record(
                     "NETWORK",
-                    "Active T-Box network could not be re-bound; requesting a fresh one.",
-                    rebindFailure
+                    "Reusing the active T-Box network $existing for ${profile.ssid}."
                 )
+                return Result.success(existing)
             }
             if (pendingRequestSsid == profile.ssid) {
                 ProjectionEventLog.record(
@@ -415,16 +438,28 @@ class TBoxNetworkConnector(context: Context) {
         ProjectionEventLog.record("NETWORK", "Process binding released; result=$released. T-Box request remains active.")
     }
 
-    /** Rebinds reverse EasyConn sockets to the still-requested T-Box network. */
+    /**
+     * Rebinds reverse EasyConn sockets to the still-requested T-Box network.
+     *
+     * Losing the network is a failure; being refused the binding on a network that is still there
+     * is not. The dashboard resumes over network-bound sockets either way, and failing here used
+     * to end a ride that was about to carry on perfectly well.
+     */
     @Synchronized
     fun rebindProcessToTBox(): Result<Network> = runCatching {
         processBindingSuspended = false
         val network = checkNotNull(activeNetwork) { "The T-Box network is no longer available." }
-        check(connectivityManager.bindProcessToNetwork(network)) {
-            "Android cannot restore the binding to the T-Box network."
+        if (runCatching { connectivityManager.bindProcessToNetwork(network) }.getOrDefault(false)) {
+            processBoundNetwork = network
+            ProjectionEventLog.record("NETWORK", "Process rebound to T-Box network=$network.")
+        } else {
+            processBoundNetwork = null
+            ProjectionEventLog.warning(
+                "NETWORK",
+                "Android refused to rebind the process to T-Box network=$network; carrying on with " +
+                    "network-bound sockets."
+            )
         }
-        processBoundNetwork = network
-        ProjectionEventLog.record("NETWORK", "Process rebound to T-Box network=$network.")
         network
     }.onFailure { ProjectionEventLog.error("NETWORK", "Unable to restore T-Box process binding.", it) }
 
@@ -743,19 +778,34 @@ class TBoxNetworkConnector(context: Context) {
                         }
                     }.exceptionOrNull()
                     if (bindFailure != null) {
-                        val activeVpn = activeVpnLabel()
-                        val message = TBoxVpnDiagnostics.userFacingMessage(bindFailure, activeVpn)
-                            ?: bindFailure.message.orEmpty()
-                        Log.e(TAG, "T-Box process binding rejected; activeVpn=$activeVpn", bindFailure)
-                        ProjectionEventLog.error(
+                        // NOT fatal, and this used to be. The process binding only moves this
+                        // process's DEFAULT route; every socket that actually talks to the dash is
+                        // bound to the network explicitly (TBoxLink.Infrastructure.createSocket
+                        // uses network.socketFactory) and the reverse servers the dash dials back
+                        // listen on the wildcard address, so neither needs it. Aborting here threw
+                        // away a network Android had just granted, complete with a usable IPv4 and
+                        // a gateway: a rider with a Tailscale exit node up got twelve of these in
+                        // forty seconds (OnePlus CPH2653, 1.1.73, 2026-08-15), each one a granted
+                        // network discarded before a single packet was sent to the dash. Carry on
+                        // unbound and let the connection fail on its own merits if the VPN really
+                        // is in the way - with LAN access allowed, it is not.
+                        val routing = TBoxVpnDiagnostics.inspect(connectivityManager, firstIpv4Gateway(linkProperties))
+                        processBoundNetwork = null
+                        processBindingRefusal = TBoxVpnDiagnostics
+                            .userFacingMessage(bindFailure, routing)
+                            ?.takeIf { routing?.capturesTBox == true }
+                        Log.w(TAG, "T-Box process binding rejected; continuing unbound", bindFailure)
+                        ProjectionEventLog.warning(
                             "NETWORK",
-                            "Process binding rejected for network=$network; activeVpn=${activeVpn ?: "none"}; " +
-                                "reason=$message."
+                            "Process binding rejected for network=$network (${bindFailure.message}); " +
+                                "vpn=${routing?.describe() ?: "none"}. Continuing with " +
+                                "network-bound sockets instead - this is only fatal if the dash " +
+                                "turns out to be unreachable."
                         )
-                        pendingFailure = IllegalStateException(message, bindFailure)
-                        releaseCallback(networkCallback)
+                        markConnected(network)
                         return
                     }
+                    processBindingRefusal = null
                     processBoundNetwork = network
                     markConnected(network)
                     Log.i(TAG, "T-Box Wi-Fi is active: ${profile.ssid}, addresses=$addresses")
@@ -984,8 +1034,9 @@ class TBoxNetworkConnector(context: Context) {
             currentNetwork()?.let { return Result.success(it) }
             pendingFailure?.let { failure ->
                 pendingFailure = null
-                // activeVpnLabel() omitted here: merely having a VpnService-based app present isn't evidence this failure caused it.
-                val vpnMessage = TBoxVpnDiagnostics.userFacingMessage(failure, activeVpnLabel = null)
+                // routing omitted here: there is no granted network to test a VPN's routes against,
+                // so only the error itself can carry the evidence.
+                val vpnMessage = TBoxVpnDiagnostics.userFacingMessage(failure, routing = null)
                 return Result.failure(vpnMessage?.let { IllegalStateException(it, failure) } ?: failure)
             }
             delay(NETWORK_POLL_MS)
@@ -1241,25 +1292,14 @@ class TBoxNetworkConnector(context: Context) {
 
     private fun normalizeSsid(value: String): String = value.trim().removeSurrounding("\"")
 
-    internal fun activeVpnLabel(): String? {
-        val capabilities = connectivityManager.allNetworks.asSequence()
-            .mapNotNull { connectivityManager.getNetworkCapabilities(it) }
-            .firstOrNull { it.hasTransport(NetworkCapabilities.TRANSPORT_VPN) }
-            ?: return null
-        val ownerUid = capabilities.ownerUid
-        val packageName = if (ownerUid >= 0) {
-            contextPackageManager.getPackagesForUid(ownerUid)?.firstOrNull()
-        } else {
-            null
-        }
-        val applicationLabel = packageName?.let { name ->
-            runCatching {
-                val info = contextPackageManager.getApplicationInfo(name, 0)
-                contextPackageManager.getApplicationLabel(info).toString()
-            }.getOrNull()
-        }
-        return applicationLabel?.takeIf { it.isNotBlank() } ?: "active"
-    }
+    /**
+     * The dash's own address on the network just joined, so a VPN's routes can be tested against
+     * something real rather than against the assumption that any VPN blocks everything.
+     */
+    private fun firstIpv4Gateway(linkProperties: LinkProperties): InetAddress? =
+        linkProperties.routes.asSequence()
+            .mapNotNull { it.gateway }
+            .firstOrNull { it is Inet4Address && !it.isAnyLocalAddress }
 
     private companion object {
         const val TAG = "TBoxNetwork"
@@ -1328,8 +1368,6 @@ class TBoxNetworkConnector(context: Context) {
          */
         const val INVALID_RSSI_DBM = -127
     }
-
-    private val contextPackageManager = context.applicationContext.packageManager
 }
 
 /**

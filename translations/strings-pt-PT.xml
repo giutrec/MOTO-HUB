@@ -8,6 +8,8 @@
     <string name="language_italian">Italiano</string>
     <string name="language_portuguese">Português</string>
     <string name="language_korean">한국어 (대한민국)</string>
+    <string name="language_french">Français</string>
+    <string name="language_spanish">Español</string>
     <string name="language_title">Idioma</string>
     <string name="language_description">Escolha o idioma utilizado pelo MOTO-HUB</string>
     <string name="language_detail_description">Por predefinição, o MOTO-HUB segue o idioma do telefone. Escolha abaixo um idioma diferente apenas para esta aplicação.</string>
@@ -92,1175 +94,593 @@
     <string name="ride_dashboard_notification_title">MOTO-HUB Ride Dashboard</string>
     <string name="ride_dashboard_notification_text">Telemetria GPS e dashboard ativas.</string>
     <string name="stop_ride_dashboard">Parar dashboard</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_moto_hub_diagnostics_ba6420b1">MOTO-HUB diagnostics</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_about_the_project_2feef1f7">ABOUT THE PROJECT</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_check_for_updates_66a2b53b">Check for updates</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_close_3e2edd8">Close</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_experimental_software_e22071df">EXPERIMENTAL SOFTWARE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_open_github_repository_80f9bf71">Open GitHub repository</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_platform_9e635873">PLATFORM</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_source_support_aa797bf0">SOURCE &amp; SUPPORT</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_version_3fc0a8b8">VERSION</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_fullscreen_7d6157db">Fullscreen</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_address_or_coordinates_9e7a90a">Address or coordinates</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_back_1f7907">Back</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_controls_e20faad6">Controls</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_cycle_panels_c623ab89">Cycle panels</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_everything_on_this_page_controls_the_projection__88534bf1">Everything on this page controls the projection currently shown on the motorcycle.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_exit_fullscreen_b7c93dd">Exit fullscreen</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_fullscreen_map_bafc2397">Fullscreen map</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_handlebar_controls_cf2abe6b">Handlebar controls</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_home_2268ff">Home</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_open_glove_friendly_fullscreen_controller_2d746356">Open glove-friendly fullscreen controller</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_reset_default_mapping_bd7464fe">Reset default mapping</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_scroll_ebe1cfb8">Scroll +</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_scroll_ebe1f19f">Scroll −</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_the_value_is_restored_when_handlebar_capture_is__ea95c499">The value is restored when handlebar capture is switched off.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_timing_9551dc6a">Timing</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_use_the_motorcycle_buttons_without_looking_down__1b06094c">Use the motorcycle buttons without looking down. The active projection receives the commands first.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_voice_4eff112">Voice</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_motorcycle_buttons_control_targetname_c5bca78f">Motorcycle buttons control $targetName</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_application_logs_ca54c69f">Application logs</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_clear_3e2c62d">Clear</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_copy_log_e59a8039">Copy log</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_no_diagnostic_events_have_been_recorded_290567d5">No diagnostic events have been recorded.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_persistent_events_from_wi_fi_t_box_mirroring_enc_679d01c0">Persistent events from Wi-Fi, T-Box, mirroring, encoder, and Android Auto.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_share_4c25fbf">Share</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_troubleshooting_f6bb8e3a">TROUBLESHOOTING</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_check_t_box_and_cellular_routes_without_starting_7ae11348">Check T-Box and cellular routes without starting a VPN or changing the default network.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_network_diagnostics_a4fc929a">Network diagnostics</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_no_network_snapshot_available_5baf5bb0">No network snapshot available.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_result_8fe0bc1d">RESULT</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_system_lab_433267fc">SYSTEM LAB</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_start_a_projection_to_populate_the_log_23fff8de">Start a projection to populate the log.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_add_a_motorcycle_by_scanning_its_t_box_qr_code_a77ba91f">Add a motorcycle by scanning its T-Box QR code.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_add_motorcycle_397b0e90">Add motorcycle</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_edit_20e22a">Edit</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_motorcycles_2c9478e2">Motorcycles</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_no_qr_connect_manually_8ad804ea">No QR? Connect manually</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_options_18bf1e7e">Options</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_saved_motorcycles_181a24a9">SAVED MOTORCYCLES</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_scan_a_qr_code_5a21ea0a">Scan a QR code</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_use_this_motorcycle_1204179a">Use this motorcycle</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_your_garage_c0aeffb4">YOUR GARAGE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_your_garage_is_empty_f25b99e3">Your garage is empty</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_connection_eeae6ade">CONNECTION</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_cancel_77df1a9a">Cancel</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_changes_are_saved_immediately_3ab73352">Changes are saved immediately.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_choose_how_the_complete_android_auto_image_is_fi_cb149112">Choose how the complete Android Auto image is fitted to the TFT.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_display_name_6697cf49">Display name</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_exclude_pixels_occupied_by_the_motorcycle_ui_the_c5210089">Exclude pixels occupied by the motorcycle UI. These values are stored for this </string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_for_example_300_1aa3b7a">For example: 300</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_for_example_mt700_adventure_4c1ae7c7">For example: MT700 Adventure</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_fuel_2195d6">Fuel</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_full_tank_range_on_a_fill_up_powers_the_fuel_ran_68a667ae">Full-tank range on a fill-up. Powers the fuel-range warning in navigation.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_identity_fbc2d4de">Identity</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_motorcycle_profile_bd90ddfa">MOTORCYCLE PROFILE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_make_it_yours_9dfd813d">Make it yours</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_override_the_automatic_profile_detection_for_thi_dcc5245b">Override the automatic profile detection for this motorcycle. Use only if the </string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_remove_91afe4a4">Remove</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_remove_motorcycle_c0498b52">Remove motorcycle?</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_remove_photo_7fa92bb6">Remove photo</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_remove_this_motorcycle_f21e94d7">Remove this motorcycle</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_reset_margins_ff05a94">Reset margins</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_t_box_identifier_modelid_2c1c9ebd">T-Box identifier: $modelId</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_tank_range_km_f16147b8">Tank range (km)</string>
+    <string name="legacy_moto_hub_diagnostics_ba6420b1">Diagnósticos MOTO-HUB</string>
+    <string name="legacy_about_the_project_2feef1f7">SOBRE O PROJETO</string>
+    <string name="legacy_check_for_updates_66a2b53b">Procurar atualizações</string>
+    <string name="legacy_close_3e2edd8">Fechar</string>
+    <string name="legacy_experimental_software_e22071df">SOFTWARE EXPERIMENTAL</string>
+    <string name="legacy_open_github_repository_80f9bf71">Abrir o repositório GitHub</string>
+    <string name="legacy_platform_9e635873">PLATAFORMA</string>
+    <string name="legacy_source_support_aa797bf0">CÓDIGO E APOIO</string>
+    <string name="legacy_version_3fc0a8b8">VERSÃO</string>
+    <string name="legacy_fullscreen_7d6157db">Ecrã inteiro</string>
+    <string name="legacy_address_or_coordinates_9e7a90a">Morada ou coordenadas</string>
+    <string name="legacy_back_1f7907">Voltar</string>
+    <string name="legacy_controls_e20faad6">Comandos</string>
+    <string name="legacy_cycle_panels_c623ab89">Percorrer os painéis</string>
+    <string name="legacy_everything_on_this_page_controls_the_projection__88534bf1">Tudo nesta página comanda a projeção atualmente mostrada na mota.</string>
+    <string name="legacy_exit_fullscreen_b7c93dd">Sair do ecrã inteiro</string>
+    <string name="legacy_fullscreen_map_bafc2397">Mapa em ecrã inteiro</string>
+    <string name="legacy_handlebar_controls_cf2abe6b">Comandos do guiador</string>
+    <string name="legacy_home_2268ff">Início</string>
+    <string name="legacy_open_glove_friendly_fullscreen_controller_2d746356">Abrir o controlador em ecrã inteiro, próprio para luvas</string>
+    <string name="legacy_reset_default_mapping_bd7464fe">Repor a atribuição predefinida</string>
+    <string name="legacy_scroll_ebe1cfb8">Deslocar +</string>
+    <string name="legacy_scroll_ebe1f19f">Deslocar −</string>
+    <string name="legacy_the_value_is_restored_when_handlebar_capture_is__ea95c499">O valor é reposto quando a captura do guiador é desligada.</string>
+    <string name="legacy_timing_9551dc6a">Tempos</string>
+    <string name="legacy_use_the_motorcycle_buttons_without_looking_down__1b06094c">Use os botões da mota sem olhar para baixo. A projeção ativa recebe os comandos primeiro.</string>
+    <string name="legacy_voice_4eff112">Voz</string>
+    <string name="legacy_motorcycle_buttons_control_targetname_c5bca78f">Os botões da mota comandam $targetName</string>
+    <string name="legacy_application_logs_ca54c69f">Registos da aplicação</string>
+    <string name="legacy_clear_3e2c62d">Limpar</string>
+    <string name="legacy_copy_log_e59a8039">Copiar registo</string>
+    <string name="legacy_no_diagnostic_events_have_been_recorded_290567d5">Não foi registado nenhum evento de diagnóstico.</string>
+    <string name="legacy_persistent_events_from_wi_fi_t_box_mirroring_enc_679d01c0">Eventos persistentes do Wi-Fi, do T-Box, do espelhamento, do codificador e do Android Auto.</string>
+    <string name="legacy_share_4c25fbf">Partilhar</string>
+    <string name="legacy_troubleshooting_f6bb8e3a">RESOLUÇÃO DE PROBLEMAS</string>
+    <string name="legacy_check_t_box_and_cellular_routes_without_starting_7ae11348">Verificar as rotas do T-Box e da rede móvel sem iniciar uma VPN nem mudar a rede predefinida.</string>
+    <string name="legacy_network_diagnostics_a4fc929a">Diagnóstico de rede</string>
+    <string name="legacy_no_network_snapshot_available_5baf5bb0">Não há nenhuma imagem da rede disponível.</string>
+    <string name="legacy_result_8fe0bc1d">RESULTADO</string>
+    <string name="legacy_system_lab_433267fc">LABORATÓRIO DO SISTEMA</string>
+    <string name="legacy_start_a_projection_to_populate_the_log_23fff8de">Inicie uma projeção para preencher o registo.</string>
+    <string name="legacy_add_a_motorcycle_by_scanning_its_t_box_qr_code_a77ba91f">Adicione uma mota lendo o QR code do T-Box.</string>
+    <string name="legacy_add_motorcycle_397b0e90">Adicionar mota</string>
+    <string name="legacy_edit_20e22a">Editar</string>
+    <string name="legacy_motorcycles_2c9478e2">Motas</string>
+    <string name="legacy_no_qr_connect_manually_8ad804ea">Sem QR? Ligar manualmente</string>
+    <string name="legacy_options_18bf1e7e">Opções</string>
+    <string name="legacy_saved_motorcycles_181a24a9">MOTAS GUARDADAS</string>
+    <string name="legacy_scan_a_qr_code_5a21ea0a">Ler um QR code</string>
+    <string name="legacy_use_this_motorcycle_1204179a">Usar esta mota</string>
+    <string name="legacy_your_garage_c0aeffb4">A SUA GARAGEM</string>
+    <string name="legacy_your_garage_is_empty_f25b99e3">A sua garagem está vazia</string>
+    <string name="legacy_connection_eeae6ade">LIGAÇÃO</string>
+    <string name="legacy_cancel_77df1a9a">Cancelar</string>
+    <string name="legacy_changes_are_saved_immediately_3ab73352">As alterações são guardadas de imediato.</string>
+    <string name="legacy_choose_how_the_complete_android_auto_image_is_fi_cb149112">Escolha como a imagem completa do Android Auto se ajusta ao TFT.</string>
+    <string name="legacy_display_name_6697cf49">Nome apresentado</string>
+    <string name="legacy_exclude_pixels_occupied_by_the_motorcycle_ui_the_c5210089">Excluir os píxeis ocupados pela interface da mota. Estes valores ficam guardados para este</string>
+    <string name="legacy_for_example_300_1aa3b7a">Por exemplo: 300</string>
+    <string name="legacy_for_example_mt700_adventure_4c1ae7c7">Por exemplo: MT700 Adventure</string>
+    <string name="legacy_fuel_2195d6">Combustível</string>
+    <string name="legacy_full_tank_range_on_a_fill_up_powers_the_fuel_ran_68a667ae">Autonomia com o depósito cheio. Alimenta o aviso de autonomia na navegação.</string>
+    <string name="legacy_identity_fbc2d4de">Identidade</string>
+    <string name="legacy_motorcycle_profile_bd90ddfa">PERFIL DA MOTA</string>
+    <string name="legacy_make_it_yours_9dfd813d">Torne-a sua</string>
+    <string name="legacy_override_the_automatic_profile_detection_for_thi_dcc5245b">Substituir a deteção automática de perfil para esta mota. Use apenas se o</string>
+    <string name="legacy_remove_91afe4a4">Remover</string>
+    <string name="legacy_remove_motorcycle_c0498b52">Remover a mota?</string>
+    <string name="legacy_remove_photo_7fa92bb6">Remover a fotografia</string>
+    <string name="legacy_remove_this_motorcycle_f21e94d7">Remover esta mota</string>
+    <string name="legacy_reset_margins_ff05a94">Repor as margens</string>
+    <string name="legacy_t_box_identifier_modelid_2c1c9ebd">Identificador do T-Box: $modelId</string>
+    <string name="legacy_tank_range_km_f16147b8">Autonomia do depósito (km)</string>
     <string name="legacy_tank_range_mi_f1614ebe">Tank range (mi)</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_the_wi_fi_password_is_stored_securely_on_this_ph_b6fb6382">The Wi-Fi password is stored securely on this phone.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_the_name_is_only_used_inside_moto_hub_10a5f3a4">The name is only used inside MOTO-HUB.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_the_saved_connection_profile_and_its_photo_will__c6d581e2">The saved connection profile and its photo will be removed from MOTO-HUB.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_could_not_derive_a_peer_ip_this_network_may_not__3fa3f2d0">Could not derive a peer IP - this network may not have a usable route yet.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_if_easyconn_discovery_keeps_failing_briefly_reco_ced96e0d">If EasyConn discovery keeps failing, briefly reconnect to this T-Box and probe </string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_scan_common_easyconn_ports_835f5172">Scan common EasyConn ports</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_t_box_capability_inspector_937ec87d">T-BOX CAPABILITY INSPECTOR</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_another_easyconn_app_can_keep_the_t_box_link_occ_fd2f2f53">Another EasyConn app can keep the T-Box link occupied even after it leaves the foreground.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_connection_failed_3b5c2fbf">CONNECTION FAILED</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_choose_what_the_ride_dashboard_shows_for_navigat_793eeb07">Choose what the Ride Dashboard shows for navigation.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_connect_your_motorcycle_2e5794e6">Connect your motorcycle.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_connecting_48965ad8">Connecting</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_dashboard_map_5dae1b0">Dashboard map</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_disconnect_966f34bc">Disconnect</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_first_time_setup_d929eaa7">FIRST-TIME SETUP</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_session_actions_bc6aa933">SESSION ACTIONS</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_scan_the_t_box_qr_code_to_save_the_network_crede_67df5b62">Scan the T-Box QR code to save the network credentials automatically.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_setting_up_network_and_t_box_7769a762">Setting up network and T-Box</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_what_to_show_122be0b9">What to show?</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_back_fe3a848e">‹ Back</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_arrived_ff08704d">ARRIVED</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_calculating_your_route_86fbe56d">Calculating your route…</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_done_2097a2">Done</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_exact_destination_pin_used_for_routing_tap_the_m_10786cc">Exact destination pin used for routing. Tap the map to change it.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_guidance_to_your_destination_will_end_27d69f">Guidance to your destination will end.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_the_wi_fi_password_is_stored_securely_on_this_ph_b6fb6382">A palavra-passe do Wi-Fi fica guardada de forma segura neste telemóvel.</string>
+    <string name="legacy_the_name_is_only_used_inside_moto_hub_10a5f3a4">O nome só é usado dentro do MOTO-HUB.</string>
+    <string name="legacy_the_saved_connection_profile_and_its_photo_will__c6d581e2">O perfil de ligação guardado e a sua fotografia serão removidos do MOTO-HUB.</string>
+    <string name="legacy_could_not_derive_a_peer_ip_this_network_may_not__3fa3f2d0">Não foi possível deduzir um IP do par - esta rede pode ainda não ter uma rota utilizável.</string>
+    <string name="legacy_if_easyconn_discovery_keeps_failing_briefly_reco_ced96e0d">Se a deteção EasyConn continuar a falhar, volte a ligar-se brevemente a este T-Box e sonde</string>
+    <string name="legacy_scan_common_easyconn_ports_835f5172">Sondar as portas EasyConn comuns</string>
+    <string name="legacy_t_box_capability_inspector_937ec87d">INSPETOR DE CAPACIDADES DO T-BOX</string>
+    <string name="legacy_another_easyconn_app_can_keep_the_t_box_link_occ_fd2f2f53">Outra aplicação EasyConn pode manter a ligação ao T-Box ocupada mesmo depois de sair para segundo plano.</string>
+    <string name="legacy_connection_failed_3b5c2fbf">A LIGAÇÃO FALHOU</string>
+    <string name="legacy_choose_what_the_ride_dashboard_shows_for_navigat_793eeb07">Escolha o que o Ride Dashboard mostra para a navegação.</string>
+    <string name="legacy_connect_your_motorcycle_2e5794e6">Ligue a sua mota.</string>
+    <string name="legacy_connecting_48965ad8">A ligar</string>
+    <string name="legacy_dashboard_map_5dae1b0">Mapa do dashboard</string>
+    <string name="legacy_disconnect_966f34bc">Desligar</string>
+    <string name="legacy_first_time_setup_d929eaa7">PRIMEIRA CONFIGURAÇÃO</string>
+    <string name="legacy_session_actions_bc6aa933">AÇÕES DA SESSÃO</string>
+    <string name="legacy_scan_the_t_box_qr_code_to_save_the_network_crede_67df5b62">Leia o QR code do T-Box para guardar automaticamente as credenciais da rede.</string>
+    <string name="legacy_setting_up_network_and_t_box_7769a762">A configurar a rede e o T-Box</string>
+    <string name="legacy_what_to_show_122be0b9">O que mostrar?</string>
+    <string name="legacy_back_fe3a848e">‹ Voltar</string>
+    <string name="legacy_arrived_ff08704d">CHEGOU</string>
+    <string name="legacy_calculating_your_route_86fbe56d">A calcular a sua rota…</string>
+    <string name="legacy_done_2097a2">Concluído</string>
+    <string name="legacy_exact_destination_pin_used_for_routing_tap_the_m_10786cc">Marcador de destino exato usado para a rota. Toque no mapa para o alterar.</string>
+    <string name="legacy_guidance_to_your_destination_will_end_27d69f">A orientação para o seu destino vai terminar.</string>
     <string name="legacy_info_225cae">INFO</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_keep_going_6d8f25bf">Keep going</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_live_navigation_70ce19c8">LIVE NAVIGATION</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_map_location_9df6ea19">MAP LOCATION</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_navigation_needs_attention_7f3ab90f">NAVIGATION NEEDS ATTENTION</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_no_9c1">NO</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_name_24eeab">Name</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_navigation_will_start_either_way_open_the_ride_d_b34bca11">Navigation will start either way. Open the Ride Dashboard on the motorcycle TFT?</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_no_favorites_yet_save_one_from_a_route_preview_o_b8e45fac">No favorites yet. Save one from a route preview or an arrival screen.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_no_matches_e3c700ba">No matches.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_not_every_address_number_is_mapped_in_openstreet_cf7708fe">Not every address number is mapped in OpenStreetMap yet, so the pin </string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_off_route_recalculating_1f5a422b">Off route – recalculating…</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_open_ride_dashboard_202629d">Open Ride Dashboard?</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_optional_label_267da254">Optional label</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_route_type_519caed1">ROUTE TYPE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_reroute_a49323d6">Reroute</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_save_27359d">Save</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_save_a_destination_as_a_favorite_from_a_route_pr_5669fe67">Save a destination as a favorite from a route preview.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_save_favorite_85e74bf">Save favorite</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_save_this_route_d63094aa">Save this route</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_search_address_or_paste_coordinates_daf446f5">Search address or paste coordinates</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_start_navigation_2d34b0b2">Start navigation</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_stop_277c22">Stop</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_stop_navigation_8a243dad">Stop navigation?</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_tap_to_dismiss_d17702a2">Tap to dismiss</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_work_293b31">Work</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_yes_156c7">YES</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_you_have_arrived_e0a68436">You have arrived</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_e_g_sunday_loop_1dd6a810">e.g., Sunday loop</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_keep_going_6d8f25bf">Continuar</string>
+    <string name="legacy_live_navigation_70ce19c8">NAVEGAÇÃO AO VIVO</string>
+    <string name="legacy_map_location_9df6ea19">LOCAL NO MAPA</string>
+    <string name="legacy_navigation_needs_attention_7f3ab90f">A NAVEGAÇÃO PRECISA DE ATENÇÃO</string>
+    <string name="legacy_no_9c1">NÃO</string>
+    <string name="legacy_name_24eeab">Nome</string>
+    <string name="legacy_navigation_will_start_either_way_open_the_ride_d_b34bca11">A navegação vai começar de qualquer forma. Abrir o Ride Dashboard no TFT da mota?</string>
+    <string name="legacy_no_favorites_yet_save_one_from_a_route_preview_o_b8e45fac">Ainda sem favoritos. Guarde um a partir de uma pré-visualização de rota ou de um ecrã de chegada.</string>
+    <string name="legacy_no_matches_e3c700ba">Sem correspondências.</string>
+    <string name="legacy_not_every_address_number_is_mapped_in_openstreet_cf7708fe">Nem todos os números de porta estão mapeados no OpenStreetMap, por isso o marcador</string>
+    <string name="legacy_off_route_recalculating_1f5a422b">Fora da rota – a recalcular…</string>
+    <string name="legacy_open_ride_dashboard_202629d">Abrir o Ride Dashboard?</string>
+    <string name="legacy_optional_label_267da254">Etiqueta opcional</string>
+    <string name="legacy_route_type_519caed1">TIPO DE ROTA</string>
+    <string name="legacy_reroute_a49323d6">Recalcular</string>
+    <string name="legacy_save_27359d">Guardar</string>
+    <string name="legacy_save_a_destination_as_a_favorite_from_a_route_pr_5669fe67">Guarde um destino como favorito a partir de uma pré-visualização de rota.</string>
+    <string name="legacy_save_favorite_85e74bf">Guardar favorito</string>
+    <string name="legacy_save_this_route_d63094aa">Guardar esta rota</string>
+    <string name="legacy_search_address_or_paste_coordinates_daf446f5">Procurar morada ou colar coordenadas</string>
+    <string name="legacy_start_navigation_2d34b0b2">Iniciar navegação</string>
+    <string name="legacy_stop_277c22">Parar</string>
+    <string name="legacy_stop_navigation_8a243dad">Parar a navegação?</string>
+    <string name="legacy_tap_to_dismiss_d17702a2">Toque para dispensar</string>
+    <string name="legacy_work_293b31">Trabalho</string>
+    <string name="legacy_yes_156c7">SIM</string>
+    <string name="legacy_you_have_arrived_e0a68436">Chegou ao destino</string>
+    <string name="legacy_e_g_sunday_loop_1dd6a810">ex.: volta de domingo</string>
     <string name="legacy_label_27143b17">‹ $label</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_clear_all_5a4e690e">CLEAR ALL</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_clear_all_5a4e690e">LIMPAR TUDO</string>
     <string name="legacy_dest_2072c2">Dest</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_fit_113f1">Fit</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_full_screen_22a47efd">Full screen</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_select_all_ba2cd45d">SELECT ALL</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_fit_113f1">Ajustar</string>
+    <string name="legacy_full_screen_22a47efd">Ecrã inteiro</string>
+    <string name="legacy_select_all_ba2cd45d">SELECIONAR TUDO</string>
     <string name="legacy_openstreetmap_contributors_692ada40">© OpenStreetMap contributors</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_auto_detects_direct_networks_choose_wi_fi_direct_a24126ac">Auto detects DIRECT- networks. Choose Wi-Fi Direct for a dashboard that is a P2P Group Owner.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_connect_without_a_qr_code_bd61ac9f">Connect without a QR code</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_manual_setup_176cc583">MANUAL SETUP</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_some_motorcycles_don_t_show_a_pairing_qr_code_on_c3361949">Some motorcycles don’t show a pairing QR code on the dash. If you already know </string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_t_box_wi_fi_transport_2b8fdfb9">T-Box Wi-Fi transport</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_wi_fi_network_name_ssid_4e8cc3a7">Wi-Fi network name (SSID)</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_wi_fi_password_aa1722dd">Wi-Fi password</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_t_box_scan_eb4ea12b">T-BOX SCAN</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_uses_this_phone_s_gps_no_t_box_needed_same_rende_58537da7">Uses this phone’s GPS - no T-Box needed. Same renderer and heading-up/zoom </string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_elevation_last_hour_10deed1a">ELEVATION / LAST HOUR</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_now_12eb6">NOW</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_waiting_for_gnss_elevation_f069100e">WAITING FOR GNSS ELEVATION</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_auto_detects_direct_networks_choose_wi_fi_direct_a24126ac">Auto deteta as redes DIRECT-. Escolha Wi-Fi Direct para um painel que seja Group Owner P2P.</string>
+    <string name="legacy_connect_without_a_qr_code_bd61ac9f">Ligar sem QR code</string>
+    <string name="legacy_manual_setup_176cc583">CONFIGURAÇÃO MANUAL</string>
+    <string name="legacy_some_motorcycles_don_t_show_a_pairing_qr_code_on_c3361949">Algumas motas não mostram um QR code de emparelhamento no painel. Se já souber</string>
+    <string name="legacy_t_box_wi_fi_transport_2b8fdfb9">Transporte Wi-Fi do T-Box</string>
+    <string name="legacy_wi_fi_network_name_ssid_4e8cc3a7">Nome da rede Wi-Fi (SSID)</string>
+    <string name="legacy_wi_fi_password_aa1722dd">Palavra-passe do Wi-Fi</string>
+    <string name="legacy_t_box_scan_eb4ea12b">LEITURA DO T-BOX</string>
+    <string name="legacy_uses_this_phone_s_gps_no_t_box_needed_same_rende_58537da7">Usa o GPS deste telemóvel - sem T-Box. Mesmo renderizador e mesmo modo de orientação/zoom</string>
+    <string name="legacy_elevation_last_hour_10deed1a">ALTITUDE / ÚLTIMA HORA</string>
+    <string name="legacy_now_12eb6">AGORA</string>
+    <string name="legacy_waiting_for_gnss_elevation_f069100e">À ESPERA DA ALTITUDE GNSS</string>
     <string name="legacy_battery_7593afdc">$battery%</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_g_force_fca415c5">G-FORCE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_motion_sensors_b224e96f">MOTION SENSORS</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_phone_system_b2b20c1d">PHONE // SYSTEM</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_turn_rate_9cfa82a3">TURN RATE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_ahead_3b5bda1">AHEAD</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_compass_sun_45d9eeda">COMPASS // SUN</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_left_239807">LEFT</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_right_4a5c9fc">RIGHT</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_sun_horizon_6a3f3196">SUN / HORIZON</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_sun_behind_2679a1ae">SUN BEHIND</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_waiting_for_position_heading_75ece8e0">WAITING FOR POSITION + HEADING</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_dashboard_customization_b85f9307">DASHBOARD CUSTOMIZATION</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_grant_41dd0fc">Grant</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_live_layout_cdba0cde">LIVE LAYOUT</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_map_1293c">MAP</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_map_stays_in_the_centre_f108a4fb">Map stays in the centre</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_needs_notification_access_44d40c16">Needs notification access</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_reset_defaults_6000a23">Reset defaults</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_swap_2785b3">Swap</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_tap_to_assign_d1b41d7">TAP TO ASSIGN</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_widget_library_cb7316bf">WIDGET LIBRARY</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_current_location_5f369a9c">CURRENT LOCATION</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_eta_10d72">ETA</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_nav_route_20ffc4db">NAV / ROUTE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_off_route_recalculating_7a9dcf5c">OFF ROUTE — RECALCULATING</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_remaining_d9f0bdd6">REMAINING</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_rise_2662c9">RISE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_set_14042">SET</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_sun_1422c">SUN</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_no_media_session_5cbc8365">-- NO MEDIA SESSION --</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_no_artwork_2acf3875">NO ARTWORK</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_now_playing_media_session_45191bd6">NOW PLAYING // MEDIA SESSION</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_signal_coverage_fef46060">SIGNAL COVERAGE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_ground_speed_gps_c8f77ac7">GROUND SPEED / GPS</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_g_force_fca415c5">FORÇA G</string>
+    <string name="legacy_motion_sensors_b224e96f">SENSORES DE MOVIMENTO</string>
+    <string name="legacy_phone_system_b2b20c1d">TELEMÓVEL // SISTEMA</string>
+    <string name="legacy_turn_rate_9cfa82a3">VELOCIDADE ANGULAR</string>
+    <string name="legacy_ahead_3b5bda1">À FRENTE</string>
+    <string name="legacy_compass_sun_45d9eeda">BÚSSOLA // SOL</string>
+    <string name="legacy_left_239807">ESQUERDA</string>
+    <string name="legacy_right_4a5c9fc">DIREITA</string>
+    <string name="legacy_sun_horizon_6a3f3196">SOL / HORIZONTE</string>
+    <string name="legacy_sun_behind_2679a1ae">SOL ATRÁS</string>
+    <string name="legacy_waiting_for_position_heading_75ece8e0">À ESPERA DE POSIÇÃO + RUMO</string>
+    <string name="legacy_dashboard_customization_b85f9307">PERSONALIZAÇÃO DO DASHBOARD</string>
+    <string name="legacy_grant_41dd0fc">Conceder</string>
+    <string name="legacy_live_layout_cdba0cde">DISPOSIÇÃO AO VIVO</string>
+    <string name="legacy_map_1293c">MAPA</string>
+    <string name="legacy_map_stays_in_the_centre_f108a4fb">O mapa fica ao centro</string>
+    <string name="legacy_needs_notification_access_44d40c16">Precisa de acesso às notificações</string>
+    <string name="legacy_reset_defaults_6000a23">Repor predefinições</string>
+    <string name="legacy_swap_2785b3">Trocar</string>
+    <string name="legacy_tap_to_assign_d1b41d7">TOQUE PARA ATRIBUIR</string>
+    <string name="legacy_widget_library_cb7316bf">BIBLIOTECA DE WIDGETS</string>
+    <string name="legacy_current_location_5f369a9c">LOCALIZAÇÃO ATUAL</string>
+    <string name="legacy_eta_10d72">CHEGADA PREVISTA</string>
+    <string name="legacy_nav_route_20ffc4db">NAV / ROTA</string>
+    <string name="legacy_off_route_recalculating_7a9dcf5c">FORA DA ROTA — A RECALCULAR</string>
+    <string name="legacy_remaining_d9f0bdd6">EM FALTA</string>
+    <string name="legacy_rise_2662c9">NASCER</string>
+    <string name="legacy_set_14042">PÔR</string>
+    <string name="legacy_sun_1422c">SOL</string>
+    <string name="legacy_no_media_session_5cbc8365">-- SEM SESSÃO DE MULTIMÉDIA --</string>
+    <string name="legacy_no_artwork_2acf3875">SEM CAPA</string>
+    <string name="legacy_now_playing_media_session_45191bd6">A REPRODUZIR // SESSÃO DE MULTIMÉDIA</string>
+    <string name="legacy_signal_coverage_fef46060">COBERTURA DO SINAL</string>
+    <string name="legacy_ground_speed_gps_c8f77ac7">VELOCIDADE NO SOLO / GPS</string>
     <string name="legacy_km_h_233edb">KM/H</string>
     <string name="legacy_mph_12b05">MPH</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_average_km_h_d2517b1e">AVERAGE KM/H</string>
+    <string name="legacy_average_km_h_d2517b1e">MÉDIA KM/H</string>
     <string name="legacy_average_mph_6c8da62">AVERAGE MPH</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_recent_8fd93a5b">RECENT</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_speed_profile_2c1ba290">SPEED PROFILE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_trip_performance_8c26f32b">TRIP // PERFORMANCE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_waiting_for_speed_data_91032a2d">WAITING FOR SPEED DATA</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_check_cellular_data_b94ccb68">CHECK CELLULAR DATA</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_live_23a8ec">LIVE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_loading_3edc6d1c">LOADING</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_recent_8fd93a5b">RECENTE</string>
+    <string name="legacy_speed_profile_2c1ba290">PERFIL DE VELOCIDADE</string>
+    <string name="legacy_trip_performance_8c26f32b">VOLTA // DESEMPENHO</string>
+    <string name="legacy_waiting_for_speed_data_91032a2d">À ESPERA DE DADOS DE VELOCIDADE</string>
+    <string name="legacy_check_cellular_data_b94ccb68">VERIFIQUE OS DADOS MÓVEIS</string>
+    <string name="legacy_live_23a8ec">AO VIVO</string>
+    <string name="legacy_loading_3edc6d1c">A CARREGAR</string>
     <string name="legacy_open_meteo_gps_2cc3134f">OPEN-METEO • GPS</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_rain_probability_9ad3fd28">RAIN $probability%</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_retrying_every_15s_e5e3f7a4">RETRYING EVERY 15S</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_i_understand_and_continue_7ea73adb">I understand and continue</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_android_auto_content_insets_7046c7dd">ANDROID AUTO CONTENT INSETS</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_choose_image_detail_and_how_moto_hub_balances_sm_577123e1">Choose image detail and how MOTO-HUB balances smoothness, heat, battery, and Wi-Fi load.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_default_route_type_b528b630">DEFAULT ROUTE TYPE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_motorcycle_features_1ef519ec">MOTORCYCLE FEATURES</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_power_mode_357a57fe">POWER MODE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_resolution_bd8b64ac">RESOLUTION</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_turn_by_turn_routing_uses_your_own_stadia_maps_a_76117a71">Turn-by-turn routing uses your own Stadia Maps API key, never a </string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_units_4d25f4f">UNITS</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_delete_79cb71cb">Delete</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_delete_this_trip_b2d7ee2d">Delete this trip?</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_delete_trip_1d14595a">Delete trip</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_discard_c6d7a07e">Discard</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_export_gpx_83319643">Export GPX</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_finish_save_39e52944">Finish &amp; save</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_gps_logging_works_with_the_phone_locked_37383170">GPS logging works with the phone locked</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_not_saved_d22da6ba">NOT SAVED</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_name_this_ride_9a657605">Name this ride</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_opening_the_saved_trip_now_c583b843">Opening the saved trip now.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_recorded_rides_823a26eb">RECORDED RIDES</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_recording_unavailable_9bbb7461">RECORDING UNAVAILABLE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_ride_archive_c06bf17a">RIDE ARCHIVE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_record_a_ride_ce0c4be6">Record a ride</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_recording_was_too_short_to_keep_6761ae14">Recording was too short to keep</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_rename_trip_584eaba7">Rename trip</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_ride_recordings_need_at_least_100_m_15_s_of_move_260f0993">Ride recordings need at least 100 m, 15 s of movement, and two GPS points.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_saved_4b07667">SAVED</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_start_new_recording_36e83013">Start new recording</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_start_recording_836b8b93">Start recording</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_track_details_6b05b82d">TRACK DETAILS</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_the_gps_trace_and_all_recorded_statistics_will_b_6d59f1b7">The GPS trace and all recorded statistics will be permanently removed.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_trip_name_5c3de586">Trip name</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_trip_saved_to_recorded_rides_31c5533c">Trip saved to Recorded rides</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_trips_4d520ce">Trips</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_try_again_25aeb09b">Try again</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_view_2832a5">VIEW</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_trips_ca1b8627">‹ Trips</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_allow_apk_installation_a3116df5">Allow APK installation</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_checking_github_releases_7e509ccb">Checking GitHub releases...</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_moto_hub_updates_c98ab24f">MOTO-HUB updates</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_no_apk_asset_attached_to_this_release_7a89904d">No APK asset attached to this release.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_no_newer_version_is_available_b79316a1">No newer version is available.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_pre_release_6bd19a9d">PRE-RELEASE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_retry_4b33288">Retry</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_skip_this_version_c2d1da37">Skip this version</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_projection_is_running_8c249b1a">Projection is running</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_fill_and_crop_8b8b5d16">Fill and crop</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_preserve_aspect_ratio_b340e377">Preserve aspect ratio</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_show_the_complete_image_with_black_side_bars_whe_90d880eb">Show the complete image with black side bars when needed.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_stretch_display_45b17e87">Stretch display</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_use_the_whole_tft_and_keep_all_content_visible_w_6c1c6337">Use the whole TFT and keep all content visible with slight stretching.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_use_the_whole_tft_without_stretching_crop_the_ed_8f0ac706">Use the whole TFT without stretching; crop the edges when aspect ratios differ.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_adjust_the_phone_media_level_while_handlebar_cap_a55dd55a">Adjust the phone media level while handlebar capture is active.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_advanced_handlebar_mapping_d94a5a3b">Advanced handlebar mapping</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_choose_the_day_night_style_used_by_android_auto_c4b5df26">Choose the day/night style used by Android Auto.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_customize_double_taps_holds_and_android_auto_com_59078421">Customize double taps, holds, and Android Auto commands.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_destinations_available_to_one_press_handlebar_na_19306aee">Destinations available to one-press handlebar navigation.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_double_tap_a52552f4">Double tap</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_map_appearance_b4c189c8">Map appearance</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_media_volume_142f4af6">Media volume</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_saved_places_f8158025">Saved places</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_select_hold_6cc41543">Select hold</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_detected_networks_fa8527c3">Detected networks</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_session_events_1a7f9e03">Session events</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_android_auto_display_56c75982">Android Auto Display</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_choose_widgets_for_each_side_panel_c04b42c9">Choose widgets for each side panel</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_customize_dashboard_3d094ab7">Customize Dashboard</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_endpoint_geometry_protocol_and_feature_flags_7f197859">Endpoint, geometry, protocol, and feature flags</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_exclude_pixels_occupied_by_the_motorcycle_ui_c69e3740">Exclude pixels occupied by the motorcycle UI</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_how_the_complete_android_auto_image_fits_the_tft_11c8bbf2">How the complete Android Auto image fits the TFT</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_override_automatic_profile_detection_b102be5">Override automatic profile detection</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_t_box_capability_inspector_e5159c9d">T-Box Capability Inspector</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_t_box_profile_override_f6f6b251">T-Box Profile Override</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_tft_safe_margins_d1e86e30">TFT Safe Margins</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_motorcycle_15a347f8">‹ Motorcycle</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_customize_d780ac23">Customize</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_dim_phone_display_4f190e58">Dim phone display</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_draw_recorded_points_on_the_dashboard_map_d0764c05">Draw recorded points on the dashboard map.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_keep_the_tft_active_while_reducing_phone_distrac_f9df0d5a">Keep the TFT active while reducing phone distraction.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_open_the_on_screen_android_auto_controls_55f559a3">Open the on-screen Android Auto controls.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_preview_50417ba8">Preview</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_preview_touch_c103ae4d">Preview &amp; touch</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_show_gps_track_2ed7fcf2">Show GPS track</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_view_android_auto_and_interact_from_your_phone_1e4d3a53">View Android Auto and interact from your phone.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_review_your_route_before_starting_guidance_48917adb">Review your route before starting guidance.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_take_me_home_bb1e43ee">Take me home</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_about_moto_hub_6966e1f8">About MOTO-HUB</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_rain_probability_9ad3fd28">CHUVA $probability%</string>
+    <string name="legacy_retrying_every_15s_e5e3f7a4">A TENTAR DE 15 EM 15 S</string>
+    <string name="legacy_i_understand_and_continue_7ea73adb">Compreendo e continuo</string>
+    <string name="legacy_android_auto_content_insets_7046c7dd">MARGENS DE CONTEÚDO DO ANDROID AUTO</string>
+    <string name="legacy_choose_image_detail_and_how_moto_hub_balances_sm_577123e1">Escolha o detalhe da imagem e a forma como o MOTO-HUB equilibra fluidez, calor, bateria e carga do Wi-Fi.</string>
+    <string name="legacy_default_route_type_b528b630">TIPO DE ROTA PREDEFINIDO</string>
+    <string name="legacy_motorcycle_features_1ef519ec">FUNCIONALIDADES DA MOTA</string>
+    <string name="legacy_power_mode_357a57fe">MODO DE ENERGIA</string>
+    <string name="legacy_resolution_bd8b64ac">RESOLUÇÃO</string>
+    <string name="legacy_turn_by_turn_routing_uses_your_own_stadia_maps_a_76117a71">A navegação curva a curva usa a sua própria chave API da Stadia Maps, nunca uma</string>
+    <string name="legacy_units_4d25f4f">UNIDADES</string>
+    <string name="legacy_delete_79cb71cb">Eliminar</string>
+    <string name="legacy_delete_this_trip_b2d7ee2d">Eliminar esta volta?</string>
+    <string name="legacy_delete_trip_1d14595a">Eliminar volta</string>
+    <string name="legacy_discard_c6d7a07e">Descartar</string>
+    <string name="legacy_export_gpx_83319643">Exportar GPX</string>
+    <string name="legacy_finish_save_39e52944">Terminar e guardar</string>
+    <string name="legacy_gps_logging_works_with_the_phone_locked_37383170">O registo GPS funciona com o telemóvel bloqueado</string>
+    <string name="legacy_not_saved_d22da6ba">NÃO GUARDADA</string>
+    <string name="legacy_name_this_ride_9a657605">Dê um nome a esta volta</string>
+    <string name="legacy_opening_the_saved_trip_now_c583b843">A abrir a volta guardada.</string>
+    <string name="legacy_recorded_rides_823a26eb">VOLTAS GRAVADAS</string>
+    <string name="legacy_recording_unavailable_9bbb7461">GRAVAÇÃO INDISPONÍVEL</string>
+    <string name="legacy_ride_archive_c06bf17a">ARQUIVO DE VOLTAS</string>
+    <string name="legacy_record_a_ride_ce0c4be6">Gravar uma volta</string>
+    <string name="legacy_recording_was_too_short_to_keep_6761ae14">A gravação foi demasiado curta para ser guardada</string>
+    <string name="legacy_rename_trip_584eaba7">Mudar o nome da volta</string>
+    <string name="legacy_ride_recordings_need_at_least_100_m_15_s_of_move_260f0993">Uma gravação de volta precisa de pelo menos 100 m, 15 s de movimento e dois pontos GPS.</string>
+    <string name="legacy_saved_4b07667">GUARDADA</string>
+    <string name="legacy_start_new_recording_36e83013">Iniciar nova gravação</string>
+    <string name="legacy_start_recording_836b8b93">Iniciar gravação</string>
+    <string name="legacy_track_details_6b05b82d">DETALHES DO TRAJETO</string>
+    <string name="legacy_the_gps_trace_and_all_recorded_statistics_will_b_6d59f1b7">O traçado GPS e todas as estatísticas gravadas serão removidos definitivamente.</string>
+    <string name="legacy_trip_name_5c3de586">Nome da volta</string>
+    <string name="legacy_trip_saved_to_recorded_rides_31c5533c">Volta guardada em Voltas gravadas</string>
+    <string name="legacy_trips_4d520ce">Voltas</string>
+    <string name="legacy_try_again_25aeb09b">Tentar de novo</string>
+    <string name="legacy_view_2832a5">VER</string>
+    <string name="legacy_trips_ca1b8627">‹ Voltas</string>
+    <string name="legacy_allow_apk_installation_a3116df5">Permitir a instalação de APK</string>
+    <string name="legacy_checking_github_releases_7e509ccb">A verificar as versões do GitHub...</string>
+    <string name="legacy_moto_hub_updates_c98ab24f">Atualizações do MOTO-HUB</string>
+    <string name="legacy_no_apk_asset_attached_to_this_release_7a89904d">Não há nenhum APK associado a esta versão.</string>
+    <string name="legacy_no_newer_version_is_available_b79316a1">Não há nenhuma versão mais recente.</string>
+    <string name="legacy_pre_release_6bd19a9d">PRÉ-LANÇAMENTO</string>
+    <string name="legacy_retry_4b33288">Tentar de novo</string>
+    <string name="legacy_skip_this_version_c2d1da37">Ignorar esta versão</string>
+    <string name="legacy_projection_is_running_8c249b1a">A projeção está a correr</string>
+    <string name="legacy_fill_and_crop_8b8b5d16">Preencher e cortar</string>
+    <string name="legacy_preserve_aspect_ratio_b340e377">Manter as proporções</string>
+    <string name="legacy_show_the_complete_image_with_black_side_bars_whe_90d880eb">Mostrar a imagem completa com barras laterais pretas quando for preciso.</string>
+    <string name="legacy_stretch_display_45b17e87">Esticar a imagem</string>
+    <string name="legacy_use_the_whole_tft_and_keep_all_content_visible_w_6c1c6337">Usar todo o TFT mantendo todo o conteúdo visível, com um ligeiro esticamento.</string>
+    <string name="legacy_use_the_whole_tft_without_stretching_crop_the_ed_8f0ac706">Usar todo o TFT sem esticar; cortar as margens quando as proporções forem diferentes.</string>
+    <string name="legacy_adjust_the_phone_media_level_while_handlebar_cap_a55dd55a">Ajustar o volume multimédia do telemóvel enquanto a captura do guiador está ativa.</string>
+    <string name="legacy_advanced_handlebar_mapping_d94a5a3b">Atribuição avançada do guiador</string>
+    <string name="legacy_choose_the_day_night_style_used_by_android_auto_c4b5df26">Escolha o estilo dia/noite usado pelo Android Auto.</string>
+    <string name="legacy_customize_double_taps_holds_and_android_auto_com_59078421">Personalize duplos toques, toques longos e comandos do Android Auto.</string>
+    <string name="legacy_destinations_available_to_one_press_handlebar_na_19306aee">Destinos disponíveis para a navegação com um toque no guiador.</string>
+    <string name="legacy_double_tap_a52552f4">Duplo toque</string>
+    <string name="legacy_map_appearance_b4c189c8">Aspeto do mapa</string>
+    <string name="legacy_media_volume_142f4af6">Volume multimédia</string>
+    <string name="legacy_saved_places_f8158025">Locais guardados</string>
+    <string name="legacy_select_hold_6cc41543">Toque longo em Select</string>
+    <string name="legacy_detected_networks_fa8527c3">Redes detetadas</string>
+    <string name="legacy_session_events_1a7f9e03">Eventos da sessão</string>
+    <string name="legacy_android_auto_display_56c75982">Ecrã do Android Auto</string>
+    <string name="legacy_choose_widgets_for_each_side_panel_c04b42c9">Escolher os widgets de cada painel lateral</string>
+    <string name="legacy_customize_dashboard_3d094ab7">Personalizar o dashboard</string>
+    <string name="legacy_endpoint_geometry_protocol_and_feature_flags_7f197859">Ponto de acesso, geometria, protocolo e opções</string>
+    <string name="legacy_exclude_pixels_occupied_by_the_motorcycle_ui_c69e3740">Excluir os píxeis ocupados pela interface da mota</string>
+    <string name="legacy_how_the_complete_android_auto_image_fits_the_tft_11c8bbf2">Como a imagem completa do Android Auto se ajusta ao TFT</string>
+    <string name="legacy_override_automatic_profile_detection_b102be5">Substituir a deteção automática de perfil</string>
+    <string name="legacy_t_box_capability_inspector_e5159c9d">Inspetor de capacidades do T-Box</string>
+    <string name="legacy_t_box_profile_override_f6f6b251">Substituição do perfil do T-Box</string>
+    <string name="legacy_tft_safe_margins_d1e86e30">Margens de segurança do TFT</string>
+    <string name="legacy_motorcycle_15a347f8">‹ Mota</string>
+    <string name="legacy_customize_d780ac23">Personalizar</string>
+    <string name="legacy_dim_phone_display_4f190e58">Escurecer o ecrã do telemóvel</string>
+    <string name="legacy_draw_recorded_points_on_the_dashboard_map_d0764c05">Desenhar os pontos gravados no mapa do dashboard.</string>
+    <string name="legacy_keep_the_tft_active_while_reducing_phone_distrac_f9df0d5a">Manter o TFT ativo reduzindo a distração do telemóvel.</string>
+    <string name="legacy_open_the_on_screen_android_auto_controls_55f559a3">Abrir os comandos do Android Auto no ecrã.</string>
+    <string name="legacy_preview_50417ba8">Pré-visualizar</string>
+    <string name="legacy_preview_touch_c103ae4d">Pré-visualização e toque</string>
+    <string name="legacy_show_gps_track_2ed7fcf2">Mostrar o traçado GPS</string>
+    <string name="legacy_view_android_auto_and_interact_from_your_phone_1e4d3a53">Ver o Android Auto e interagir a partir do telemóvel.</string>
+    <string name="legacy_review_your_route_before_starting_guidance_48917adb">Reveja a sua rota antes de iniciar a orientação.</string>
+    <string name="legacy_take_me_home_bb1e43ee">Levar-me a casa</string>
+    <string name="legacy_about_moto_hub_6966e1f8">Sobre o MOTO-HUB</string>
     <string name="legacy_android_auto_cb210d00">Android Auto</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_announce_upcoming_maneuvers_while_navigating_7c1d9f50">Announce upcoming maneuvers while navigating</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_auto_connect_on_launch_9e7cd0e0">Auto-connect on launch</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_auto_connect_recovery_trip_recording_1bf7551f">Auto-connect, recovery, trip recording</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_auto_record_rides_3d1b712a">Auto-record rides</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_auto_recover_stalled_android_auto_and_ride_dashb_5da6ea2d">Auto-recover stalled Android Auto and Ride Dashboard streams</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_bluetooth_capture_and_mapping_3e23fd19">Bluetooth capture and mapping</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_connect_and_discover_t_box_when_app_opens_fe05f1ea">Connect and discover T-Box when app opens</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_connection_automation_93f3bb33">Connection &amp; automation</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_diagnostics_3748418c">Diagnostics</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_disable_touchscreen_4f636f13">Disable touchscreen</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_draw_detected_curved_segments_in_a_distinct_colo_906c94c">Draw detected curved segments in a distinct color on the TFT map</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_enable_logging_e57825e2">Enable logging</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_encoder_detail_and_power_mode_for_all_streams_9c18fdcf">Encoder detail and power mode for all streams</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_fuel_range_warning_e301d2ef">Fuel range warning</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_full_client_info_every_candidate_profile_s_score_fb2a321f">Full CLIENT_INFO, every candidate profile’s score, unknown command </string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_golden_hour_hint_26c00b9f">Golden-hour hint</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_highlight_curvy_roads_6d7866a">Highlight curvy roads</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_master_switch_for_the_diagnostic_log_off_means_n_1d7e2b81">Master switch for the diagnostic log. Off means nothing is recorded </string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_navigation_e5d7e634">Navigation</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_network_tests_and_application_logs_6064f99">Network tests and application logs</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_preview_ride_dashboard_cf294e4">Preview Ride Dashboard</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_recovery_watchdog_eb0fb218">Recovery watchdog</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_resolution_and_display_mode_70f7a2be">Resolution and display mode</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_review_copy_share_or_clear_events_fa00934b">Review, copy, share, or clear events</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_routes_through_fossgis_s_free_public_valhalla_se_5f3fb227">Routes through FOSSGIS’s free public Valhalla server instead of </string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_see_the_tft_render_on_this_phone_using_its_own_g_d21ea9ba">See the TFT render on this phone, using its own GPS - no T-Box needed</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_show_forecast_conditions_at_your_destination_in__d467471f">Show forecast conditions at your destination in the route preview</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_show_minutes_to_the_nearest_sunrise_sunset_golde_840f15d">Show minutes to the nearest sunrise/sunset golden hour</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_start_gps_logging_with_projection_sessions_1c3d9c89">Start GPS logging with projection sessions</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_t_box_discovery_wi_fi_binding_cellular_routes_32d84d5f">T-Box discovery, Wi-Fi binding, cellular routes</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_try_without_a_key_demo_server_74e379d4">Try without a key (demo server)</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_use_focus_and_handlebar_controls_even_when_the_t_d1be0479">Use focus and handlebar controls even when the T-Box reports a touch display</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_verbose_t_box_logging_ee12f7b3">Verbose T-Box logging</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_video_quality_3ed2f63a">Video quality</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_voice_guidance_a2d4eea6">Voice guidance</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_warn_when_a_route_would_exceed_your_motorcycle_s_c31a0f09">Warn when a route would exceed your motorcycle’s tank range (set in Garage)</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_weather_at_arrival_44ffc4d8">Weather at arrival</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_your_own_routing_api_key_for_turn_by_turn_94d8b202">Your own routing API key for turn-by-turn</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_settings_7469104a">‹ Settings</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_gps_ride_recording_and_trip_statistics_28992d34">GPS ride recording and trip statistics</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_moto_hub_display_dimmer_57b6244b">MOTO-HUB display dimmer</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_filter_1_d_497daa14">FILTER %1$d</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_recording_1_s_b01f3573">RECORDING · %1$s</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_1_d_optimized_gps_points_de88df06">%1$d optimized GPS points</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_place_1_d_name_6bdc57c6">Place %1$d name</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_save_place_1_d_39c7a048">Save place %1$d</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_t_box_identifier_1_s_531e2638">T-Box identifier: %1$s</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_announce_upcoming_maneuvers_while_navigating_7c1d9f50">Anunciar as manobras seguintes durante a navegação</string>
+    <string name="legacy_auto_connect_on_launch_9e7cd0e0">Ligar automaticamente ao arrancar</string>
+    <string name="legacy_auto_connect_recovery_trip_recording_1bf7551f">Ligação automática, recuperação, gravação de voltas</string>
+    <string name="legacy_auto_record_rides_3d1b712a">Gravar as voltas automaticamente</string>
+    <string name="legacy_auto_recover_stalled_android_auto_and_ride_dashb_5da6ea2d">Recuperar sozinho as transmissões do Android Auto e do Ride Dashboard que bloqueiem</string>
+    <string name="legacy_bluetooth_capture_and_mapping_3e23fd19">Captura Bluetooth e atribuição</string>
+    <string name="legacy_connect_and_discover_t_box_when_app_opens_fe05f1ea">Ligar e procurar o T-Box quando a aplicação abre</string>
+    <string name="legacy_connection_automation_93f3bb33">Ligação e automatismos</string>
+    <string name="legacy_diagnostics_3748418c">Diagnóstico</string>
+    <string name="legacy_disable_touchscreen_4f636f13">Desativar o ecrã tátil</string>
+    <string name="legacy_draw_detected_curved_segments_in_a_distinct_colo_906c94c">Desenhar os troços com curvas detetados numa cor distinta no mapa TFT</string>
+    <string name="legacy_enable_logging_e57825e2">Ativar o registo</string>
+    <string name="legacy_encoder_detail_and_power_mode_for_all_streams_9c18fdcf">Detalhe do codificador e modo de energia para todas as transmissões</string>
+    <string name="legacy_fuel_range_warning_e301d2ef">Aviso de autonomia de combustível</string>
+    <string name="legacy_full_client_info_every_candidate_profile_s_score_fb2a321f">CLIENT_INFO completo, pontuação de cada perfil candidato, comando desconhecido</string>
+    <string name="legacy_golden_hour_hint_26c00b9f">Sugestão de hora dourada</string>
+    <string name="legacy_highlight_curvy_roads_6d7866a">Realçar as estradas com curvas</string>
+    <string name="legacy_master_switch_for_the_diagnostic_log_off_means_n_1d7e2b81">Interruptor principal do registo de diagnóstico. Desligado significa que nada é registado</string>
+    <string name="legacy_navigation_e5d7e634">Navegação</string>
+    <string name="legacy_network_tests_and_application_logs_6064f99">Testes de rede e registos da aplicação</string>
+    <string name="legacy_preview_ride_dashboard_cf294e4">Pré-visualizar o Ride Dashboard</string>
+    <string name="legacy_recovery_watchdog_eb0fb218">Vigilante de recuperação</string>
+    <string name="legacy_resolution_and_display_mode_70f7a2be">Resolução e modo de imagem</string>
+    <string name="legacy_review_copy_share_or_clear_events_fa00934b">Consultar, copiar, partilhar ou limpar eventos</string>
+    <string name="legacy_routes_through_fossgis_s_free_public_valhalla_se_5f3fb227">Passa pelo servidor Valhalla público e gratuito da FOSSGIS em vez de</string>
+    <string name="legacy_see_the_tft_render_on_this_phone_using_its_own_g_d21ea9ba">Ver o TFT desenhado neste telemóvel, com o GPS dele - sem T-Box</string>
+    <string name="legacy_show_forecast_conditions_at_your_destination_in__d467471f">Mostrar as condições previstas no destino na pré-visualização da rota</string>
+    <string name="legacy_show_minutes_to_the_nearest_sunrise_sunset_golde_840f15d">Mostrar os minutos até à hora dourada do nascer ou pôr do sol mais próximo</string>
+    <string name="legacy_start_gps_logging_with_projection_sessions_1c3d9c89">Iniciar o registo GPS com as sessões de projeção</string>
+    <string name="legacy_t_box_discovery_wi_fi_binding_cellular_routes_32d84d5f">Deteção do T-Box, ligação Wi-Fi, rotas móveis</string>
+    <string name="legacy_try_without_a_key_demo_server_74e379d4">Experimentar sem chave (servidor de demonstração)</string>
+    <string name="legacy_use_focus_and_handlebar_controls_even_when_the_t_d1be0479">Usar o foco e os comandos do guiador mesmo quando o T-Box indica um ecrã tátil</string>
+    <string name="legacy_verbose_t_box_logging_ee12f7b3">Registo detalhado do T-Box</string>
+    <string name="legacy_video_quality_3ed2f63a">Qualidade de vídeo</string>
+    <string name="legacy_voice_guidance_a2d4eea6">Orientação por voz</string>
+    <string name="legacy_warn_when_a_route_would_exceed_your_motorcycle_s_c31a0f09">Avisar quando uma rota exceder a autonomia do depósito da sua mota (definida na Garagem)</string>
+    <string name="legacy_weather_at_arrival_44ffc4d8">Meteorologia à chegada</string>
+    <string name="legacy_your_own_routing_api_key_for_turn_by_turn_94d8b202">A sua própria chave API de rotas para a navegação curva a curva</string>
+    <string name="legacy_settings_7469104a">‹ Definições</string>
+    <string name="legacy_gps_ride_recording_and_trip_statistics_28992d34">Gravação GPS de voltas e estatísticas</string>
+    <string name="legacy_moto_hub_display_dimmer_57b6244b">Atenuador de ecrã do MOTO-HUB</string>
+    <string name="legacy_filter_1_d_497daa14">FILTRO %1$d</string>
+    <string name="legacy_recording_1_s_b01f3573">A GRAVAR · %1$s</string>
+    <string name="legacy_1_d_optimized_gps_points_de88df06">%1$d pontos GPS otimizados</string>
+    <string name="legacy_place_1_d_name_6bdc57c6">Nome do local %1$d</string>
+    <string name="legacy_save_place_1_d_39c7a048">Guardar o local %1$d</string>
+    <string name="legacy_t_box_identifier_1_s_531e2638">Identificador do T-Box: %1$s</string>
     <string name="legacy_1_s_fe2c9a02">‹ %1$s</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_motorcycle_buttons_control_1_s_6e2f90ac">Motorcycle buttons control %1$s</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_rain_1_d_84b55e18">RAIN %1$d%%</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_motorcycle_buttons_control_1_s_6e2f90ac">Os botões da mota comandam %1$s</string>
+    <string name="legacy_rain_1_d_84b55e18">CHUVA %1$d%%</string>
     <string name="legacy_1_d_c_41e7b8ff">%1$d°C</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
     <string name="legacy_1_d_km_h_6ce8c40f">%1$d KM/H</string>
     <string name="legacy_1_d_mph_669c2f51">%1$d MPH</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
     <string name="legacy_moto_hub_258caaa5">MOTO-HUB</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_recording_this_ride_1aceedab">Recording this ride</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_moto_hub_controls_f72ba5d1">MOTO-HUB controls</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_1_d_available_e7e32615">%1$d available</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_1_s_remaining_e0c291">%1$s remaining</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_recording_this_ride_1aceedab">A gravar esta volta</string>
+    <string name="legacy_moto_hub_controls_f72ba5d1">Comandos MOTO-HUB</string>
+    <string name="legacy_1_d_available_e7e32615">%1$d disponíveis</string>
+    <string name="legacy_1_s_remaining_e0c291">%1$s em falta</string>
     <string name="legacy_1_s_2_s_a1c6054a">%1$s · %2$s</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
     <string name="legacy_1000_mt_x_cfdl26_a07555df">1000 MT-X (CFDL26)</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_200_ms_snappier_singles_bddf5c9a">200 ms - snappier singles</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_300_ms_balanced_17f78a68">300 ms - balanced</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_450_ms_forgiving_doubles_3234effd">450 ms - forgiving doubles</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_500_ms_quicker_hold_a1cbda27">500 ms - quicker hold</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_600_ms_balanced_9f5246b">600 ms - balanced</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_800_ms_deliberate_hold_32e73399">800 ms - deliberate hold</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_200_ms_snappier_singles_bddf5c9a">200 ms - toques simples mais vivos</string>
+    <string name="legacy_300_ms_balanced_17f78a68">300 ms - equilibrado</string>
+    <string name="legacy_450_ms_forgiving_doubles_3234effd">450 ms - duplos mais tolerantes</string>
+    <string name="legacy_500_ms_quicker_hold_a1cbda27">500 ms - toque longo mais rápido</string>
+    <string name="legacy_600_ms_balanced_9f5246b">600 ms - equilibrado</string>
+    <string name="legacy_800_ms_deliberate_hold_32e73399">800 ms - toque longo marcado</string>
     <string name="legacy_800mt_cfdl26_9a9a6453">800MT (CFDL26)</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
     <string name="legacy_800nk_advanced_cfdl26_8796cfe5">800NK Advanced (CFDL26)</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_active_profile_dcb9be6f">ACTIVE PROFILE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_active_profile_dcb9be6f">PERFIL ATIVO</string>
     <string name="legacy_android_auto_4d461ce0">ANDROID AUTO</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_atms_1ed139">ATMs</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_avg_feb2">AVG</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_avg_speed_7231cd39">AVG SPEED</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_access_point_2a7fd7f4">Access point</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_airports_db81a128">Airports</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_album_cover_current_track_and_progress_5704cf2c">Album cover, current track and progress</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_atms_1ed139">Multibancos</string>
+    <string name="legacy_avg_feb2">MÉD</string>
+    <string name="legacy_avg_speed_7231cd39">VELOCIDADE MÉD</string>
+    <string name="legacy_access_point_2a7fd7f4">Ponto de acesso</string>
+    <string name="legacy_airports_db81a128">Aeroportos</string>
+    <string name="legacy_album_cover_current_track_and_progress_5704cf2c">Capa do álbum, faixa atual e progresso</string>
     <string name="legacy_altitude_7d3daec2">Altitude</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_android_auto_map_9e2be3c">Android Auto map</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_arc_speedometer_bearing_and_gnss_lock_status_a1dab290">Arc speedometer, bearing and GNSS lock status</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_assistant_ccab92be">Assistant</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_attractions_ab6135cc">Attractions</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_android_auto_map_9e2be3c">Mapa do Android Auto</string>
+    <string name="legacy_arc_speedometer_bearing_and_gnss_lock_status_a1dab290">Velocímetro em arco, rumo e estado do sinal GNSS</string>
+    <string name="legacy_assistant_ccab92be">Assistente</string>
+    <string name="legacy_attractions_ab6135cc">Atrações</string>
     <string name="legacy_auto_1f51cf">Auto</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_auto_day_night_808f223b">Auto (day/night)</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_backward_left_7f90d6f7">Backward - Left</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_backward_double_tap_left_bf920c29">Backward double tap - Left</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_bakery_7628ee00">Bakery</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_banks_3cfd197">Banks</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_bars_pubs_8301b610">Bars &amp; pubs</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_battery_phone_fc45d1a1">Battery &amp; Phone</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_battery_charging_connectivity_temperature_and_mo_59cfa2d5">Battery, charging, connectivity, temperature and motion sensors</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_bicycle_rental_cee64385">Bicycle rental</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_bluetooth_absolute_volume_change_3096ab72">Bluetooth absolute-volume change</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_bluetooth_next_track_command_7a7046ee">Bluetooth next-track command</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_bluetooth_play_pause_command_a9252e58">Bluetooth play/pause command</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_bluetooth_previous_track_command_d68a66f2">Bluetooth previous-track command</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_cfdl16_450sr_style_non_touch_b3fdf770">CFDL16 / 450SR-style non-touch</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_cfdl16_legacy_b0fd3b8a">CFDL16 / Legacy</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_cfdl26_motoplay_landscape_touch_a52d575c">CFDL26 MotoPlay landscape touch</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_cfdl26_motoplay_portrait_handlebar_primary_c724cad9">CFDL26 MotoPlay portrait handlebar-primary</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_auto_day_night_808f223b">Auto (dia/noite)</string>
+    <string name="legacy_backward_left_7f90d6f7">Trás - Esquerda</string>
+    <string name="legacy_backward_double_tap_left_bf920c29">Duplo toque para trás - Esquerda</string>
+    <string name="legacy_bakery_7628ee00">Padaria</string>
+    <string name="legacy_banks_3cfd197">Bancos</string>
+    <string name="legacy_bars_pubs_8301b610">Bares e cervejarias</string>
+    <string name="legacy_battery_phone_fc45d1a1">Bateria e telemóvel</string>
+    <string name="legacy_battery_charging_connectivity_temperature_and_mo_59cfa2d5">Bateria, carregamento, ligação, temperatura e sensores de movimento</string>
+    <string name="legacy_bicycle_rental_cee64385">Aluguer de bicicletas</string>
+    <string name="legacy_bluetooth_absolute_volume_change_3096ab72">Alteração de volume absoluto por Bluetooth</string>
+    <string name="legacy_bluetooth_next_track_command_7a7046ee">Comando Bluetooth de faixa seguinte</string>
+    <string name="legacy_bluetooth_play_pause_command_a9252e58">Comando Bluetooth de reprodução/pausa</string>
+    <string name="legacy_bluetooth_previous_track_command_d68a66f2">Comando Bluetooth de faixa anterior</string>
+    <string name="legacy_cfdl16_450sr_style_non_touch_b3fdf770">CFDL16 / sem toque, estilo 450SR</string>
+    <string name="legacy_cfdl16_legacy_b0fd3b8a">CFDL16 / legado</string>
+    <string name="legacy_cfdl26_motoplay_landscape_touch_a52d575c">CFDL26 MotoPlay horizontal com toque</string>
+    <string name="legacy_cfdl26_motoplay_portrait_handlebar_primary_c724cad9">CFDL26 MotoPlay vertical, guiador prioritário</string>
     <string name="legacy_cfmoto_800nk_97f23a55">CFMOTO 800NK</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
     <string name="legacy_cl_c450_5c8b3190">CL-C450</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_crcp_sdk_0_9_23_x_non_touch_5621c1f8">CRCP / sdk 0.9.23.x non-touch</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_campsites_75e7180b">Campsites</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_car_service_917649">Car service</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_charging_5973c691">Charging</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_choose_a_widget_for_1_s_26345a66">Choose a widget for %1$s</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_compass_9bdfd4f2">Compass</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_current_conditions_wind_humidity_via_open_meteo_4e58c8f3">Current conditions, wind, humidity via Open-Meteo</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_d_pad_down_1de05778">D-pad down</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_d_pad_left_1de3d2dd">D-pad left</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_d_pad_right_9eecea06">D-pad right</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_d_pad_up_a8ebfef1">D-pad up</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_d_pad_6049d29c">D-pad ▲</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_d_pad_6049d2a0">D-pad ▶</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_d_pad_6049d2a6">D-pad ▼</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_d_pad_6049d2aa">D-pad ◀</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_crcp_sdk_0_9_23_x_non_touch_5621c1f8">CRCP / sdk 0.9.23.x sem toque</string>
+    <string name="legacy_campsites_75e7180b">Parques de campismo</string>
+    <string name="legacy_car_service_917649">Oficinas auto</string>
+    <string name="legacy_charging_5973c691">A carregar</string>
+    <string name="legacy_choose_a_widget_for_1_s_26345a66">Escolha um widget para %1$s</string>
+    <string name="legacy_compass_9bdfd4f2">Bússola</string>
+    <string name="legacy_current_conditions_wind_humidity_via_open_meteo_4e58c8f3">Condições atuais, vento e humidade via Open-Meteo</string>
+    <string name="legacy_d_pad_down_1de05778">Direcional para baixo</string>
+    <string name="legacy_d_pad_left_1de3d2dd">Direcional para a esquerda</string>
+    <string name="legacy_d_pad_right_9eecea06">Direcional para a direita</string>
+    <string name="legacy_d_pad_up_a8ebfef1">Direcional para cima</string>
+    <string name="legacy_d_pad_6049d29c">Direcional ▲</string>
+    <string name="legacy_d_pad_6049d2a0">Direcional ▶</string>
+    <string name="legacy_d_pad_6049d2a6">Direcional ▼</string>
+    <string name="legacy_d_pad_6049d2aa">Direcional ◀</string>
     <string name="legacy_dist_2005a6">DIST</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_distance_3fd77bf5">DISTANCE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_day_light_2f4e1b57">Day (light)</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_detect_from_the_motorcycle_recommended_9fd07c6f">Detect from the motorcycle (recommended)</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_development_simulator_profile_45f9bdc8">Development simulator profile</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_do_nothing_a83eb158">Do nothing</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_down_double_press_c52a55d2">Down double press</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_down_press_6ec23765">Down press</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_down_double_f6f5f8f8">Down · double</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_down_single_1037016f">Down · single</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_drinking_water_6ae0dde1">Drinking water</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_elapsed_c777dd5c">ELAPSED</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_elevation_857ea708">ELEVATION +</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_editing_1_s_a5399c23">Editing %1$s</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_elevation_profile_climb_rate_and_gps_accuracy_d7b5d893">Elevation profile, climb rate and GPS accuracy</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_favorites_3baf7a37">FAVORITES</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_favorite_427c2dbc">Favorite</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_fire_stations_e5a3dc49">Fire stations</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_food_21807e">Food</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_forward_right_ed1ba1ce">Forward - Right</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_forward_double_tap_right_50824858">Forward double tap - Right</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_gnss_satellite_visibility_and_fix_status_55616e56">GNSS satellite visibility and fix status</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_gps_search_f2175dfe">GPS SEARCH</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_distance_3fd77bf5">DISTÂNCIA</string>
+    <string name="legacy_day_light_2f4e1b57">Dia (claro)</string>
+    <string name="legacy_detect_from_the_motorcycle_recommended_9fd07c6f">Detetar a partir da mota (recomendado)</string>
+    <string name="legacy_development_simulator_profile_45f9bdc8">Perfil do simulador de desenvolvimento</string>
+    <string name="legacy_do_nothing_a83eb158">Não fazer nada</string>
+    <string name="legacy_down_double_press_c52a55d2">Duplo toque para baixo</string>
+    <string name="legacy_down_press_6ec23765">Toque para baixo</string>
+    <string name="legacy_down_double_f6f5f8f8">Baixo · duplo</string>
+    <string name="legacy_down_single_1037016f">Baixo · simples</string>
+    <string name="legacy_drinking_water_6ae0dde1">Água potável</string>
+    <string name="legacy_elapsed_c777dd5c">DECORRIDO</string>
+    <string name="legacy_elevation_857ea708">DESNÍVEL +</string>
+    <string name="legacy_editing_1_s_a5399c23">A editar %1$s</string>
+    <string name="legacy_elevation_profile_climb_rate_and_gps_accuracy_d7b5d893">Perfil altimétrico, velocidade de subida e precisão do GPS</string>
+    <string name="legacy_favorites_3baf7a37">FAVORITOS</string>
+    <string name="legacy_favorite_427c2dbc">Favorito</string>
+    <string name="legacy_fire_stations_e5a3dc49">Quartéis de bombeiros</string>
+    <string name="legacy_food_21807e">Restauração</string>
+    <string name="legacy_forward_right_ed1ba1ce">Frente - Direita</string>
+    <string name="legacy_forward_double_tap_right_50824858">Duplo toque para a frente - Direita</string>
+    <string name="legacy_gnss_satellite_visibility_and_fix_status_55616e56">Visibilidade dos satélites GNSS e estado do sinal</string>
+    <string name="legacy_gps_search_f2175dfe">PROCURA GPS</string>
     <string name="legacy_gps_1_d_m_85cd2614">GPS ±%1$d m</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_guiding_to_destination_1328e050">Guiding to destination</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_heading_sun_altitude_and_rider_relative_sun_posi_8620d321">Heading, sun altitude and rider-relative sun position</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_hospitals_466ae959">Hospitals</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_hotels_stays_e91bd2ff">Hotels &amp; stays</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_in_use_1_s_9a0bc66d">IN USE • %1$s</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_key_configured_d2c8ebf">KEY CONFIGURED</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_large_glove_friendly_actions_for_the_active_dash_ae3e3599">Large, glove-friendly actions for the active dashboard.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_larger_absolute_volume_change_c11a1729">Larger absolute-volume change</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_left_panel_9dcb38cb">Left panel</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_left_double_f4a67f33">Left · double</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_left_single_de787aa">Left · single</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_log_copied_to_clipboard_a7cbe711">Log copied to clipboard</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_max_12944">MAX</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_max_speed_6338424b">MAX SPEED</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_mode_2431a3">MODE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_moto_hub_simulator_72ee829">MOTO-HUB Simulator</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_moving_87e69c4e">MOVING</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_manage_88ef8985">Manage</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_manage_guidance_search_a_new_destination_or_resu_7899102a">Manage guidance, search a new destination, or resume your route.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_manual_recording_73634e37">Manual recording</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_mirroring_8b513fa3">Mirroring</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_mirrors_android_auto_s_own_map_5091f0fa">Mirrors Android Auto’s own map</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_motoplay_landscape_cfdl16_47ddf145">MotoPlay Landscape (CFDL16)</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_motorcycle_service_4f005f46">Motorcycle service</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_navigation_8beff614">NAVIGATION</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_no_key_set_25cc0b82">NO KEY SET</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_native_turn_by_turn_navigation_rendered_on_the_t_96caa565">Native turn-by-turn navigation rendered on the TFT</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_nav_place_1_9c6fda12">Nav · place 1</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_nav_place_2_9c6fda13">Nav · place 2</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_nav_place_3_9c6fda14">Nav · place 3</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_navigate_place_1_8cdacefb">Navigate → place 1</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_navigate_place_2_8cdacefc">Navigate → place 2</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_navigate_place_3_8cdacefd">Navigate → place 3</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_near_square_panel_544x512_7dfae4b9">Near-square panel, 544x512</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_near_square_touch_panel_720x712_644c47fc">Near-square touch panel, 720x712</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_next_turn_eta_sun_position_daylight_remaining_48ea2589">Next turn, ETA, sun position, daylight remaining</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_night_dark_e807e573">Night (dark)</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_none_252358">None</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_now_playing_774920a4">Now Playing</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_ok_select_85c307d1">OK / select</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_off_1354f">Off</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_guiding_to_destination_1328e050">A orientar para o destino</string>
+    <string name="legacy_heading_sun_altitude_and_rider_relative_sun_posi_8620d321">Rumo, altura do sol e posição do sol em relação ao condutor</string>
+    <string name="legacy_hospitals_466ae959">Hospitais</string>
+    <string name="legacy_hotels_stays_e91bd2ff">Hotéis e alojamento</string>
+    <string name="legacy_in_use_1_s_9a0bc66d">EM USO • %1$s</string>
+    <string name="legacy_key_configured_d2c8ebf">CHAVE CONFIGURADA</string>
+    <string name="legacy_large_glove_friendly_actions_for_the_active_dash_ae3e3599">Ações grandes e próprias para luvas no dashboard ativo.</string>
+    <string name="legacy_larger_absolute_volume_change_c11a1729">Alteração de volume absoluto maior</string>
+    <string name="legacy_left_panel_9dcb38cb">Painel esquerdo</string>
+    <string name="legacy_left_double_f4a67f33">Esquerda · duplo</string>
+    <string name="legacy_left_single_de787aa">Esquerda · simples</string>
+    <string name="legacy_log_copied_to_clipboard_a7cbe711">Registo copiado para a área de transferência</string>
+    <string name="legacy_max_12944">MÁX</string>
+    <string name="legacy_max_speed_6338424b">VELOCIDADE MÁX</string>
+    <string name="legacy_mode_2431a3">MODO</string>
+    <string name="legacy_moto_hub_simulator_72ee829">Simulador MOTO-HUB</string>
+    <string name="legacy_moving_87e69c4e">EM MOVIMENTO</string>
+    <string name="legacy_manage_88ef8985">Gerir</string>
+    <string name="legacy_manage_guidance_search_a_new_destination_or_resu_7899102a">Faça a gestão da orientação, procure um novo destino ou retome a sua rota.</string>
+    <string name="legacy_manual_recording_73634e37">Gravação manual</string>
+    <string name="legacy_mirroring_8b513fa3">Espelhamento</string>
+    <string name="legacy_mirrors_android_auto_s_own_map_5091f0fa">Reproduz o próprio mapa do Android Auto</string>
+    <string name="legacy_motoplay_landscape_cfdl16_47ddf145">MotoPlay horizontal (CFDL16)</string>
+    <string name="legacy_motorcycle_service_4f005f46">Oficinas de motos</string>
+    <string name="legacy_navigation_8beff614">NAVEGAÇÃO</string>
+    <string name="legacy_no_key_set_25cc0b82">SEM CHAVE DEFINIDA</string>
+    <string name="legacy_native_turn_by_turn_navigation_rendered_on_the_t_96caa565">Navegação curva a curva nativa, desenhada no TFT</string>
+    <string name="legacy_nav_place_1_9c6fda12">Nav · local 1</string>
+    <string name="legacy_nav_place_2_9c6fda13">Nav · local 2</string>
+    <string name="legacy_nav_place_3_9c6fda14">Nav · local 3</string>
+    <string name="legacy_navigate_place_1_8cdacefb">Navegar → local 1</string>
+    <string name="legacy_navigate_place_2_8cdacefc">Navegar → local 2</string>
+    <string name="legacy_navigate_place_3_8cdacefd">Navegar → local 3</string>
+    <string name="legacy_near_square_panel_544x512_7dfae4b9">Painel quase quadrado, 544x512</string>
+    <string name="legacy_near_square_touch_panel_720x712_644c47fc">Painel tátil quase quadrado, 720x712</string>
+    <string name="legacy_next_turn_eta_sun_position_daylight_remaining_48ea2589">Próxima curva, chegada prevista, posição do sol, luz restante</string>
+    <string name="legacy_night_dark_e807e573">Noite (escuro)</string>
+    <string name="legacy_none_252358">Nenhum</string>
+    <string name="legacy_now_playing_774920a4">A reproduzir</string>
+    <string name="legacy_ok_select_85c307d1">OK / selecionar</string>
+    <string name="legacy_off_1354f">Desligado</string>
     <string name="legacy_openstreetmap_12cdd70f">OpenStreetMap</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_phone_489454e">PHONE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_pad_fullscreen_screen_stays_on_tap_exit_to_leave_fed4fb3e">Pad fullscreen — screen stays on. Tap Exit to leave.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_parking_33f14b98">Parking</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_pharmacies_3d1e90b1">Pharmacies</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_picnic_8e7a005e">Picnic</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_police_8ed2913e">Police</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_post_offices_828381d7">Post offices</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_quick_controls_b6d227a9">Quick controls</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_recent_destinations_4acda7ca">RECENT DESTINATIONS</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_recorded_route_823d22b9">RECORDED ROUTE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_phone_489454e">TELEMÓVEL</string>
+    <string name="legacy_pad_fullscreen_screen_stays_on_tap_exit_to_leave_fed4fb3e">Ecrã inteiro do tablet — o ecrã fica ligado. Toque em Sair para terminar.</string>
+    <string name="legacy_parking_33f14b98">Estacionamento</string>
+    <string name="legacy_pharmacies_3d1e90b1">Farmácias</string>
+    <string name="legacy_picnic_8e7a005e">Piquenique</string>
+    <string name="legacy_police_8ed2913e">Polícia</string>
+    <string name="legacy_post_offices_828381d7">Estações de correios</string>
+    <string name="legacy_quick_controls_b6d227a9">Comandos rápidos</string>
+    <string name="legacy_recent_destinations_4acda7ca">DESTINOS RECENTES</string>
+    <string name="legacy_recorded_route_823d22b9">ROTA GRAVADA</string>
     <string name="legacy_ride_dashboard_7a0ca94c">RIDE DASHBOARD</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_rides_4a5be5b">RIDES</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_route_options_30bc2f87">ROUTE OPTIONS</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_route_preview_683e8cb1">ROUTE PREVIEW</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_requires_a_real_bluetooth_key_up_e9aa900c">Requires a real Bluetooth key-up</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_rest_areas_9d275e5a">Rest areas</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_rides_4a5be5b">VOLTAS</string>
+    <string name="legacy_route_options_30bc2f87">OPÇÕES DE ROTA</string>
+    <string name="legacy_route_preview_683e8cb1">PRÉ-VISUALIZAÇÃO DA ROTA</string>
+    <string name="legacy_requires_a_real_bluetooth_key_up_e9aa900c">Requer um verdadeiro levantar de tecla Bluetooth</string>
+    <string name="legacy_rest_areas_9d275e5a">Áreas de descanso</string>
     <string name="legacy_ride_dashboard_ae928d6c">Ride Dashboard</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_right_panel_f3a982e0">Right panel</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_right_double_8bb580fe">Right · double</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_right_single_a4f68975">Right · single</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_rotary_back_875f5656">Rotary back</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_rotary_forward_5bd716f6">Rotary forward</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_saved_routes_18cdcb23">SAVED ROUTES</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_search_results_3469955e">SEARCH RESULTS</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_selected_for_1_s_49f82b77">SELECTED FOR %1$s</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_satellites_110a3ab8">Satellites</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_save_route_5f739206">Save route</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_search_a_destination_pick_a_favorite_or_start_fr_a4048c1b">Search a destination, pick a favorite, or start from a saved route.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_select_ok_6ca8fff1">Select / OK</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_select_double_tap_enter_star_8a562c06">Select double tap - Enter / Star</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_select_hold_enter_star_217fe7bb">Select hold - Enter / Star</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_select_tap_enter_star_b26a1adf">Select tap - Enter / Star</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_select_double_44fd35de">Select · double</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_select_hold_ce87ce0c">Select · hold</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_select_tap_2ff408b6">Select · tap</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_send_navigation_and_selection_commands_to_androi_887e42f0">Send navigation and selection commands to Android Auto.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_speed_gauge_85be8ba0">Speed Gauge</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_start_android_auto_to_enable_the_controller_2a5eb409">Start Android Auto to enable the controller.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_start_the_dashboard_to_enable_these_actions_1fe53fdf">Start the dashboard to enable these actions.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_supermarkets_5e8b87fc">Supermarkets</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_t_box_connected_35a5911b">T-Box connected</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_time_274acd">TIME</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_right_panel_f3a982e0">Painel direito</string>
+    <string name="legacy_right_double_8bb580fe">Direita · duplo</string>
+    <string name="legacy_right_single_a4f68975">Direita · simples</string>
+    <string name="legacy_rotary_back_875f5656">Roda para trás</string>
+    <string name="legacy_rotary_forward_5bd716f6">Roda para a frente</string>
+    <string name="legacy_saved_routes_18cdcb23">ROTAS GUARDADAS</string>
+    <string name="legacy_search_results_3469955e">RESULTADOS DA PESQUISA</string>
+    <string name="legacy_selected_for_1_s_49f82b77">SELECIONADO PARA %1$s</string>
+    <string name="legacy_satellites_110a3ab8">Satélites</string>
+    <string name="legacy_save_route_5f739206">Guardar rota</string>
+    <string name="legacy_search_a_destination_pick_a_favorite_or_start_fr_a4048c1b">Procure um destino, escolha um favorito ou parta de uma rota guardada.</string>
+    <string name="legacy_select_ok_6ca8fff1">Selecionar / OK</string>
+    <string name="legacy_select_double_tap_enter_star_8a562c06">Duplo toque em Select - Enter / Estrela</string>
+    <string name="legacy_select_hold_enter_star_217fe7bb">Toque longo em Select - Enter / Estrela</string>
+    <string name="legacy_select_tap_enter_star_b26a1adf">Toque em Select - Enter / Estrela</string>
+    <string name="legacy_select_double_44fd35de">Select · duplo</string>
+    <string name="legacy_select_hold_ce87ce0c">Select · longo</string>
+    <string name="legacy_select_tap_2ff408b6">Select · toque</string>
+    <string name="legacy_send_navigation_and_selection_commands_to_androi_887e42f0">Enviar comandos de navegação e de seleção para o Android Auto.</string>
+    <string name="legacy_speed_gauge_85be8ba0">Velocímetro</string>
+    <string name="legacy_start_android_auto_to_enable_the_controller_2a5eb409">Inicie o Android Auto para ativar o controlador.</string>
+    <string name="legacy_start_the_dashboard_to_enable_these_actions_1fe53fdf">Inicie o dashboard para ativar estas ações.</string>
+    <string name="legacy_supermarkets_5e8b87fc">Supermercados</string>
+    <string name="legacy_t_box_connected_35a5911b">T-Box ligado</string>
+    <string name="legacy_time_274acd">TEMPO</string>
     <string name="legacy_total_4c4e324">TOTAL</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_toilets_1eefa3e6">Toilets</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_touch_controller_53c8733d">Touch controller</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_trip_metrics_7c88c7c8">Trip Metrics</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_trip_distance_duration_average_speed_and_speed_p_97ed123f">Trip distance, duration, average speed and speed profile</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_two_next_track_presses_inside_the_window_7db072f9">Two next-track presses inside the window</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_two_presses_inside_the_double_tap_window_cc11c279">Two presses inside the double-tap window</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_unable_to_create_log_file_9dac9184">Unable to create log file</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_unable_to_save_the_motorcycle_photo_d9e617d">Unable to save the motorcycle photo</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_up_double_press_5e63a079">Up double press</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_up_press_df788a9e">Up press</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_up_double_6854af1f">Up · double</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_up_single_8195b796">Up · single</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_viewpoints_390623e8">Viewpoints</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_weather_ac24cfd4">Weather</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_where_are_you_going_f697966b">Where are you going?</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
+    <string name="legacy_toilets_1eefa3e6">Casas de banho</string>
+    <string name="legacy_touch_controller_53c8733d">Controlador tátil</string>
+    <string name="legacy_trip_metrics_7c88c7c8">Dados da volta</string>
+    <string name="legacy_trip_distance_duration_average_speed_and_speed_p_97ed123f">Distância, duração, velocidade média e perfil de velocidade da volta</string>
+    <string name="legacy_two_next_track_presses_inside_the_window_7db072f9">Dois toques de faixa seguinte dentro da janela</string>
+    <string name="legacy_two_presses_inside_the_double_tap_window_cc11c279">Dois toques dentro da janela de duplo toque</string>
+    <string name="legacy_unable_to_create_log_file_9dac9184">Não foi possível criar o ficheiro de registo</string>
+    <string name="legacy_unable_to_save_the_motorcycle_photo_d9e617d">Não foi possível guardar a fotografia da mota</string>
+    <string name="legacy_up_double_press_5e63a079">Duplo toque para cima</string>
+    <string name="legacy_up_press_df788a9e">Toque para cima</string>
+    <string name="legacy_up_double_6854af1f">Cima · duplo</string>
+    <string name="legacy_up_single_8195b796">Cima · simples</string>
+    <string name="legacy_viewpoints_390623e8">Miradouros</string>
+    <string name="legacy_weather_ac24cfd4">Meteorologia</string>
+    <string name="legacy_where_are_you_going_f697966b">Para onde vai?</string>
     <string name="legacy_wi_fi_direct_p2p_5247f7ce">Wi-Fi Direct (P2P)</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_your_route_is_live_e56afe3e">Your route is live</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_modelid_66660742_wi_fi_direct_non_touch_f23f0c0b">modelId 66660742, Wi-Fi Direct, non-touch</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_absolute_volume_change_53b165a0">absolute-volume change</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_play_pause_command_31202f86">play/pause command</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_previous_track_command_f9a52120">previous-track command</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_next_track_command_26b481c">next-track command</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_both_1f3381">BOTH</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_android_auto_live_564f882c">ANDROID AUTO LIVE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_android_auto_standby_9525974d">ANDROID AUTO STANDBY</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_phone_preview_live_290cbf6">PHONE PREVIEW LIVE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_starting_7d22d040">STARTING</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_live_on_tft_d375f015">LIVE ON TFT</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_preparing_69cf13e4">PREPARING</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_recording_route_df2cfb1a">RECORDING ROUTE</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_1_s_is_ready_to_connect_6b95609b">%1$s is ready to connect.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_allow_moto_hub_notifications_to_keep_streaming_v_4700fc1e">Allow MOTO-HUB notifications to keep streaming visible and controllable.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_allow_nearby_devices_and_location_to_detect_the__a4c1fa2c">Allow Nearby devices and Location to detect the T-Box Wi-Fi network.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_android_is_requesting_a_connection_to_1_s_ffe67969">Android is requesting a connection to %1$s.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_camera_permission_is_required_to_read_the_t_box__4e87d105">Camera permission is required to read the T-Box QR code.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_connection_cancelled_you_can_try_again_at_any_ti_19906357">Connection cancelled. You can try again at any time.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_disconnected_372b4933">Disconnected.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_motorcycle_8dd33db1">Motorcycle</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_network_connected_searching_for_the_easyconn_ser_851763f6">Network connected. Searching for the EasyConn service.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_no_known_phone_location_yet_move_outdoors_and_re_47df6139">No known phone location yet; move outdoors and retry.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_pair_a_motorcycle_in_garage_before_starting_navi_76f923b3">Pair a motorcycle in Garage before starting navigation.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_permission_granted_starting_the_capture_session_4805d845">Permission granted. Starting the capture session.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_profile_saved_connect_to_the_t_box_network_and_s_a9069261">Profile saved. Connect to the T-Box network and start discovery.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_qr_code_scanned_but_the_profile_was_not_saved_1__e3b6164f">QR code scanned, but the profile was not saved: %1$s</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_ride_dashboard_streaming_is_active_on_the_motorc_3729a921">Ride Dashboard streaming is active on the motorcycle TFT.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_set_up_the_motorcycle_network_to_get_started_32bb831">Set up the motorcycle network to get started.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_sharing_cancelled_by_the_user_72c1171e">Sharing cancelled by the user.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_something_went_wrong_try_again_b634c6cc">Something went wrong. Try again.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_starting_the_ride_dashboard_pipeline_f27c3ca7">Starting the Ride Dashboard pipeline.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_starting_the_native_ride_dashboard_d28cae88">Starting the native Ride Dashboard.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_starting_the_projection_pipeline_bcc6994a">Starting the projection pipeline.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_stop_the_current_mirroring_or_android_auto_sessi_5390e262">Stop the current mirroring or Android Auto session before opening the Ride Dashboard from here.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_streaming_active_to_the_motorcycle_tft_b881d9a3">Streaming active to the motorcycle TFT.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_t_box_qr_code_scanned_and_saved_1_s_is_ready_to__d28dd75d">T-Box QR code scanned and saved. %1$s is ready to connect.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_t_box_connection_lost_reconnect_to_the_motorcycl_cb4aa98e">T-Box connection lost. Reconnect to the motorcycle network.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_t_box_found_you_can_now_choose_an_app_or_screen__163f7c13">T-Box found. You can now choose an app or screen to share.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_t_box_not_found_1_s_656efb68">T-Box not found: %1$s</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_that_search_is_too_long_try_a_shorter_search_e54badba">That search is too long. Try a shorter search.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_1_d_curved_segments_detected_af1abc2b">%1$d curved segments detected</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_1_d_entries_newest_first_7c18f089">%1$d entries  /  newest first</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_1_d_km_remaining_after_this_route_1b9e2ebf">%1$d km remaining after this route</string>
+    <string name="legacy_your_route_is_live_e56afe3e">A sua rota está ativa</string>
+    <string name="legacy_modelid_66660742_wi_fi_direct_non_touch_f23f0c0b">modelId 66660742, Wi-Fi Direct, sem toque</string>
+    <string name="legacy_absolute_volume_change_53b165a0">alteração de volume absoluto</string>
+    <string name="legacy_play_pause_command_31202f86">comando de reprodução/pausa</string>
+    <string name="legacy_previous_track_command_f9a52120">comando de faixa anterior</string>
+    <string name="legacy_next_track_command_26b481c">comando de faixa seguinte</string>
+    <string name="legacy_both_1f3381">AMBOS</string>
+    <string name="legacy_android_auto_live_564f882c">ANDROID AUTO AO VIVO</string>
+    <string name="legacy_android_auto_standby_9525974d">ANDROID AUTO EM ESPERA</string>
+    <string name="legacy_phone_preview_live_290cbf6">PRÉ-VISUALIZAÇÃO NO TELEMÓVEL</string>
+    <string name="legacy_starting_7d22d040">A INICIAR</string>
+    <string name="legacy_live_on_tft_d375f015">AO VIVO NO TFT</string>
+    <string name="legacy_preparing_69cf13e4">A PREPARAR</string>
+    <string name="legacy_recording_route_df2cfb1a">A GRAVAR A ROTA</string>
+    <string name="legacy_1_s_is_ready_to_connect_6b95609b">%1$s está pronto para ligar.</string>
+    <string name="legacy_allow_moto_hub_notifications_to_keep_streaming_v_4700fc1e">Permita as notificações do MOTO-HUB para manter a transmissão visível e controlável.</string>
+    <string name="legacy_allow_nearby_devices_and_location_to_detect_the__a4c1fa2c">Permita Dispositivos por perto e Localização para detetar a rede Wi-Fi do T-Box.</string>
+    <string name="legacy_android_is_requesting_a_connection_to_1_s_ffe67969">O Android está a pedir uma ligação a %1$s.</string>
+    <string name="legacy_camera_permission_is_required_to_read_the_t_box__4e87d105">É necessária a permissão de câmara para ler o QR code do T-Box.</string>
+    <string name="legacy_connection_cancelled_you_can_try_again_at_any_ti_19906357">Ligação cancelada. Pode tentar de novo a qualquer momento.</string>
+    <string name="legacy_disconnected_372b4933">Desligado.</string>
+    <string name="legacy_motorcycle_8dd33db1">Mota</string>
+    <string name="legacy_network_connected_searching_for_the_easyconn_ser_851763f6">Rede ligada. À procura do serviço EasyConn.</string>
+    <string name="legacy_no_known_phone_location_yet_move_outdoors_and_re_47df6139">Ainda não há nenhuma posição conhecida do telemóvel; vá para o exterior e tente de novo.</string>
+    <string name="legacy_pair_a_motorcycle_in_garage_before_starting_navi_76f923b3">Emparelhe uma mota na Garagem antes de iniciar a navegação.</string>
+    <string name="legacy_permission_granted_starting_the_capture_session_4805d845">Permissão concedida. A iniciar a sessão de captura.</string>
+    <string name="legacy_profile_saved_connect_to_the_t_box_network_and_s_a9069261">Perfil guardado. Ligue-se à rede do T-Box e inicie a deteção.</string>
+    <string name="legacy_qr_code_scanned_but_the_profile_was_not_saved_1__e3b6164f">QR code lido, mas o perfil não foi guardado: %1$s</string>
+    <string name="legacy_ride_dashboard_streaming_is_active_on_the_motorc_3729a921">A transmissão do Ride Dashboard está ativa no TFT da mota.</string>
+    <string name="legacy_set_up_the_motorcycle_network_to_get_started_32bb831">Configure a rede da mota para começar.</string>
+    <string name="legacy_sharing_cancelled_by_the_user_72c1171e">Partilha cancelada pelo utilizador.</string>
+    <string name="legacy_something_went_wrong_try_again_b634c6cc">Algo correu mal. Tente de novo.</string>
+    <string name="legacy_starting_the_ride_dashboard_pipeline_f27c3ca7">A iniciar o pipeline do Ride Dashboard.</string>
+    <string name="legacy_starting_the_native_ride_dashboard_d28cae88">A iniciar o Ride Dashboard nativo.</string>
+    <string name="legacy_starting_the_projection_pipeline_bcc6994a">A iniciar o pipeline de projeção.</string>
+    <string name="legacy_stop_the_current_mirroring_or_android_auto_sessi_5390e262">Pare o espelhamento ou a sessão do Android Auto em curso antes de abrir o Ride Dashboard a partir daqui.</string>
+    <string name="legacy_streaming_active_to_the_motorcycle_tft_b881d9a3">Transmissão ativa para o TFT da mota.</string>
+    <string name="legacy_t_box_qr_code_scanned_and_saved_1_s_is_ready_to__d28dd75d">QR code do T-Box lido e guardado. %1$s está pronto para ligar.</string>
+    <string name="legacy_t_box_connection_lost_reconnect_to_the_motorcycl_cb4aa98e">Ligação ao T-Box perdida. Volte a ligar-se à rede da mota.</string>
+    <string name="legacy_t_box_found_you_can_now_choose_an_app_or_screen__163f7c13">T-Box encontrado. Já pode escolher uma aplicação ou um ecrã para partilhar.</string>
+    <string name="legacy_t_box_not_found_1_s_656efb68">T-Box não encontrado: %1$s</string>
+    <string name="legacy_that_search_is_too_long_try_a_shorter_search_e54badba">Essa pesquisa é demasiado longa. Experimente uma pesquisa mais curta.</string>
+    <string name="legacy_1_d_curved_segments_detected_af1abc2b">%1$d troços com curvas detetados</string>
+    <string name="legacy_1_d_entries_newest_first_7c18f089">%1$d entradas  /  mais recentes primeiro</string>
+    <string name="legacy_1_d_km_remaining_after_this_route_1b9e2ebf">%1$d km de autonomia depois desta rota</string>
     <string name="legacy_1_d_mi_remaining_after_this_route_aaf9da45">%1$d mi remaining after this route</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
     <string name="legacy_1_s_2_s_3_s_4fcb415a">%1$s  %2$s: %3$s</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
     <string name="legacy_1_s_2_d_c_4859b80e">%1$s · %2$d°C</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_connect_a_motorcycle_before_customizing_its_dash_cc281859">Connect a motorcycle before customizing its dashboard.</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_curvy_roads_ahead_15524f7">Curvy roads ahead</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_golden_hour_in_1_d_min_5c769914">Golden hour in %1$d min</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_golden_hour_now_ab52d7b1">Golden hour now</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_installed_version_1_s_2_d_29cd3201">Installed version: %1$s (%2$d)</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_location_and_notifications_are_required_while_re_4f6ceb2b">Location and notifications are required while recording a trip</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_opening_in_1_d_s_42389c34">Opening in %1$d s…</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_peer_1_s_2_s_521b5084">Peer %1$s -&gt; %2$s</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_port_1_d_b6522e8b">Port %1$d</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_unable_to_open_github_8bdb9881">Unable to open GitHub</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_unable_to_open_wi_fi_settings_537aaf03">Unable to open Wi-Fi settings</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_unable_to_open_official_cfmoto_app_settings_ec49e64b">Unable to open official CFMOTO app settings</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_no_open_ports_found_8533cd9d">no open ports found</string>
-    <!-- TODO: translate this legacy UI string; keep the name and placeholders unchanged. -->
-    <string name="legacy_open_1_s_e55a596b">open: %1$s</string>
+    <string name="legacy_connect_a_motorcycle_before_customizing_its_dash_cc281859">Ligue uma mota antes de personalizar o seu dashboard.</string>
+    <string name="legacy_curvy_roads_ahead_15524f7">Estradas com curvas à frente</string>
+    <string name="legacy_golden_hour_in_1_d_min_5c769914">Hora dourada dentro de %1$d min</string>
+    <string name="legacy_golden_hour_now_ab52d7b1">Hora dourada agora</string>
+    <string name="legacy_installed_version_1_s_2_d_29cd3201">Versão instalada: %1$s (%2$d)</string>
+    <string name="legacy_location_and_notifications_are_required_while_re_4f6ceb2b">A localização e as notificações são necessárias durante a gravação de uma volta</string>
+    <string name="legacy_opening_in_1_d_s_42389c34">A abrir dentro de %1$d s…</string>
+    <string name="legacy_peer_1_s_2_s_521b5084">Par %1$s -&gt; %2$s</string>
+    <string name="legacy_port_1_d_b6522e8b">Porta %1$d</string>
+    <string name="legacy_unable_to_open_github_8bdb9881">Não foi possível abrir o GitHub</string>
+    <string name="legacy_unable_to_open_wi_fi_settings_537aaf03">Não foi possível abrir as definições de Wi-Fi</string>
+    <string name="legacy_unable_to_open_official_cfmoto_app_settings_ec49e64b">Não foi possível abrir as definições da aplicação oficial CFMOTO</string>
+    <string name="legacy_no_open_ports_found_8533cd9d">não foram encontradas portas abertas</string>
+    <string name="legacy_open_1_s_e55a596b">abertas: %1$s</string>
     <!-- Android Auto pre-flight: the official MotoPlay client is installed, but may not be active. -->
     <string name="legacy_cfmoto_motoplay_detected_ca887791">CFMOTO MotoPlay detetado</string>
     <string name="legacy_moto_hub_starts_google_android_auto_not_motoplay_1ab1d3e9">O MOTO-HUB inicia o Google Android Auto, não o MotoPlay.</string>
@@ -1281,6 +701,288 @@
     <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
     <string name="legacy_use_these_details_52f852ac">Usar estes dados</string>
 
+    <!-- ===========================================================         Catalogue sweep, 2026-08-13: strings this worktree draws but had
+         no identifier for. Values come from the pro-poc catalogues, where
+         the same source strings are already translated.
+         ================================================================== -->
+
+    <!-- Source: MainActivity.kt -->
+    <string name="legacy_unable_to_open_discord_50e2e02e">Não foi possível abrir o Discord</string>
+
+    <!-- Source: feature/about/AboutScreen.kt -->
+    <string name="legacy_d_taps_away_from_the_prototype_779bf960">%d toques até ao protótipo</string>
+    <string name="legacy_community_source_fe28bfcc">COMUNIDADE E CÓDIGO</string>
+    <string name="legacy_discord_c6d7d50c">Discord</string>
+    <string name="legacy_github_7f258fe3">GitHub</string>
+    <string name="legacy_map_rendering_by_maplibre_native_bsd_2_clause_ve_cb6afe3f">Renderização do mapa por MapLibre Native (BSD-2-Clause). Mosaicos vetoriais da OpenFreeMap, segundo o esquema OpenMapTiles; mosaicos raster da CARTO. Pesquisa de moradas por Photon. Cálculo de rotas por Valhalla, alojado pela Stadia Maps ou pelo servidor de demonstração da FOSSGIS. Locais por Overpass. Meteorologia por Open-Meteo. Preços dos combustíveis publicados como dados abertos pelo Ministerio para la Transición Ecológica de Espanha, pela DGEG portuguesa, pelo Ministère de l\'Économie francês e pelo MIMIT italiano. Os dados da DGEG não podem ser usados comercialmente.</string>
+    <string name="legacy_maps_data_b256210d">MAPAS E DADOS</string>
+    <string name="legacy_maps_addresses_and_routes_are_built_on_data_by_o_f0b02b91">Mapas, moradas e rotas assentam em dados de © OpenStreetMap contributors, sob licença ODbL.</string>
+    <string name="legacy_prototype_unlocked_856a4841">Protótipo desbloqueado</string>
+
+    <!-- Source: feature/androidauto/AndroidAutoHelpScreen.kt -->
+    <string name="legacy_a_notification_confirms_the_server_is_running_le_eacf82e">Uma notificação confirma que o servidor está a correr. Deixe-o ligado: mantém-se ativo até o parar ou reiniciar o telemóvel.</string>
+    <string name="legacy_android_auto_17_4_removed_the_way_an_app_can_ask_890c8f24">O Android Auto 17.4 removeu a forma de uma aplicação pedir para projetar. O MOTO-HUB continua a tentar, e em versões anteriores funciona — mas quando não funciona, o Android Auto pode ser iniciado a partir do seu próprio menu de programador. Não precisa de instalar nada.</string>
+    <string name="legacy_android_auto_does_not_start_2266b70e">O Android Auto não arranca</string>
+    <string name="legacy_every_time_android_auto_will_not_start_18ff3ab9">SEMPRE QUE O ANDROID AUTO NÃO ARRANCAR</string>
+    <string name="legacy_go_back_to_moto_hub_and_start_android_auto_it_co_ff8cc50d">Volte ao MOTO-HUB e inicie o Android Auto. Liga-se sozinho em poucos segundos — não há mais nada a premir.</string>
+    <string name="legacy_in_android_auto_s_developer_settings_open_the_me_1ea3a8cf">Nas definições de Programador do Android Auto, abra o menu ⋮ no canto superior direito e escolha \"Iniciar servidor da unidade principal\". Está nesse menu, não na lista de definições abaixo.</string>
+    <string name="legacy_in_developer_settings_turn_on_add_new_cars_to_an_19f79566">Nas definições de Programador, ative \"Adicionar novos carros ao Android Auto\" (nas versões mais antigas chama-se \"Origens desconhecidas\").</string>
+    <string name="legacy_jumps_straight_to_the_app_where_the_menu_above_l_7c8b2093">Vai diretamente à aplicação onde está o menu acima</string>
+    <string name="legacy_normally_moto_hub_waits_and_asks_android_auto_to_6c183bab">Normalmente o MOTO-HUB espera e pede ao Android Auto que se ligue. A versão 17.4 fechou essa porta a todas as aplicações deste tipo, não só a esta. O servidor da unidade principal inverte o sentido — o Android Auto espera e o MOTO-HUB liga-se a ele — e essa é uma porta que a Google deixou aberta para as suas ferramentas de teste.</string>
+    <string name="legacy_one_time_setup_ca24c531">CONFIGURAÇÃO ÚNICA</string>
+    <string name="legacy_open_android_auto_settings_48a5120d">Abrir definições do Android Auto</string>
+    <string name="legacy_open_the_android_auto_app_scroll_to_the_bottom_a_69ae9e53">Abra a aplicação Android Auto, desça até ao fim e toque dez vezes em \"Versão\". Aparecem as definições de Programador.</string>
+    <string name="legacy_why_14fa8">PORQUÊ</string>
+
+    <!-- Source: feature/controls/BluetoothStatus.kt -->
+    <string name="legacy_allow_bluetooth_access_so_the_app_can_see_whethe_8754f4c2">Permita o acesso ao Bluetooth para a aplicação poder ver se a mota está ligada.</string>
+    <string name="legacy_bluetooth_is_off_turn_it_on_then_pair_the_motorc_5375bc65">O Bluetooth está desligado — ligue-o e depois emparelhe a mota.</string>
+    <string name="legacy_connected_now_1_s_if_that_is_the_motorcycle_the__cd016af1">Ligado agora: %1$s. Se for a mota, os botões do guiador conseguem chegar ao telemóvel.</string>
+    <string name="legacy_no_audio_device_is_connected_right_now_with_the__7d4f4d3e">Não há nenhum dispositivo de áudio ligado neste momento. Com a mota ligada, o painel dela deverá aparecer aqui — se nunca aparecer, emparelhe-o nas definições de Bluetooth.</string>
+    <string name="legacy_this_phone_has_no_bluetooth_b42f7e85">Este telemóvel não tem Bluetooth.</string>
+
+    <!-- Source: feature/controls/HandlebarMappingScreen.kt -->
+    <string name="legacy_a_button_the_app_has_not_been_taught_yet_53060697">Um botão que a aplicação ainda não aprendeu</string>
+    <string name="legacy_a_single_press_acts_immediately_instead_of_waiti_ebd37a80">Uma pressão simples atua de imediato em vez de esperar pela janela da pressão dupla. A dupla continua a funcionar — apenas executa primeiro a simples.</string>
+    <string name="legacy_allow_bluetooth_bbde9a57">Permitir Bluetooth</string>
+    <string name="legacy_bluetooth_settings_ed5eb975">Definições de Bluetooth</string>
+    <string name="legacy_checking_bluetooth_ce222d3e">A verificar o Bluetooth…</string>
+    <string name="legacy_choose_what_this_press_does_4e74fce9">Escolha o que esta pressão faz.</string>
+    <string name="legacy_done_1_d_presses_learned_dd4b86bd">Concluído - %1$d pressões aprendidas.</string>
+    <string name="legacy_double_press_window_a8b0763c">Janela de pressão dupla</string>
+    <string name="legacy_every_card_now_describes_your_handlebar_buttons__f70bd7b3">Agora cada cartão descreve o seu guiador. Os botões que marcou como ausentes desapareceram.</string>
+    <string name="legacy_finish_7d6e78b3">Concluir</string>
+    <string name="legacy_handlebar_7b449ccb">Guiador</string>
+    <string name="legacy_hold_gestures_a5df4e6b">Gestos de pressão longa</string>
+    <string name="legacy_hold_time_bba08d6e">Tempo de pressão longa</string>
+    <string name="legacy_how_long_the_app_waits_before_deciding_a_press_w_fbe08ef2">Quanto tempo a aplicação espera antes de decidir se uma pressão foi dupla ou longa.</string>
+    <string name="legacy_motorcycle_bluetooth_88c59adf">Bluetooth da mota</string>
+    <string name="legacy_not_detected_yet_d1e8f877">ainda não detetado</string>
+    <string name="legacy_not_on_my_bike_49509421">Não existe na minha mota</string>
+    <string name="legacy_nothing_happens_some_dashboards_keep_a_button_fo_c80119d0">Não acontece nada? Alguns painéis reservam um botão para si próprios e não enviam nada ao telemóvel — num CFMOTO CFDL16 é exatamente isso que faz uma pressão CURTA no basculante. Marque-o como ausente e deixa de ocupar espaço.</string>
+    <string name="legacy_on_the_motorcycle_do_this_5d34555e">Na mota, faça isto</string>
+    <string name="legacy_one_card_per_button_with_what_a_press_a_double_p_e88303f5">Um cartão por botão, com o que fazem uma pressão, uma pressão dupla e uma pressão longa. Ensine o guiador para a aplicação saber que botões o seu tem realmente.</string>
+    <string name="legacy_press_a_handlebar_button_fd958503">Prima um botão do guiador</string>
+    <string name="legacy_reset_actions_to_defaults_95ecb43">Repor as ações predefinidas</string>
+    <string name="legacy_skip_27599f">Ignorar</string>
+    <string name="legacy_snappy_singles_330a9d7e">Pressões simples imediatas</string>
+    <string name="legacy_step_1_d_of_2_d_72bf41f6">PASSO %1$d DE %2$d</string>
+    <string name="legacy_stop_here_d51e892e">Parar aqui</string>
+    <string name="legacy_teach_my_handlebar_51393162">Ensinar o meu guiador</string>
+    <string name="legacy_timing_937fe44a">TEMPORIZAÇÃO</string>
+    <string name="legacy_turn_off_if_your_handlebar_needs_a_long_physical_c92718d1">Desligue se o seu guiador exigir uma pressão física longa em cada clique — caso contrário, essas pressões são interpretadas como pressões longas.</string>
+    <string name="legacy_controls_fd1b9add">‹ Controlos</string>
+    <string name="legacy_handlebar_c1b6ada4">‹ Guiador</string>
+
+    <!-- Source: feature/garage/GarageScreen.kt -->
+    <string name="legacy_add_your_first_motorcycle_to_get_rolling_b8e9f267">Adicione a sua primeira mota para começar.</string>
+    <string name="legacy_no_motorcycle_no_problem_4346def1">SEM MOTA? SEM PROBLEMA</string>
+
+    <!-- Source: feature/home/CoreAvailability.kt -->
+    <string name="legacy_advanced_needs_moto_hub_core_installed_and_paire_722fef7d">O Advanced precisa do MOTO-HUB (Core) instalado e emparelhado com o seu T‑Box para ligar, espelhar ou executar o Android Auto.</string>
+    <string name="legacy_couldn_t_open_the_browser_3e0fae25">Não foi possível abrir o navegador.</string>
+    <string name="legacy_download_moto_hub_core_976f62e2">Transferir o MOTO-HUB Core</string>
+    <string name="legacy_moto_hub_core_not_found_b76c3f4f">MOTO-HUB CORE NÃO ENCONTRADO</string>
+
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_android_auto_17_4_removed_the_way_apps_ask_it_to_b5455068">O Android Auto 17.4 removeu a forma de as aplicações pedirem para projetar. Ainda pode ser iniciado a partir do menu de programador do Android Auto.</string>
+    <string name="legacy_one_possible_cause_the_official_cfmoto_app_is_in_b6013d8d">Uma causa possível: a aplicação oficial CFMOTO está instalada e pode manter a ligação ao T-Box ocupada mesmo em segundo plano. Se a ligação continuar a falhar, force a paragem na página Informações da aplicação e tente de novo.</string>
+    <string name="legacy_open_cfmoto_app_info_4af1a737">Abrir informações da aplicação CFMOTO</string>
+    <string name="legacy_retry_connection_54743f76">Tentar ligar de novo</string>
+    <string name="legacy_some_dashboards_never_broadcast_a_network_of_the_787ecd2c">Alguns painéis nunca emitem uma rede própria: entram num hotspot criado pelo telemóvel, usando o Ssid e a Palavra-passe mostrados no painel. Se o seu disser \"abrir hotspot Android\", experimente assim.</string>
+    <string name="legacy_the_official_cfmoto_app_is_installed_and_may_be__461e26a6">A aplicação oficial CFMOTO está instalada e pode estar a ocupar o T-Box. Force a paragem na página Informações da aplicação e tente de novo.</string>
+    <string name="legacy_try_my_phone_hosts_the_hotspot_d4f6db66">Experimente: o hotspot é do meu telemóvel</string>
+
+    <!-- Source: feature/home/HubViewModel.kt -->
+    <string name="legacy_network_connected_pairing_over_bluetooth_and_wai_5b4c6259">Rede ligada. A emparelhar por Bluetooth e à espera do painel.</string>
+
+    <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
+    <string name="legacy_altitude_ft_89feab0c">ALTITUDE FT</string>
+    <string name="legacy_altitude_m_caa51e4f">ALTITUDE M</string>
+    <string name="legacy_distance_ft_552284d9">DISTÂNCIA FT</string>
+    <string name="legacy_distance_km_5522856d">DISTÂNCIA KM</string>
+    <string name="legacy_distance_m_a7e856e2">DISTÂNCIA M</string>
+    <string name="legacy_distance_mi_552285a7">DISTÂNCIA MI</string>
+    <string name="legacy_max_km_h_45403037">MÁX KM/H</string>
+    <string name="legacy_max_mph_5d129e29">MÁX MPH</string>
+
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_auto_connect_and_recovery_57ed0872">Ligação automática e recuperação</string>
+    <string name="legacy_auto_recover_stalled_android_auto_streams_bd3e2d8e">Recuperar sozinho transmissões do Android Auto bloqueadas</string>
+    <string name="legacy_button_mapping_815600">Atribuição de botões</string>
+    <string name="legacy_buttons_control_android_auto_3dc44642">Os botões comandam o Android Auto</string>
+    <string name="legacy_drive_android_auto_with_the_motorcycle_s_buttons_ec16509d">Comande o Android Auto com os botões da mota</string>
+    <string name="legacy_handlebar_buttons_47b4fd2c">Botões do guiador</string>
+    <string name="legacy_managed_by_the_companion_app_its_controls_screen_9ad80a75">Gerido pela aplicação companheira: o ecrã Comandos dela volta a aplicar a sua própria configuração do guiador sempre que uma sessão começa, substituindo o que estiver definido aqui. Configure o guiador aí.</string>
+    <string name="legacy_music_volume_9fa56d95">VOLUME DA MÚSICA</string>
+    <string name="legacy_off_means_the_mode_picker_stays_exactly_as_befor_c93efb5c">Desligado significa que o seletor de modo permanece, exatamente como antes.</string>
+    <string name="legacy_on_9ff">Ligado</string>
+    <string name="legacy_put_a_screen_on_the_tft_as_soon_as_the_motorcycl_60bf969c">Pôr um ecrã no TFT assim que a mota se ligar</string>
+    <string name="legacy_requires_the_phone_paired_to_the_motorcycle_s_bl_dda6960a">Requer o telemóvel emparelhado com o Bluetooth da mota. A música continua a tocar, mas os seus botões são capturados enquanto uma sessão está a decorrer.</string>
+    <string name="legacy_set_the_dash_clock_over_bluetooth_experimental_3431b284">Acertar o relógio do painel por Bluetooth (experimental)</string>
+    <string name="legacy_settings_595d2043">Definições</string>
+    <string name="legacy_some_dashboards_ask_for_the_time_over_bluetooth__b44ce43b">Alguns painéis pedem a hora por Bluetooth em vez de Wi-Fi e ficam nas 00:00 sem ela. É preciso que a mota já esteja emparelhada com este telemóvel nas definições Bluetooth do Android. Desligado por predefinição; o MOTO-HUB só responde a um dispositivo que pergunte no protocolo do próprio painel.</string>
+    <string name="legacy_some_dashboards_forget_settings_like_the_clock_w_76d95842">Alguns painéis esquecem definições como o relógio quando a ligação Wi-Fi Direct cai por completo. Mantém o telemóvel associado à rede da mota até sair da aplicação ou desligar o Wi-Fi. Desligado por predefinição; ligue apenas se o seu painel perder a hora depois de desligar.</string>
+    <string name="legacy_start_automatically_2cb44c45">Iniciar automaticamente</string>
+    <string name="legacy_start_on_connect_94487a47">Iniciar ao ligar</string>
+    <string name="legacy_stay_linked_to_the_bike_s_wi_fi_after_disconnect_81b0e941">Manter a ligação ao Wi-Fi da mota depois de desligar</string>
+    <string name="legacy_the_motorcycle_s_buttons_reach_the_phone_over_bl_356cbf0d">Os botões da mota chegam ao telemóvel por Bluetooth como teclas multimédia. Enquanto uma sessão estiver a transmitir, o MOTO-HUB pode capturá-los e comandar a navegação do Android Auto em vez do leitor de música.</string>
+    <string name="legacy_what_each_press_double_press_and_hold_does_97201ad9">O que faz cada toque, duplo toque e toque longo</string>
+    <string name="legacy_what_to_do_when_android_auto_refuses_to_project_fa692d1b">O que fazer quando o Android Auto se recusa a projetar</string>
+    <string name="legacy_what_to_start_5b78fc39">O QUE INICIAR</string>
+    <string name="legacy_while_capture_is_on_the_volume_buttons_navigate__9e410bf">Com a captura ativa, os botões de volume navegam em vez de mudar o volume — defina aqui o seu nível de audição.</string>
+    <string name="legacy_with_this_on_moto_hub_skips_the_what_should_i_sh_498b0614">Com isto ligado, o MOTO-HUB salta o ecrã \"o que devo mostrar?\" e põe o ecrã escolhido no TFT assim que a ligação à mota se estabelece. Acontece uma vez por arranque da aplicação - pare um ecrã e volta a ter o controlo.</string>
+
+    <!-- Source: ui/components/SystemKillNotice.kt -->
+    <string name="legacy_dismiss_c6dc4a6a">Dispensar</string>
+    <string name="legacy_stopped_by_your_phone_37b2b157">INTERROMPIDO PELO TELEMÓVEL</string>
+    <string name="legacy_your_last_session_ended_at_1_s_because_the_phone_8386f49c">A sua última sessão terminou às %1$s porque o telemóvel fechou %2$s, e não por uma falha da aplicação.</string>
+
+    <!-- ==================================================================
+         Catalogue sweep, 2026-08-13 (second pass): source strings that sit
+         inside an if/when/arrayOf within the lookup call.
+         ================================================================== -->
+
+    <!-- Source: feature/ai/AiSettingsScreen.kt -->
+    <string name="legacy_api_key_fb0d9b39">Chave API</string>
+    <string name="legacy_replace_api_key_d64eadad">Substituir a chave API</string>
+
+    <!-- Source: feature/androidauto/AndroidAutoPreviewScreen.kt -->
+    <string name="legacy_hide_controls_2dc943b4">Ocultar os comandos</string>
+
+    <!-- Source: feature/controls/ControlsScreen.kt -->
+    <string name="legacy_1_d_rpm_2_d_km_h_3_d_c_coolant_60ed46da">%1$d rpm · %2$d km/h · %3$d °C líquido</string>
+    <string name="legacy_obd_adapter_connected_29e365e9">Adaptador OBD ligado</string>
+    <string name="legacy_saved_4bf7e67">Guardado</string>
+    <string name="legacy_the_dashboard_shows_why_on_the_motorcycle_442e8daa">O painel mostra o motivo na mota.</string>
+    <string name="legacy_waiting_for_the_obd_adapter_b3b01207">À espera do adaptador OBD</string>
+
+    <!-- Source: feature/controls/HandlebarMappingScreen.kt -->
+    <string name="legacy_listening_2ece009b">À escuta</string>
+    <string name="legacy_received_d3a64e01">Recebido</string>
+    <string name="legacy_teach_again_4fb10bd5">Ensinar de novo</string>
+
+    <!-- Source: feature/home/HubHomeScreen.kt -->
+    <string name="legacy_bluetooth_is_turned_off_so_the_obd_adapter_canno_5a8640c">O Bluetooth está desligado, por isso não é possível alcançar o adaptador OBD.</string>
+    <string name="legacy_customizable_vector_map_rendered_on_the_tft_bfa6e220">Mapa vetorial personalizável desenhado no TFT</string>
+    <string name="legacy_gps_following_8ad5867b">A seguir o GPS</string>
+    <string name="legacy_moto_hub_needs_bluetooth_access_to_reach_the_obd_af681be3">O MOTO-HUB precisa de acesso Bluetooth para alcançar o adaptador OBD.</string>
+    <string name="legacy_no_map_live_engine_data_from_a_paired_elm327_ada_8ecf531c">Sem mapa: dados do motor ao vivo de um adaptador ELM327 emparelhado</string>
+    <string name="legacy_no_paired_obd_adapter_found_pair_the_elm327_dong_90029f7c">Não foi encontrado nenhum adaptador OBD emparelhado. Emparelhe primeiro o dongle ELM327.</string>
+    <string name="legacy_restore_gps_76fc23d8">Voltar ao GPS</string>
+
+    <!-- Source: feature/navigation/NavigationScreen.kt -->
+    <string name="legacy_mute_24c639">Sem som</string>
+    <string name="legacy_voice_on_8e4723ad">Voz ligada</string>
+
+    <!-- Source: feature/obd/ObdFuelAirScreen.kt -->
+    <string name="legacy_the_ecu_is_adding_fuel_steadily_worth_a_look_if__da08dd7">A centralina está a enriquecer a mistura de forma constante. Vale a pena ver se continuar a subir.</string>
+    <string name="legacy_the_ecu_is_taking_fuel_away_steadily_worth_a_loo_b2e06214">A centralina está a empobrecer a mistura de forma constante. Vale a pena ver se continuar a descer.</string>
+
+    <!-- Source: feature/obd/ObdFullScanScreen.kt -->
+    <string name="legacy_last_scan_1c6351c7">ÚLTIMA ANÁLISE</string>
+    <string name="legacy_run_full_scan_62e71f9">Executar análise completa</string>
+    <string name="legacy_scanning_f99dc8b1">A ANALISAR</string>
+    <string name="legacy_scanning_b757d75">A analisar…</string>
+
+    <!-- Source: feature/obd/ObdHubScreen.kt -->
+    <string name="legacy_bluetooth_is_turned_off_92ceda3f">O Bluetooth está desligado.</string>
+    <string name="legacy_connected_and_reading_1e53c68c">Ligado e a ler</string>
+    <string name="legacy_connecting_ca35204e">A ligar…</string>
+    <string name="legacy_moto_hub_needs_bluetooth_access_to_reach_the_ada_8763b3f4">O MOTO-HUB precisa de acesso Bluetooth para alcançar o adaptador.</string>
+    <string name="legacy_no_paired_obd_adapter_found_72c35314">Não foi encontrado nenhum adaptador OBD emparelhado.</string>
+    <string name="legacy_not_connected_273cf5d2">Não ligado.</string>
+
+    <!-- Source: feature/ridedashboard/widget/AltitudeWidget.kt -->
+    <string name="legacy_1h_af24">-1H</string>
+    <string name="legacy_climbing_6536490d">A SUBIR</string>
+    <string name="legacy_descending_da6096f8">A DESCER</string>
+    <string name="legacy_gnss_live_7bc47fe5">GNSS ATIVO</string>
+    <string name="legacy_level_44fa364">NIVELADO</string>
+    <string name="legacy_no_fix_8982dd16">SEM SINAL</string>
+    <string name="legacy_vertical_speed_427682fd">VEL. VERTICAL</string>
+
+    <!-- Source: feature/ridedashboard/widget/BatteryWidget.kt -->
+    <string name="legacy_battery_level_508e0b71">NÍVEL DA BATERIA</string>
+    <string name="legacy_charging_843f5271">A CARREGAR</string>
+    <string name="legacy_external_power_41cdb450">ALIMENTAÇÃO EXTERNA</string>
+    <string name="legacy_hot_1182d">QUENTE</string>
+    <string name="legacy_low_power_483394f9">BATERIA FRACA</string>
+    <string name="legacy_no_sensor_69b15af9">SEM SENSOR</string>
+    <string name="legacy_normal_8999b0e7">NORMAL</string>
+    <string name="legacy_off_1314f">DESLIGADO</string>
+    <string name="legacy_warm_288a85">MORNO</string>
+
+    <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
+    <string name="legacy_east_205bfd">ESTE</string>
+    <string name="legacy_glare_risk_8e426920">RISCO DE ENCANDEAMENTO</string>
+    <string name="legacy_gnss_stale_fd32d3a0">GNSS DESATUALIZADO</string>
+    <string name="legacy_ne_9b7">NE</string>
+    <string name="legacy_no_gnss_a6d94c86">SEM GNSS</string>
+    <string name="legacy_north_47050e5">NORTE</string>
+    <string name="legacy_nw_9c9">NO</string>
+    <string name="legacy_se_a52">SE</string>
+    <string name="legacy_south_4b6d1ad">SUL</string>
+    <string name="legacy_sun_tracking_5fd65e2b">A SEGUIR O SOL</string>
+    <string name="legacy_sw_a64">SO</string>
+    <string name="legacy_west_2899af">OESTE</string>
+
+    <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
+    <string name="legacy_off_for_1_s_a8aabb23">Desligado em %1$s</string>
+    <string name="legacy_one_widget_pinned_on_1_s_9ab92ad6">Um widget fixo em %1$s</string>
+    <string name="legacy_rotating_on_1_s_c5e75b74">A rodar em %1$s</string>
+    <string name="legacy_this_panel_cycles_through_the_1_d_ticked_widgets_3a2b2d0e">Este painel percorre os %1$d widgets marcados.</string>
+    <string name="legacy_this_panel_shows_that_one_widget_and_never_rotat_f3acc606">Este painel mostra apenas esse widget e nunca roda. Marque mais um para iniciar o carrossel.</string>
+    <string name="legacy_tick_widgets_below_to_build_this_panel_s_carouse_ab0f3111">Marque os widgets abaixo para montar o carrossel deste painel. Cada painel tem o seu.</string>
+
+    <!-- Source: feature/ridedashboard/widget/SatelliteWidget.kt -->
+    <string name="legacy_2d_fix_weak_geometry_e5b0cd1f">SINAL 2D  •  GEOMETRIA FRACA</string>
+    <string name="legacy_3d_fix_navigation_ready_bff99e13">SINAL 3D  •  PRONTO A NAVEGAR</string>
+    <string name="legacy_scan_26be7d">A PROCURAR</string>
+    <string name="legacy_searching_for_satellites_f009ee35">À PROCURA DE SATÉLITES</string>
+
+    <!-- Source: feature/ridedashboard/widget/SpeedGaugeWidget.kt -->
+    <string name="legacy_gnss_ok_35ac4b15">GNSS OK</string>
+    <string name="legacy_n_4e">N</string>
+    <string name="legacy_w_57">O</string>
+
+    <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
+    <string name="legacy_session_live_5f7f2456">SESSÃO ATIVA</string>
+
+    <!-- Source: feature/settings/SettingsScreen.kt -->
+    <string name="legacy_capture_84285f26">Capturar</string>
+    <string name="legacy_capturing_561c2223">A capturar…</string>
+    <string name="legacy_recalibrate_ceebf5d4">Recalibrar</string>
+
+    <!-- Source: feature/trips/TripLibraryUi.kt -->
+    <string name="legacy_enhanced_9c6c8376">COMPLETO</string>
+    <string name="legacy_gps_only_e6f03982">SÓ GPS</string>
     <!-- Source: feature/controls/HandlebarHidCaptureService.kt -->
     <string name="handlebar_hid_capture_description">Permite que a MOTO-HUB leia as pressões do D-pad de um comando Bluetooth HID do guiador quando o modo HID está selecionado nas definições de botões do guiador.</string>
+
+    <!-- ==================================================================
+         Handlebar HID mode, phone-only Android Auto and the teach
+         prerequisite dialog (PR #8, rebased 2026-08-18).
+         ================================================================== -->
+    <string name="legacy_android_auto_isn_t_running_9f167e30">O Android Auto não está a funcionar</string>
+    <string name="legacy_teaching_the_handlebar_needs_a_live_android_auto_697217d0">Ensinar os comandos do guiador precisa de uma sessão Android Auto ativa para captar as pressões. Liga-te à mota, ou inicia-a neste telemóvel sem T-Box.</string>
+    <string name="legacy_connect_to_1_s_579387aa">Ligar a %1$s</string>
+    <string name="legacy_start_on_this_phone_no_t_box_f1bcc79f">Iniciar neste telemóvel (sem T-Box)</string>
+    <string name="legacy_bluetooth_is_off_turn_it_on_then_pair_the_remote_356459fc">O Bluetooth está desligado — liga-o e emparelha o comando como teclado.</string>
+    <string name="legacy_allow_bluetooth_access_so_the_app_can_read_the_r_bf160fa2">Permite o acesso ao Bluetooth para que a aplicação possa ler as pressões do comando.</string>
+    <string name="legacy_bluetooth_is_on_a_hid_remote_doesn_t_show_up_her_77795af8">O Bluetooth está ligado. Um comando HID não aparece aqui como dispositivo ligado — se as pressões continuarem por reconhecer, verifica que está emparelhado nas definições Bluetooth do sistema e que a Acessibilidade está ativada.</string>
+    <string name="legacy_or_right_now_without_the_t_box_21ba0502">OU AGORA MESMO, SEM T-BOX</string>
+    <string name="legacy_android_auto_straight_to_your_phone_f0cc540c">Android Auto — diretamente no telemóvel</string>
+    <string name="legacy_input_protocol_8ff4fe4e">PROTOCOLO DE ENTRADA</string>
+    <string name="legacy_most_dashboards_send_buttons_as_avrcp_media_keys_6e1dd82c">A maioria dos painéis envia os botões como teclas multimédia AVRCP — deixa AVRCP. Escolhe HID apenas se o comando emparelhar como teclado Bluetooth e as suas pressões nunca aparecerem em baixo.</string>
+    <string name="legacy_hid_mode_also_needs_moto_hub_s_accessibility_ser_c0cdf4cc">O modo HID precisa também do serviço de Acessibilidade do MOTO-HUB ativado, ou as pressões não serão vistas.</string>
+    <string name="legacy_open_accessibility_settings_a01c954b">Abrir as definições de Acessibilidade</string>
+    <string name="legacy_turn_on_moto_hub_so_handlebar_presses_reach_the__b41c5310">Ativa o MOTO-HUB para que as pressões no guiador cheguem à aplicação a partir de qualquer ecrã</string>
+    <string name="legacy_was_moto_hub_s_switch_greyed_out_android_blocks__b5233420">O interruptor do MOTO-HUB estava a cinzento? O Android bloqueia-o para aplicações que não foram instaladas a partir de uma loja, e o MOTO-HUB é transferido do GitHub. Abre Informação da aplicação, toca em ⋮ no canto superior direito, escolhe \"Permitir definições restritas\" e volta para ligar o interruptor.</string>
+    <string name="legacy_open_app_info_7c77c863">Abrir Informação da aplicação</string>
+    <string name="legacy_where_allow_restricted_settings_lives_8f29fea1">Onde fica \"Permitir definições restritas\"</string>
+    <string name="legacy_avrcp_media_keys_f50e20c7">AVRCP (teclas multimédia)</string>
+    <string name="legacy_hid_d_pad_a247f04a">HID (D-pad)</string>
+    <string name="legacy_default_the_dashboard_sends_bluetooth_media_key__ccbdfbf7">Predefinido. O painel envia comandos Bluetooth de tecla multimédia para reproduzir/pausar, faixa e volume.</string>
+    <string name="legacy_for_remotes_that_pair_as_a_bluetooth_keyboard_an_25055a66">Para comandos que emparelham como teclado Bluetooth e enviam pressões do D-pad. Requer ativar o serviço de Acessibilidade do MOTO-HUB em baixo.</string>
 </resources>

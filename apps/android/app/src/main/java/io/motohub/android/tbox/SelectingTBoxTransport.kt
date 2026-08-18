@@ -91,6 +91,14 @@ class SelectingTBoxTransport(context: Context) : TBoxTransport {
 
     override suspend fun start(host: TBoxHost): Result<Unit> = active.start(host)
 
+    /**
+     * Routes a JPEG still to the Yunmo transport, for the X-Cape profile that captures stills
+     * instead of encoding video. Returns false on any other family, which is what the caller wants:
+     * only a session configured for that profile ever produces JPEG frames in the first place.
+     */
+    fun offerJpegFrame(jpeg: ByteArray, frameId: Int): Boolean =
+        if (active === yunmo) yunmo.offerJpegFrame(jpeg, frameId) else false
+
     override fun offerAccessUnit(avcc: ByteArray): Boolean = active.offerAccessUnit(avcc)
 
     override suspend fun stop() {

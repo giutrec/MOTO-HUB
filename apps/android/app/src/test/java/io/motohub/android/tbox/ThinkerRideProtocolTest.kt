@@ -150,4 +150,73 @@ class ThinkerRideProtocolTest {
         assertFalse(ThinkerRideProtocol.isPairConfirmation("""{"msg_id":25,"msg_type":24}"""))
         assertFalse(ThinkerRideProtocol.isPairConfirmation("send_pairresult but not json"))
     }
+
+    @Test
+    fun recognisesAPairResultInsideAConcatenatedNotification() {
+        // Dash firmware packs multiple JSON objects into one notify payload; whole-string
+        // parsing fails on these, so the confirmation must still be recognised.
+        assertTrue(
+            ThinkerRideProtocol.isPairConfirmation(
+                """{"msg_id":10,"item":1}{"msg_id":27,"func":"PAIR","act":"send_pairresult","result":1}"""
+            )
+        )
+        assertTrue(
+            ThinkerRideProtocol.isPairConfirmation(
+                "{\n\t\"msg_id\":\t27,\n\t\"act\":\t\"send_pairresult\",\n\t\"result\":\t1\n}{\"msg_id\":10}"
+            )
+        )
+        assertFalse(
+            ThinkerRideProtocol.isPairConfirmation(
+                """{"msg_id":27,"act":"send_pairresult","result":0}{"msg_id":10,"item":1}"""
+            )
+        )
+    }
+
+    @Test
+    fun rebuildsAMessageSplitAcrossNotifications() {
+        // Exactly how a KOVE 800X PRO delivered send_pairinfo at the default 23-byte MTU.
+        val assembler = ThinkerRideProtocol.NotifyAssembler()
+
+        assertTrue(assembler.accept("{\n\t\"msg_id\":\t27,\n\t\"f").isEmpty())
+        assertTrue(assembler.accept("unc\":\t\"PAIR\",\n\t\"act\"").isEmpty())
+        assertTrue(assembler.accept(":\t\"send_pairresult\",\n\t").isEmpty())
+
+        val completed = assembler.accept("\"result\":\t1\n}")
+        assertEquals(1, completed.size)
+        assertTrue(ThinkerRideProtocol.isPairConfirmation(completed.first()))
+    }
+
+    @Test
+    fun splitsSeveralMessagesArrivingInOneNotification() {
+        val assembler = ThinkerRideProtocol.NotifyAssembler()
+
+        val messages = assembler.accept(
+            """{"msg_id":10,"item":1}{"msg_id":27,"act":"send_pairresult","result":1}"""
+        )
+
+        assertEquals(2, messages.size)
+        assertEquals("""{"msg_id":10,"item":1}""", messages[0])
+        assertTrue(ThinkerRideProtocol.isPairConfirmation(messages[1]))
+    }
+
+    @Test
+    fun keepsTheTrailingPartialMessageForTheNextNotification() {
+        val assembler = ThinkerRideProtocol.NotifyAssembler()
+
+        val first = assembler.accept("""{"msg_id":13}{"msg_id":27,"act":""")
+        assertEquals(listOf("""{"msg_id":13}"""), first)
+
+        val second = assembler.accept(""""send_pairresult","result":1}""")
+        assertEquals(1, second.size)
+        assertTrue(ThinkerRideProtocol.isPairConfirmation(second.first()))
+    }
+
+    @Test
+    fun bracesInsideStringsDoNotSplitAMessage() {
+        val assembler = ThinkerRideProtocol.NotifyAssembler()
+
+        val messages = assembler.accept("""{"msg_id":9,"name":"a}{b","tag":-1}""")
+
+        assertEquals(listOf("""{"msg_id":9,"name":"a}{b","tag":-1}"""), messages)
+    }
 }

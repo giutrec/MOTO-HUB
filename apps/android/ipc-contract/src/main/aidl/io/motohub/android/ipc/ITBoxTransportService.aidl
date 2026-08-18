@@ -102,4 +102,29 @@ interface ITBoxTransportService {
         String localIpv4,
         String groupOwnerIpv4
     );
+
+    /**
+     * Why the last connect() or connectOverFormedGroup() returned false, in the caller's own
+     * words to its rider. Null when the last connect succeeded, when none has run, or when Core
+     * predates this call.
+     *
+     * connect() answers a bare boolean, and for a long time that was everything the companion app
+     * knew. It could only say "Core failed to connect to the T-Box" and then offer the help it had
+     * - which is help for a busy EasyConn session, so every network-layer failure came out looking
+     * like the official CFMOTO app was holding the link. A rider chased that as far as
+     * uninstalling an app that had nothing to do with it (2026-08-15), while the real reason - a
+     * VPN holding the route to the dash - sat in Core's log where nothing showed it to him.
+     *
+     * Read it only after a false answer, and pair it with getLastConnectFailureStage().
+     */
+    String getLastConnectFailure();
+
+    /**
+     * Which half of the connect produced getLastConnectFailure(): one of
+     * IpcBridgeContract.CONNECT_STAGE_*. Lets a caller offer network help for a network failure
+     * and session help for a session failure, without matching on message text that is assembled
+     * from exceptions and translated. Returns CONNECT_STAGE_UNKNOWN (0) on a Core that predates
+     * this call, which is also what an empty reply parcel reads as.
+     */
+    int getLastConnectFailureStage();
 }

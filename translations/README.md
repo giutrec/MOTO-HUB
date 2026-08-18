@@ -19,12 +19,25 @@ The English catalogue is the fallback and the source of truth for identifiers.
 A translated catalogue may omit an identifier while it is being worked on;
 Android will then fall back to English for that individual string.
 
-The Italian and Portuguese files include the complete current catalogue. The
-Italian catalogue is translated and ready for review; Portuguese entries still
-marked `TODO` are intentionally copied from English so a translator can fill
-them in incrementally.
+Every catalogue holds the complete set of identifiers and every one of them is
+translated: the `TODO` markers that used to stand in for untranslated entries
+are gone. A catalogue may still omit an identifier while it is being worked on;
+Android then falls back to English for that individual string.
 
 The Android build maps the locale tags in these filenames to Android resource
 qualifiers automatically (`it-IT` becomes `values-it`, `pt-PT` becomes
-`values-pt-rPT`, `ko-KR` becomes `values-ko-rKR`). A new locale must be added to both this directory and
-`app/src/main/res/xml/locales_config.xml`.
+`values-pt-rPT`, `ko-KR` becomes `values-ko-rKR`, `fr-FR` becomes `values-fr`,
+`es-ES` becomes `values-es`).
+A new locale must be added in three places: this directory, the `localeDirectories`
+map in `app/build.gradle.kts`, and `app/src/main/res/xml/locales_config.xml` —
+plus an `AppLanguage` entry and a `language_*` string if it should appear in the
+in-app language picker.
+
+## Keeping the catalogue complete
+
+Identifiers are derived from the English source text, so a new `motoHubText("…")`
+or `WidgetDrawingContext.localized("…")` call silently falls back to its English
+literal until the catalogue gains a matching entry. Nothing in the build fails
+when that happens, which is how the catalogue fell 621 strings behind between
+2026-08-08 and 2026-08-13. When adding UI text, add the catalogue entry in the
+same change.

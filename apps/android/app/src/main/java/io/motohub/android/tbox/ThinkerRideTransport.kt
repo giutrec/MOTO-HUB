@@ -40,6 +40,14 @@ import kotlinx.coroutines.withTimeoutOrNull
  * panel size, so [start] emits the configured profile's geometry as the session's video area —
  * that is what makes other ThinkerRide models with other TFT resolutions a profile entry, not a
  * code change.
+ *
+ * A re-[discover] while the session is still healthy reuses it instead of tearing it down
+ * (KoveMirror 9163284 keeps its TCP listeners alive across retries for the same reason): the
+ * dash opens the video connection up to ~25s after mirror-start, and destroying the servers on
+ * a retry leaves it mirroring into a socket nobody owns — a black TFT until power-cycle. The
+ * video accept path is late-tolerant for the same scenario: a connection that arrives after
+ * [start] gave up, or a dash that drops and reopens the channel, is wired straight into the
+ * running session.
  */
 class ThinkerRideTransport(context: Context) : TBoxTransport {
 
@@ -64,10 +72,22 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
     override suspend fun discover(link: TBoxLink, expectedModelId: String?): Result<TBoxHost> =
         withContext(Dispatchers.IO) {
             runCatching {
-                teardownSession()
                 if (!ThinkerRideGate.hasBlePermissions(appContext)) {
                     error(ThinkerRideGate.missingPermissionMessage("MOTO-HUB"))
                 }
+                reusableSession(link)?.let { alive ->
+                    ProjectionEventLog.record(
+                        "THINKERRIDE",
+                        "Re-discovery found the dash session still healthy; reusing it instead " +
+                            "of rescanning (servers and BLE link stay up)."
+                    )
+                    return@runCatching TBoxHost(
+                        ipAddress = alive.localAddress(),
+                        port = ThinkerRideProtocol.VIDEO_PORT,
+                        packageName = ThinkerRideProtocol.PACKAGE_TAG
+                    )
+                }
+                teardownSession()
                 val created = Session(link)
                 synchronized(sessionLock) { session = created }
                 try {
@@ -91,7 +111,7 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
                     TBoxHost(
                         ipAddress = created.localAddress(),
                         port = ThinkerRideProtocol.VIDEO_PORT,
-                        packageName = THINKERRIDE_PACKAGE_TAG
+                        packageName = ThinkerRideProtocol.PACKAGE_TAG
                     )
                 } catch (failure: Throwable) {
                     teardownSession()
@@ -118,18 +138,43 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
                         "${PAIR_CONFIRM_TIMEOUT_MS}ms; sending mirror-start anyway."
                 )
             }
-            active.ble.sendMirrorStatus(true)
+            // Mirror-start goes out on the confirmation we already have, exactly as KoveMirror
+            // does. A 2026-08-14 experiment re-sent the pairing handshake first, on the theory
+            // that the dash only honours a mirror-start that closely follows one; the field
+            // disproved it — a dash that ignores mirror-start ignored it 1.5s after a fresh
+            // confirmation too, and answered none of 15 repeat handshakes. All that was left was
+            // an unrequested `get_pairinfo` in front of every mirror-start, so it is gone. The
+            // age is logged because it is the number any future theory about this would need.
             ProjectionEventLog.record(
                 "THINKERRIDE",
-                "Mirror-start sent over Bluetooth; waiting for the dash video connection " +
-                    "(stream ${area.width}x${area.height})."
+                "Pairing was confirmed ${active.ble.millisSincePairConfirmation()}ms ago; " +
+                    "sending mirror-start now."
+            )
+            active.mirrorArea = area
+            active.ble.sendMirrorStatus(true)
+            // "Sent" used to mean "queued", which is not the same claim at all: on a dash that
+            // ignores mirror-start, whether the bytes actually left this phone is the difference
+            // between our bug and its firmware. Wait for the queue to drain and say which it was.
+            val drained = active.ble.awaitWritesDrained(MIRROR_START_DRAIN_TIMEOUT_MS)
+            ProjectionEventLog.record(
+                "THINKERRIDE",
+                if (drained) {
+                    "Mirror-start left the phone over Bluetooth; waiting for the dash video " +
+                        "connection (stream ${area.width}x${area.height})."
+                } else {
+                    "Mirror-start is still queued after ${MIRROR_START_DRAIN_TIMEOUT_MS}ms; " +
+                        "waiting for the dash video connection anyway " +
+                        "(stream ${area.width}x${area.height})."
+                }
             )
             val video = withTimeoutOrNull(VIDEO_CONNECT_TIMEOUT_MS) { active.videoConnected.await() }
                 ?: error(
                     "The dashboard acknowledged the session but never opened the video " +
                         "connection. Power-cycle the dash screen and connect again."
                 )
-            active.beginVideo(video, area)
+            // The dash may have dropped and reopened the channel since the first accept; the
+            // newest socket is the live one, the deferred only remembers the first.
+            active.beginVideo(active.latestVideoSocket ?: video, area)
             mutableEvents.tryEmit(TBoxEvent.VideoArea(area.width, area.height, isFallback = false))
             mutableEvents.tryEmit(TBoxEvent.VideoStreamStart)
             Unit
@@ -151,6 +196,20 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
         mutableEvents.tryEmit(TBoxEvent.Stopped)
     }
 
+    /**
+     * The current session, when it can serve another [discover] as-is: same network, BLE link
+     * never lost, and the dash has already proven it can reach the control server. Anything less
+     * gets the full teardown-and-rescan.
+     */
+    private fun reusableSession(link: TBoxLink): Session? {
+        val active = synchronized(sessionLock) { session } ?: return null
+        val healthy = !active.closed.get() &&
+            !active.fatalReported.get() &&
+            active.controlConnected.isCompleted &&
+            active.link.network == link.network
+        return if (healthy) active else null
+    }
+
     private fun teardownSession() {
         val previous = synchronized(sessionLock) {
             val current = session
@@ -169,11 +228,19 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
     }
 
     /** Everything owned by one dash connection, torn down as a unit. */
-    private inner class Session(private val link: TBoxLink) {
+    private inner class Session(val link: TBoxLink) {
         val closed = AtomicBoolean(false)
         val fatalReported = AtomicBoolean(false)
         val controlConnected = CompletableDeferred<Socket>()
         val videoConnected = CompletableDeferred<Socket>()
+
+        /** Set by [start] just before mirror-start; a reopened video connection needs it. */
+        @Volatile
+        var mirrorArea: TBoxEvent.VideoArea? = null
+
+        /** The most recent accepted video socket; [videoConnected] only remembers the first. */
+        @Volatile
+        var latestVideoSocket: Socket? = null
 
         val ble = ThinkerRideBleLink(
             appContext,
@@ -234,7 +301,27 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
             acceptLoop("heartbeat", heartbeatServer) { socket -> runHeartbeat(socket) }
             acceptLoop("video", videoServer) { socket ->
                 socket.tcpNoDelay = true
-                if (!videoConnected.isCompleted) videoConnected.complete(socket)
+                // Only a dash that was told to mirror can be opening this; anything else is
+                // something on this phone probing the port. The network diagnostics screen did
+                // exactly that (it dials the registry's host:15456, which on this wire is *us*),
+                // and without this guard that probe was accepted as the dash and the real
+                // connection had nowhere to land.
+                if (mirrorArea == null) {
+                    ProjectionEventLog.record(
+                        "THINKERRIDE",
+                        "Ignoring a video connection that arrived before any mirror-start; " +
+                            "the dash was never asked to mirror."
+                    )
+                    runCatching { socket.close() }
+                    return@acceptLoop
+                }
+                latestVideoSocket = socket
+                if (!videoConnected.complete(socket)) {
+                    // The dash reopened the channel — or connected after start() stopped
+                    // waiting. Wire the running session onto the new socket instead of
+                    // leaving the dash mirroring into nothing.
+                    mirrorArea?.let { area -> beginVideo(socket, area) }
+                }
             }
         }
 
@@ -292,7 +379,11 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
             )
         }
 
+        // Reached from both the accept thread (dash reopened the channel) and start().
+        @Synchronized
         fun beginVideo(socket: Socket, area: TBoxEvent.VideoArea) {
+            if (videoSocket === socket) return
+            videoSocket?.let { previous -> runCatching { previous.close() } }
             val out = socket.getOutputStream()
             out.write(ThinkerRideProtocol.videoSizeHeader(area.width, area.height))
             out.flush()
@@ -365,11 +456,33 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
             // The control channel is where an unknown ThinkerRide model would identify itself,
             // so keep whatever readable content arrives; a future profile is written from these
             // lines the same way EasyConn profiles are written from CLIENT_INFO logs.
+            //
+            // Binary replies used to be dropped here, which left every diagnostic log showing
+            // only our side of this conversation: a dash answering our five handshake commands
+            // in binary said nothing we could read. On a dash that accepts mirror-start and then
+            // never mirrors (KOVE 800X PRO, 2026-08-17) that silence is the whole question, so
+            // anything unreadable is hex-dumped instead of discarded.
+            // The 6-byte keep-alive arrives every few seconds and is answered, not read; hex
+            // dumping it would bury everything else.
+            if (ThinkerRideProtocol.isKeepaliveProbe(buffer, length)) return
             val text = String(buffer, 0, length, StandardCharsets.UTF_8)
             val printable = text.count { it.code in 32..126 }
             if (printable >= length / 2 && text.isNotBlank()) {
                 ProjectionEventLog.record("THINKERRIDE", "Dash control payload: ${text.trim()}")
+                return
             }
+            val shown = minOf(length, CONTROL_HEX_DUMP_LIMIT)
+            val hex = buildString(shown * 3) {
+                for (index in 0 until shown) {
+                    if (index > 0) append(' ')
+                    append("%02X".format(buffer[index]))
+                }
+            }
+            val suffix = if (length > shown) " … (+${length - shown} bytes)" else ""
+            ProjectionEventLog.record(
+                "THINKERRIDE",
+                "Dash control payload (binary, $length bytes): $hex$suffix"
+            )
         }
 
         fun close() {
@@ -390,15 +503,29 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
     }
 
     private companion object {
-        const val THINKERRIDE_PACKAGE_TAG = "thinkerride"
         const val BLE_SCAN_TIMEOUT_MS = 20_000L
         const val CONTROL_CONNECT_TIMEOUT_MS = 20_000L
-        const val VIDEO_CONNECT_TIMEOUT_MS = 15_000L
+
+        /**
+         * A real KOVE 800X was logged opening the video connection 12.0s and 25.3s after
+         * mirror-start (2026-08-13 tester diagnostics), so 15s lost the race half the time.
+         */
+        const val VIDEO_CONNECT_TIMEOUT_MS = 40_000L
 
         /** How long [start] waits for `send_pairresult` before going ahead regardless. */
         const val PAIR_CONFIRM_TIMEOUT_MS = 6_000L
 
         /** How long [stop] gives the mirror-stop packets to leave the phone. */
         const val BLE_DRAIN_TIMEOUT_MS = 1_500L
+
+        /** Bytes of an unreadable control payload written to the log before truncating. */
+        const val CONTROL_HEX_DUMP_LIMIT = 64
+
+        /**
+         * How long [start] waits for the mirror-start packets to actually leave the phone before
+         * it stops claiming they did. Two packets [ThinkerRideProtocol.BLE_WRITE_SPACING_MS]
+         * apart clear well inside this even after a retry or two.
+         */
+        const val MIRROR_START_DRAIN_TIMEOUT_MS = 3_000L
     }
 }

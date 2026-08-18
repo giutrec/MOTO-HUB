@@ -6,10 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -31,6 +28,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import io.motohub.android.BuildConfig
 import io.motohub.android.ui.components.MonoLabel
+import io.motohub.android.ui.components.MotoHubDialogBody
 
 @Composable
 fun GithubUpdateDialog(
@@ -50,12 +48,7 @@ fun GithubUpdateDialog(
         onDismissRequest = onDismiss,
         title = { Text(motoHubText("MOTO-HUB updates")) },
         text = {
-            Column(
-                modifier = Modifier
-                    .heightIn(max = 560.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            MotoHubDialogBody {
                 Text(
                     motoHubText("Installed version: %1\$s (%2\$d)", BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
                     style = MaterialTheme.typography.bodySmall,

@@ -7,15 +7,13 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import io.motohub.android.i18n.motoHubText
+import io.motohub.android.ui.components.MotoHubDialogBody
 
 /**
  * A pre-flight warning, not a claim that the official app is currently active.
@@ -35,7 +33,7 @@ fun OfficialCfmotoWarningDialog(
         onDismissRequest = onDismiss,
         title = { Text(motoHubText("CFMOTO MotoPlay detected")) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            MotoHubDialogBody {
                 Text(
                     motoHubText(
                         "MOTO-HUB starts Google Android Auto, not MotoPlay."
@@ -50,6 +48,14 @@ fun OfficialCfmotoWarningDialog(
                     ),
                     style = MaterialTheme.typography.bodyMedium
                 )
+                // Three buttons never fit on one row of a narrow phone, and Material 3 wraps them
+                // into a ragged stack, so the settings shortcut sits with the text that asks for it.
+                OutlinedButton(
+                    onClick = onOpenOfficialAppSettings,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(motoHubText("Open MotoPlay settings"))
+                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -73,13 +79,8 @@ fun OfficialCfmotoWarningDialog(
             }
         },
         dismissButton = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onOpenOfficialAppSettings) {
-                    Text(motoHubText("Open MotoPlay settings"))
-                }
-                OutlinedButton(onClick = onDismiss) {
-                    Text(motoHubText("Cancel"))
-                }
+            OutlinedButton(onClick = onDismiss) {
+                Text(motoHubText("Cancel"))
             }
         }
     )

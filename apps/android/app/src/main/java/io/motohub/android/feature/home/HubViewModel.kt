@@ -19,6 +19,7 @@ import io.motohub.android.tbox.SelectingTBoxTransport
 import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxLinkResolver
 import io.motohub.android.tbox.TBoxModelProfile
+import io.motohub.android.tbox.TBoxProtocolMemory
 import io.motohub.android.tbox.ProfileOverride
 import io.motohub.android.tbox.TBoxNetworkConnector
 import io.motohub.android.tbox.TBoxNetworkEvent
@@ -369,11 +370,12 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                 val networkFailure = connected.exceptionOrNull()
                 if (networkFailure != null) {
                     ProjectionEventLog.error("NETWORK", "T-Box AP connection failed.", networkFailure)
-                    // activeVpnLabel omitted: see TBoxNetworkConnector.connect() for why merely having a VPN active isn't evidence.
+                    // routing omitted: the connector already tested the VPN's routes against the
+                    // network it was granted and put its verdict in the message, if it had one.
                     showError(
                         TBoxVpnDiagnostics.userFacingMessage(
                             error = networkFailure,
-                            activeVpnLabel = null
+                            routing = null
                         ) ?: "Unable to connect to the T-Box network: ${networkFailure.message}",
                         // Android never joined an access point. On a dash that is itself a Wi-Fi
                         // client there is no access point to join, so this is the only failure it
@@ -404,21 +406,54 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                     "Resolving protocol profile: modelId=${profile.modelId ?: "none"}, " +
                         "override=${requestedOverride.key}, connectionMode=${profile.connectionMode}."
                 )
+                // A dash whose family we already learned is routed straight there, instead of
+                // waiting for EasyConn discovery to time out first (two 15s NSD windows plus wake
+                // probes). A pinned override always wins, and only non-EasyConn families are ever
+                // remembered, so this can only ever save time.
+                val protocolMemory = TBoxProtocolMemory(getApplication())
+                val learnedProfile = if (requestedOverride == ProfileOverride.AUTO) {
+                    protocolMemory.learnedFamily(profile.ssid)
+                        ?.let { family -> TBoxModelProfile.entries.firstOrNull { it.transportFamily == family } }
+                } else {
+                    null
+                }
+                learnedProfile?.let {
+                    ProjectionEventLog.record(
+                        "PROFILE",
+                        "This motorcycle was already seen speaking ${it.transportFamily}; going " +
+                            "straight to that transport instead of letting EasyConn time out first."
+                    )
+                }
                 transport.configureProtocolProfile(
-                    TBoxModelProfile.resolve(profile.modelId, null, requestedOverride)
+                    learnedProfile ?: TBoxModelProfile.resolve(profile.modelId, null, requestedOverride)
                 )
                 val discovered = transport.discover(establishedLink, profile.modelId)
                 val discoveryFailure = discovered.exceptionOrNull()
                 if (discoveryFailure != null) {
                     ProjectionEventLog.error("DISCOVERY", "EasyConn service discovery failed.", discoveryFailure)
+                    // The link was up and the dash did not answer on it. Another EasyConn app
+                    // holding the session is a real explanation here, and only here.
+                    val routingDiagnosis = networkConnector.vpnRoutingDiagnosis()
                     transport.stop()
                     establishedLink.disconnect()
                     networkConnector.disconnect()
                     TBoxSessionRegistry.clear()
-                    showError(motoHubText("T-Box not found: %1\$s", discoveryFailure.message.orEmpty()))
+                    if (routingDiagnosis != null) {
+                        // Nothing this app sent ever left the phone: report the route, not the dash.
+                        showError(routingDiagnosis)
+                    } else {
+                        showError(
+                            motoHubText("T-Box not found: %1\$s", discoveryFailure.message.orEmpty()),
+                            offerOfficialAppHelp = true
+                        )
+                    }
                     return@launch
                 }
                 val host = discovered.getOrThrow()
+                // Record what discovery settled on, so the next ride skips the slow path.
+                transport.activeProtocolProfile?.let { discoveredProfile ->
+                    protocolMemory.remember(profile.ssid, discoveredProfile.transportFamily)
+                }
                 capabilityStore.recordDiscovery(profile, host)
                 ProjectionEventLog.record(
                     "DISCOVERY",
@@ -558,7 +593,16 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    private fun showError(message: String, offerPhoneHotspotRetry: Boolean = false) {
+    /**
+     * @param offerOfficialAppHelp only for failures a busy EasyConn session could have caused -
+     *   see [HubSessionState.offerOfficialAppHelp]. Defaults to false so a new failure path has to
+     *   claim that help deliberately rather than inherit it.
+     */
+    private fun showError(
+        message: String,
+        offerPhoneHotspotRetry: Boolean = false,
+        offerOfficialAppHelp: Boolean = false
+    ) {
         val userFacingMessage = TBoxConflictDiagnostics.userFacingMessage(message)
         // Recorded as a warning, not an error: this only puts a banner on screen. Whatever
         // actually failed was already reported at ERROR by the layer that detected it, and
@@ -569,7 +613,8 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
             session = mutableUiState.value.session.copy(
                 phase = SessionPhase.ERROR,
                 message = userFacingMessage,
-                offerPhoneHotspotRetry = offerPhoneHotspotRetry
+                offerPhoneHotspotRetry = offerPhoneHotspotRetry,
+                offerOfficialAppHelp = offerOfficialAppHelp
             )
         )
     }

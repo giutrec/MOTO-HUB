@@ -15,9 +15,40 @@ import io.motohub.android.tbox.SelectingTBoxTransport
 import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxLinkResolver
 import io.motohub.android.tbox.TBoxModelProfile
+import io.motohub.android.tbox.TBoxProtocolMemory
 import io.motohub.android.tbox.TBoxNetworkConnector
 import io.motohub.android.tbox.TBoxSessionHandle
 import io.motohub.android.tbox.TBoxSessionRegistry
+
+/**
+ * Why the last AIDL connect failed, kept where the bridge can read it after [CoreTBoxConnector.connect]
+ * has already answered its bare boolean.
+ *
+ * Process-wide rather than per-connector because the connector that failed may already have been
+ * released by the time the caller asks - and because there is only ever one connect in flight
+ * (CoreTBoxConnectors hands out one connector per SSID and the bridge blocks on it).
+ */
+internal object CoreConnectFailureRecord {
+    @Volatile
+    private var reason: String? = null
+
+    @Volatile
+    private var stage: Int = IpcBridgeContract.CONNECT_STAGE_UNKNOWN
+
+    fun clear() {
+        reason = null
+        stage = IpcBridgeContract.CONNECT_STAGE_UNKNOWN
+    }
+
+    fun record(stage: Int, reason: String?) {
+        this.stage = stage
+        this.reason = reason?.takeIf { it.isNotBlank() }
+    }
+
+    fun reason(): String? = reason
+
+    fun stage(): Int = stage
+}
 
 /** Establishes and tears down a T-Box session on behalf of an AIDL caller. */
 class CoreTBoxConnector(private val context: Context) {
@@ -55,20 +86,28 @@ class CoreTBoxConnector(private val context: Context) {
         // 202 through 207 granted and lost within a second each, one dashboard frame, a broken pipe,
         // then eleven rejoin attempts refused by Android in 2-10ms before it gave up 3.5 minutes
         // later. Refusing here costs that rider one clear sentence instead.
+        CoreConnectFailureRecord.clear()
         val holder = TBoxSessionRegistry.current()
         val consumers = TBoxSessionRegistry.activeConsumers()
         if (holder != null && holder.networkConnector !== networkConnector && consumers.isNotEmpty()) {
+            val refusal = "MOTO-HUB Core is already using this dash for $consumers. Stop that " +
+                "session first, then connect again."
             ProjectionEventLog.error(
                 "IPC_TBOX",
                 "AIDL connect refused: MOTO-HUB Core is already using this dash for $consumers. " +
                     "Two connectors would compete for the same Wi-Fi association and drop each " +
                     "other's network. Stop that session first, then connect again."
             )
+            CoreConnectFailureRecord.record(IpcBridgeContract.CONNECT_STAGE_REFUSED, refusal)
             return false
         }
         val connected = TBoxLinkResolver.connect(context, networkConnector, profile, formedGroup)
         val link = connected.getOrElse {
             ProjectionEventLog.error("IPC_TBOX", "AIDL connect: T-Box network connection failed.", it)
+            CoreConnectFailureRecord.record(
+                IpcBridgeContract.CONNECT_STAGE_NETWORK,
+                it.message ?: "The phone could not reach the motorcycle's network."
+            )
             return false
         }
         ProjectionEventLog.record("IPC_TBOX", "AIDL connect: T-Box link established (${link.label}).")
@@ -78,17 +117,56 @@ class CoreTBoxConnector(private val context: Context) {
             "AIDL connect: resolving protocol profile: modelId=${profile.modelId ?: "none"}, " +
                 "override=${requestedOverride.key}, connectionMode=${profile.connectionMode}."
         )
-        transport.configureProtocolProfile(
-            TBoxModelProfile.resolve(profile.modelId, null, requestedOverride)
-        )
+        // A dash whose family we already learned is routed straight there. Discovery can answer
+        // this, but only by letting EasyConn fail first, which costs two 15s NSD windows and the
+        // wake probes before anything else is tried - the difference a rider sees between pinning
+        // the profile by hand and leaving it on Auto. Only ever a shortcut: a pinned override wins,
+        // and only non-EasyConn families are ever remembered.
+        val learnedProfile = if (requestedOverride == ProfileOverride.AUTO) {
+            TBoxProtocolMemory(context).learnedFamily(profile.ssid)
+                ?.let { family -> TBoxModelProfile.entries.firstOrNull { it.transportFamily == family } }
+        } else {
+            null
+        }
+        val resolvedProfile = learnedProfile ?: TBoxModelProfile.resolve(profile.modelId, null, requestedOverride)
+        learnedProfile?.let {
+            ProjectionEventLog.record(
+                "PROFILE",
+                "This motorcycle was already seen speaking ${it.transportFamily}; going straight " +
+                    "to that transport instead of letting EasyConn discovery time out first."
+            )
+        }
+        transport.configureProtocolProfile(resolvedProfile)
         val discovered = transport.discover(link, profile.modelId)
         val host = discovered.getOrElse {
             ProjectionEventLog.error("IPC_TBOX", "AIDL connect: EasyConn discovery failed.", it)
+            // A dash that never answers because the packets never left the phone is not a
+            // discovery problem, and saying "the dash did not answer" sends the rider to the
+            // bike. When the process binding was refused with a VPN demonstrably holding the
+            // route to the dash, that is the failure - reported as a network one, because it is.
+            val routingDiagnosis = networkConnector.vpnRoutingDiagnosis()
+            if (routingDiagnosis != null) {
+                ProjectionEventLog.record(
+                    "IPC_TBOX",
+                    "AIDL connect: discovery had no route to the dash - the process binding was " +
+                        "refused earlier and a VPN holds that route."
+                )
+                CoreConnectFailureRecord.record(IpcBridgeContract.CONNECT_STAGE_NETWORK, routingDiagnosis)
+            } else {
+                CoreConnectFailureRecord.record(
+                    IpcBridgeContract.CONNECT_STAGE_DISCOVERY,
+                    it.message ?: "The motorcycle did not answer on its own network."
+                )
+            }
             transport.stop()
             link.disconnect()
             networkConnector.disconnect()
             TBoxSessionRegistry.clear()
             return false
+        }
+        // Record what discovery settled on, so the next ride skips the slow path.
+        transport.activeProtocolProfile?.let { discoveredProfile ->
+            TBoxProtocolMemory(context).remember(profile.ssid, discoveredProfile.transportFamily)
         }
         capabilityStore.recordDiscovery(profile, host)
         TBoxSessionRegistry.install(
