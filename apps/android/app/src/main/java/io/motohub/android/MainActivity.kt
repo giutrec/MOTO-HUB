@@ -71,6 +71,7 @@ import io.motohub.android.feature.home.HubViewModel
 import io.motohub.android.feature.androidauto.AndroidAutoHelpScreen
 import io.motohub.android.feature.androidauto.AndroidAutoPreviewScreen
 import io.motohub.android.feature.androidauto.OfficialCfmotoWarningDialog
+import io.motohub.android.feature.controls.HandlebarTeachPrerequisiteRequest
 import io.motohub.android.feature.diagnostics.NetworkDiagnosticsScreen
 import io.motohub.android.feature.diagnostics.NetworkDiagnosticsViewModel
 import io.motohub.android.feature.diagnostics.ApplicationLogScreen
@@ -468,7 +469,44 @@ class MainActivity : ComponentActivity() {
                 var androidAutoPermissionPending by rememberSaveable { mutableStateOf(false) }
                 var showOfficialCfmotoWarning by rememberSaveable { mutableStateOf(false) }
                 var externalDisplayPermissionPending by rememberSaveable { mutableStateOf(false) }
+                // Mirrors androidAutoPermissionPending for the phone-only path (see
+                // startPhoneOnlyBridge below) - a real T-Box session and a phone-only one both
+                // post a media notification for the same MediaButtonBridge/handlebar reason, so
+                // both need POST_NOTIFICATIONS before starting, not just the T-Box one.
+                var phoneOnlyAndroidAutoPermissionPending by rememberSaveable { mutableStateOf(false) }
+                // Set right before the permission chain starts (see continueAndroidAutoPhoneOnlyStart)
+                // and read once the bridge actually starts, on either side of a permission
+                // request round-trip. The handlebar teach dialog wants the session running
+                // silently in the background - captureActive is all it needs - and opening the
+                // full-screen preview there just hands the rider a "Close" button they can hit
+                // by accident and kill the very session they asked for.
+                var phoneOnlyAndroidAutoShowPreview by rememberSaveable { mutableStateOf(true) }
                 var microphonePermissionAction by rememberSaveable { mutableStateOf<String?>(null) }
+                // Starts the phone-only bridge itself - permission checks (notification, mic)
+                // happen in continueAndroidAutoPhoneOnlyStart below, exactly like
+                // continueAndroidAutoStart does for the real T-Box path. Skipping them here was
+                // the field bug reported 2026-08-13: without RECORD_AUDIO, invoking Android
+                // Auto's Assistant left it waiting on a microphone stream that never arrived,
+                // and every handlebar press after that point silently did nothing.
+                val startPhoneOnlyBridge: () -> Unit = {
+                    ProjectionEventLog.record(
+                        "ANDROID_AUTO",
+                        "User started phone-only Android Auto (no T-Box) for testing."
+                    )
+                    // Same bridge Advanced's own "Android Auto - straight to your phone" card
+                    // starts over IPC (see PhoneOnlyAndroidAutoLaunchRequest) - here it's an
+                    // in-process button tap instead of a launch Intent. Deliberately NOT
+                    // androidAutoPhoneOnlyLaunchedFromPro: that flag finish()es this Activity
+                    // when the preview closes, which is right for a launch FROM Advanced but
+                    // would exit Core's own UI for a tap made inside it.
+                    androidAutoPhoneOnlyBridge.start(onFailure = { message ->
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    })
+                    androidAutoPreviewIsPhoneOnly = true
+                    if (phoneOnlyAndroidAutoShowPreview) {
+                        showAndroidAutoPreview = true
+                    }
+                }
                 val microphonePermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
                 ) { granted ->
@@ -478,6 +516,7 @@ class MainActivity : ComponentActivity() {
                     if (granted) {
                         when (action) {
                             "full" -> startAndroidAuto()
+                            "phone_only" -> startPhoneOnlyBridge()
                         }
                     }
                 }
@@ -488,6 +527,16 @@ class MainActivity : ComponentActivity() {
                         startAndroidAuto()
                     } else {
                         microphonePermissionAction = action
+                        microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                }
+                val requestMicAndStartPhoneOnly: () -> Unit = {
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                        PackageManager.PERMISSION_GRANTED
+                    ) {
+                        startPhoneOnlyBridge()
+                    } else {
+                        microphonePermissionAction = "phone_only"
                         microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     }
                 }
@@ -516,6 +565,13 @@ class MainActivity : ComponentActivity() {
                         } else {
                             viewModel.onNotificationPermissionDenied()
                         }
+                    } else if (phoneOnlyAndroidAutoPermissionPending) {
+                        phoneOnlyAndroidAutoPermissionPending = false
+                        if (granted) {
+                            requestMicAndStartPhoneOnly()
+                        } else {
+                            viewModel.onNotificationPermissionDenied()
+                        }
                     }
                 }
                 val continueAndroidAutoStart: () -> Unit = {
@@ -528,6 +584,22 @@ class MainActivity : ComponentActivity() {
                         requestMicAndStart("full")
                     } else {
                         androidAutoPermissionPending = true
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }
+                // Same permission sequence as continueAndroidAutoStart (notification, then mic)
+                // for the phone-only path - see startPhoneOnlyBridge for why skipping this was a bug.
+                val continueAndroidAutoPhoneOnlyStart: (Boolean) -> Unit = { showPreview ->
+                    phoneOnlyAndroidAutoShowPreview = showPreview
+                    val notificationGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                        ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.POST_NOTIFICATIONS
+                        ) == PackageManager.PERMISSION_GRANTED
+                    if (notificationGranted) {
+                        requestMicAndStartPhoneOnly()
+                    } else {
+                        phoneOnlyAndroidAutoPermissionPending = true
                         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
                 }
@@ -571,6 +643,39 @@ class MainActivity : ComponentActivity() {
                         connectWhenAndroidAccepts("after the Wi-Fi permission grant")
                     } else {
                         viewModel.onNearbyWifiPermissionDenied()
+                    }
+                }
+                // Same permission-check-then-connect sequence HubHomeScreen's own Connect
+                // button uses (see onConnectAndDiscover below) - pulled out so the handlebar
+                // teach prerequisite dialog (see HandlebarTeachPrerequisiteRequest) can reuse it
+                // after selecting a different motorcycle, instead of duplicating the check.
+                val connectToActiveMotorcycle: () -> Unit = {
+                    val permissions =
+                        tboxConnectPermissions(context, viewModel.uiState.value.session.motorcycle)
+                    if (permissions.all { permission ->
+                            ContextCompat.checkSelfPermission(context, permission) ==
+                                PackageManager.PERMISSION_GRANTED
+                        }
+                    ) {
+                        connectWhenAndroidAccepts("Connect button")
+                    } else {
+                        wifiPermissionLauncher.launch(permissions)
+                    }
+                }
+                LaunchedEffect(Unit) {
+                    HandlebarTeachPrerequisiteRequest.requests.collect { choice ->
+                        when (choice) {
+                            HandlebarTeachPrerequisiteRequest.Choice.PhoneOnly ->
+                                // Silent: calibration only needs captureActive, and a fresh
+                                // rider seeing an unexpected full-screen preview open here
+                                // could tap its "Close" button without realizing that stops
+                                // the very session they just asked for.
+                                continueAndroidAutoPhoneOnlyStart(false)
+                            is HandlebarTeachPrerequisiteRequest.Choice.Connect -> {
+                                viewModel.selectMotorcycle(choice.motorcycleId)
+                                connectToActiveMotorcycle()
+                            }
+                        }
                     }
                 }
                 fun reconnectAfterModeStop(mode: String) {
@@ -896,14 +1001,24 @@ class MainActivity : ComponentActivity() {
                     AndroidAutoPreviewScreen(
                         onBack = {
                             ProjectionEventLog.record("UI", "Android Auto phone preview closed.")
-                            if (androidAutoPreviewIsPhoneOnly) {
-                                androidAutoPhoneOnlyBridge.stop()
-                            }
-                            showAndroidAutoPreview = false
-                            androidAutoPreviewIsPhoneOnly = false
                             if (androidAutoPhoneOnlyLaunchedFromPro) {
+                                // Advanced launched Core just for this preview - closing it IS
+                                // closing the whole point of this Activity instance.
+                                androidAutoPhoneOnlyBridge.stop()
+                                showAndroidAutoPreview = false
+                                androidAutoPreviewIsPhoneOnly = false
                                 androidAutoPhoneOnlyLaunchedFromPro = false
                                 finish()
+                            } else {
+                                // Otherwise this is closing the PREVIEW, not the session: a
+                                // phone-only test session (and its handlebar capture) keeps
+                                // running in the background exactly like a real T-Box session
+                                // does when the rider switches tabs - HubDestination.ACTIVE_SESSION
+                                // picks it up from the same AndroidAutoRuntime state either way,
+                                // with its own "reopen preview" and explicit Stop actions.
+                                // androidAutoPreviewIsPhoneOnly deliberately stays true so
+                                // onStopAndroidAuto knows which session that Stop belongs to.
+                                showAndroidAutoPreview = false
                             }
                         }
                     )
@@ -1094,19 +1209,7 @@ class MainActivity : ComponentActivity() {
                             viewModel.preparePhoneHotspotRetry()
                             showManualPairing = true
                         },
-                        onConnectAndDiscover = {
-                            val permissions =
-                                tboxConnectPermissions(context, viewModel.uiState.value.session.motorcycle)
-                            if (permissions.all { permission ->
-                                    ContextCompat.checkSelfPermission(context, permission) ==
-                                        PackageManager.PERMISSION_GRANTED
-                                }
-                            ) {
-                                connectWhenAndroidAccepts("Connect button")
-                            } else {
-                                wifiPermissionLauncher.launch(permissions)
-                            }
-                        },
+                        onConnectAndDiscover = connectToActiveMotorcycle,
                         officialCfmotoAppInstalled = OfficialCfmotoClient.isInstalled(context),
                         onCloseOfficialCfmotoAndRetry = {
                             // Android 14+ cannot close another app's process; this action is a
@@ -1158,13 +1261,21 @@ class MainActivity : ComponentActivity() {
                         onStartAndroidAuto = startAndroidAutoWithWarning,
                         onStopAndroidAuto = {
                             ProjectionEventLog.record("ANDROID_AUTO", "User requested Android Auto stop.")
-                            AndroidAutoSessionService.stop(context)
-                            reconnectAfterModeStop("Android Auto")
+                            if (androidAutoPreviewIsPhoneOnly) {
+                                // No T-Box link to reconnect for a phone-only session -
+                                // reconnectAfterModeStop is specifically for the real T-Box path.
+                                androidAutoPhoneOnlyBridge.stop()
+                                androidAutoPreviewIsPhoneOnly = false
+                            } else {
+                                AndroidAutoSessionService.stop(context)
+                                reconnectAfterModeStop("Android Auto")
+                            }
                         },
                         onOpenAndroidAutoPreview = {
                             ProjectionEventLog.record("UI", "Android Auto phone preview opened.")
                             showAndroidAutoPreview = true
                         },
+                        onStartPhoneOnlyAndroidAuto = { continueAndroidAutoPhoneOnlyStart(true) },
                         dimDisplayEnabled = dimDisplayEnabled,
                         onDimDisplayChanged = { enabled ->
                             ProjectionEventLog.record("DISPLAY", "User changed display dimmer preference to enabled=$enabled.")

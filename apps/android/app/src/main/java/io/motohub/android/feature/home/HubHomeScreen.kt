@@ -104,6 +104,7 @@ fun HubHomeScreen(
     onStartAndroidAuto: () -> Unit,
     onStopAndroidAuto: () -> Unit,
     onOpenAndroidAutoPreview: () -> Unit,
+    onStartPhoneOnlyAndroidAuto: () -> Unit,
     dimDisplayEnabled: Boolean,
     onDimDisplayChanged: (Boolean) -> Unit,
     onStopProjection: () -> Unit,
@@ -162,6 +163,7 @@ fun HubHomeScreen(
                             onStartAndroidAuto = onStartAndroidAuto,
                             onStopAndroidAuto = onStopAndroidAuto,
                             onOpenAndroidAutoPreview = onOpenAndroidAutoPreview,
+                            onStartPhoneOnlyAndroidAuto = onStartPhoneOnlyAndroidAuto,
                             dimDisplayEnabled = dimDisplayEnabled,
                             onDimDisplayChanged = onDimDisplayChanged,
                             onStopProjection = onStopProjection,
@@ -209,6 +211,7 @@ private fun HomeTabContent(
     onStartAndroidAuto: () -> Unit,
     onStopAndroidAuto: () -> Unit,
     onOpenAndroidAutoPreview: () -> Unit,
+    onStartPhoneOnlyAndroidAuto: () -> Unit,
     dimDisplayEnabled: Boolean,
     onDimDisplayChanged: (Boolean) -> Unit,
     onStopProjection: () -> Unit,
@@ -299,7 +302,8 @@ private fun HomeTabContent(
                 onOpenAndroidAutoSettings = onOpenAndroidAutoSettings,
                 onScanQr = onScanQr,
                 onImportQrPhoto = onImportQrPhoto,
-                onManualPairing = onManualPairing
+                onManualPairing = onManualPairing,
+                onStartPhoneOnlyAndroidAuto = onStartPhoneOnlyAndroidAuto
             )
         }
         }
@@ -436,7 +440,8 @@ private fun ConnectionContent(
     onOpenAndroidAutoSettings: () -> Unit,
     onScanQr: () -> Unit,
     onImportQrPhoto: () -> Unit,
-    onManualPairing: () -> Unit
+    onManualPairing: () -> Unit,
+    onStartPhoneOnlyAndroidAuto: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         errorMessage?.let { message ->
@@ -464,6 +469,13 @@ private fun ConnectionContent(
             SecondaryAction("Import QR", onImportQrPhoto, modifier = Modifier.weight(1f))
         }
         LinkRow("No QR? Connect manually", onManualPairing)
+        HorizontalDivider()
+        // Runs Android Auto entirely on the phone's own screen via
+        // PhoneOnlyAndroidAutoBridge - no T-Box, no Bluetooth, no motorcycle required. Exists
+        // for testing the Android Auto path itself (identity, handlebar mapping, ...) without
+        // a bike to hand; Advanced offers the same shortcut from its own home screen.
+        MonoLabel(motoHubText("OR RIGHT NOW, WITHOUT THE T-BOX"))
+        SecondaryAction(motoHubText("Android Auto — straight to your phone"), onStartPhoneOnlyAndroidAuto)
     }
 }
 

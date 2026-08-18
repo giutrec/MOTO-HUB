@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,11 +39,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.motohub.android.BuildConfig
 import io.motohub.android.R
 import io.motohub.android.feature.controls.HandlebarControlStore
+import io.motohub.android.feature.controls.HandlebarHidCaptureService
+import io.motohub.android.feature.controls.HandlebarInputMode
 import io.motohub.android.feature.controls.HandlebarMappingScreen
 import io.motohub.android.feature.controls.MediaButtonBridge
 import io.motohub.android.session.ProjectionEventLog
@@ -567,6 +573,21 @@ private fun DiagnosticsDetail(
 private fun HandlebarControlsDetail(onBack: () -> Unit, onOpenMapping: () -> Unit) {
     val context = LocalContext.current
     var enabled by remember { mutableStateOf(HandlebarControlStore.isEnabled(context)) }
+    var inputMode by remember { mutableStateOf(HandlebarControlStore.inputMode(context)) }
+    // Granted outside this app, in system settings, so the only moment it can have changed is a
+    // return to this screen - hence the resume watch rather than a plain read in composition.
+    var hidServiceEnabled by remember { mutableStateOf(HandlebarHidCaptureService.isEnabled(context)) }
+    var openedAccessibilitySettings by rememberSaveable { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hidServiceEnabled = HandlebarHidCaptureService.isEnabled(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val volumeLevels = remember { MediaButtonBridge.volumeLevels(context) }
     var listeningVolume by remember { mutableStateOf(volumeLevels.first.toFloat()) }
     MotoHubDetailScreen(
@@ -597,6 +618,76 @@ private fun HandlebarControlsDetail(onBack: () -> Unit, onOpenMapping: () -> Uni
                 color = MaterialTheme.colorScheme.error
             )
         }
+        MonoLabel(motoHubText("INPUT PROTOCOL"))
+        Text(
+            motoHubText(
+                "Most dashboards send buttons as AVRCP media keys — leave this on AVRCP. Pick " +
+                    "HID only if the remote pairs as a Bluetooth keyboard and its presses never " +
+                    "register below."
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        HandlebarInputMode.entries.forEach { candidate ->
+            MotoHubRadioRow(
+                title = motoHubText(candidate.label),
+                description = motoHubText(candidate.description),
+                selected = inputMode == candidate,
+                onClick = {
+                    inputMode = candidate
+                    HandlebarControlStore.setInputMode(context, candidate)
+                    ProjectionEventLog.record(
+                        "SETTINGS",
+                        "Handlebar input mode changed to ${candidate.name}."
+                    )
+                }
+            )
+        }
+        if (inputMode == HandlebarInputMode.HID) {
+            if (!hidServiceEnabled) {
+                Text(
+                    motoHubText(
+                        "HID mode also needs MOTO-HUB's Accessibility Service turned on, or " +
+                            "presses will not be seen."
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            MotoHubActionRow(
+                title = motoHubText("Open Accessibility settings"),
+                description = motoHubText(
+                    "Turn on MOTO-HUB so handlebar presses reach the app from any screen"
+                ),
+                onClick = {
+                    openedAccessibilitySettings = true
+                    HandlebarHidCaptureService.openAccessibilitySettings(context)
+                }
+            )
+            // Second half of the grant, and only shown once the rider has come back from the
+            // first half without the service on - which is exactly what the Android 13+
+            // restricted-settings gate looks like from here. Never shown pre-emptively: on a
+            // phone where the toggle worked normally this step would be noise.
+            // See HandlebarHidCaptureService.openAppInfo.
+            if (openedAccessibilitySettings && !hidServiceEnabled) {
+                Text(
+                    motoHubText(
+                        "Was MOTO-HUB's switch greyed out? Android blocks it for apps that " +
+                            "were not installed from a store, and MOTO-HUB is downloaded from " +
+                            "GitHub. Open App info, tap ⋮ at the top right, choose \"Allow " +
+                            "restricted settings\", then come back and turn the switch on."
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+                MotoHubActionRow(
+                    title = motoHubText("Open App info"),
+                    description = motoHubText("Where \"Allow restricted settings\" lives"),
+                    onClick = { HandlebarHidCaptureService.openAppInfo(context) }
+                )
+            }
+        }
+        HorizontalDivider()
         ToggleRow(
             title = motoHubText("Buttons control Android Auto"),
             description = motoHubText(

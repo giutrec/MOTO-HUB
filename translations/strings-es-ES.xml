@@ -1534,4 +1534,31 @@
     <!-- Source: feature/trips/TripLibraryUi.kt -->
     <string name="legacy_enhanced_9c6c8376">COMPLETO</string>
     <string name="legacy_gps_only_e6f03982">SOLO GPS</string>
+
+    <!-- ==================================================================
+         Handlebar HID mode, phone-only Android Auto and the teach
+         prerequisite dialog (PR #8, rebased 2026-08-18).
+         ================================================================== -->
+    <string name="handlebar_hid_capture_description">Permite que MOTO-HUB lea las pulsaciones del D-pad de un mando HID Bluetooth del manillar mientras el modo HID esté seleccionado en los ajustes de Botones del manillar.</string>
+    <string name="legacy_android_auto_isn_t_running_9f167e30">Android Auto no está en marcha</string>
+    <string name="legacy_teaching_the_handlebar_needs_a_live_android_auto_697217d0">Para enseñar los mandos del manillar hace falta una sesión de Android Auto activa que capture las pulsaciones. Conéctate a la moto o inícialo en este teléfono sin T-Box.</string>
+    <string name="legacy_connect_to_1_s_579387aa">Conectar a %1$s</string>
+    <string name="legacy_start_on_this_phone_no_t_box_f1bcc79f">Iniciar en este teléfono (sin T-Box)</string>
+    <string name="legacy_bluetooth_is_off_turn_it_on_then_pair_the_remote_356459fc">El Bluetooth está apagado: enciéndelo y empareja el mando como teclado.</string>
+    <string name="legacy_allow_bluetooth_access_so_the_app_can_read_the_r_bf160fa2">Permite el acceso al Bluetooth para que la aplicación pueda leer las pulsaciones del mando.</string>
+    <string name="legacy_bluetooth_is_on_a_hid_remote_doesn_t_show_up_her_77795af8">El Bluetooth está encendido. Un mando HID no aparece aquí como dispositivo conectado: si las pulsaciones siguen sin reconocerse, comprueba que esté emparejado en los ajustes de Bluetooth del sistema y que la Accesibilidad esté activada.</string>
+    <string name="legacy_or_right_now_without_the_t_box_21ba0502">O AHORA MISMO, SIN T-BOX</string>
+    <string name="legacy_android_auto_straight_to_your_phone_f0cc540c">Android Auto: directo en el teléfono</string>
+    <string name="legacy_input_protocol_8ff4fe4e">PROTOCOLO DE ENTRADA</string>
+    <string name="legacy_most_dashboards_send_buttons_as_avrcp_media_keys_6e1dd82c">La mayoría de los cuadros envían los botones como teclas multimedia AVRCP: deja AVRCP. Elige HID solo si el mando se empareja como teclado Bluetooth y sus pulsaciones nunca aparecen abajo.</string>
+    <string name="legacy_hid_mode_also_needs_moto_hub_s_accessibility_ser_c0cdf4cc">El modo HID también necesita el servicio de Accesibilidad de MOTO-HUB activado, o las pulsaciones no se verán.</string>
+    <string name="legacy_open_accessibility_settings_a01c954b">Abrir los ajustes de Accesibilidad</string>
+    <string name="legacy_turn_on_moto_hub_so_handlebar_presses_reach_the__b41c5310">Activa MOTO-HUB para que las pulsaciones del manillar lleguen a la aplicación desde cualquier pantalla</string>
+    <string name="legacy_was_moto_hub_s_switch_greyed_out_android_blocks__b5233420">¿El interruptor de MOTO-HUB estaba en gris? Android lo bloquea para las aplicaciones que no se instalaron desde una tienda, y MOTO-HUB se descarga de GitHub. Abre Información de la aplicación, toca ⋮ arriba a la derecha, elige \"Permitir ajustes restringidos\" y vuelve para activar el interruptor.</string>
+    <string name="legacy_open_app_info_7c77c863">Abrir Información de la aplicación</string>
+    <string name="legacy_where_allow_restricted_settings_lives_8f29fea1">Donde está \"Permitir ajustes restringidos\"</string>
+    <string name="legacy_avrcp_media_keys_f50e20c7">AVRCP (teclas multimedia)</string>
+    <string name="legacy_hid_d_pad_a247f04a">HID (D-pad)</string>
+    <string name="legacy_default_the_dashboard_sends_bluetooth_media_key__ccbdfbf7">Predeterminado. El cuadro envía comandos Bluetooth de tecla multimedia para reproducir/pausar, pista y volumen.</string>
+    <string name="legacy_for_remotes_that_pair_as_a_bluetooth_keyboard_an_25055a66">Para mandos que se emparejan como teclado Bluetooth y envían pulsaciones del D-pad. Requiere activar el servicio de Accesibilidad de MOTO-HUB más abajo.</string>
 </resources>

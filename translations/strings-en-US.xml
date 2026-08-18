@@ -1277,8 +1277,7 @@
     <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
     <string name="legacy_use_these_details_52f852ac">Use these details</string>
 
-    <!-- ==================================================================
-         Catalogue sweep, 2026-08-13: strings this worktree draws but had
+    <!-- ===========================================================         Catalogue sweep, 2026-08-13: strings this worktree draws but had
          no identifier for. Values come from the pro-poc catalogues, where
          the same source strings are already translated.
          ================================================================== -->
@@ -1534,4 +1533,35 @@
     <!-- Source: feature/trips/TripLibraryUi.kt -->
     <string name="legacy_enhanced_9c6c8376">ENHANCED</string>
     <string name="legacy_gps_only_e6f03982">GPS ONLY</string>
+=======
+    <!-- Source: feature/controls/HandlebarHidCaptureService.kt (system Accessibility settings
+         description; rendered outside the app's own Compose runtime, so it is a plain string
+         resource rather than a motoHubText() call). -->
+    <string name="handlebar_hid_capture_description">Lets MOTO-HUB read D-pad presses from a Bluetooth HID handlebar remote while HID mode is selected in Handlebar buttons settings.</string>
+
+    <!-- ==================================================================
+         Handlebar HID mode, phone-only Android Auto and the teach
+         prerequisite dialog (PR #8, rebased 2026-08-18).
+         ================================================================== -->
+    <string name="legacy_android_auto_isn_t_running_9f167e30">Android Auto isn\'t running</string>
+    <string name="legacy_teaching_the_handlebar_needs_a_live_android_auto_697217d0">Teaching the handlebar needs a live Android Auto session to capture presses. Connect to the motorcycle, or start it on this phone without a T-Box.</string>
+    <string name="legacy_connect_to_1_s_579387aa">Connect to %1$s</string>
+    <string name="legacy_start_on_this_phone_no_t_box_f1bcc79f">Start on this phone (no T-Box)</string>
+    <string name="legacy_bluetooth_is_off_turn_it_on_then_pair_the_remote_356459fc">Bluetooth is off — turn it on, then pair the remote as a keyboard.</string>
+    <string name="legacy_allow_bluetooth_access_so_the_app_can_read_the_r_bf160fa2">Allow Bluetooth access so the app can read the remote\'s key presses.</string>
+    <string name="legacy_bluetooth_is_on_a_hid_remote_doesn_t_show_up_her_77795af8">Bluetooth is on. A HID remote doesn\'t show up here as a connected device — if presses still aren\'t recognized, check it is paired in system Bluetooth settings and that Accessibility is turned on.</string>
+    <string name="legacy_or_right_now_without_the_t_box_21ba0502">OR RIGHT NOW, WITHOUT THE T-BOX</string>
+    <string name="legacy_android_auto_straight_to_your_phone_f0cc540c">Android Auto — straight to your phone</string>
+    <string name="legacy_input_protocol_8ff4fe4e">INPUT PROTOCOL</string>
+    <string name="legacy_most_dashboards_send_buttons_as_avrcp_media_keys_6e1dd82c">Most dashboards send buttons as AVRCP media keys — leave this on AVRCP. Pick HID only if the remote pairs as a Bluetooth keyboard and its presses never register below.</string>
+    <string name="legacy_hid_mode_also_needs_moto_hub_s_accessibility_ser_c0cdf4cc">HID mode also needs MOTO-HUB\'s Accessibility Service turned on, or presses will not be seen.</string>
+    <string name="legacy_open_accessibility_settings_a01c954b">Open Accessibility settings</string>
+    <string name="legacy_turn_on_moto_hub_so_handlebar_presses_reach_the__b41c5310">Turn on MOTO-HUB so handlebar presses reach the app from any screen</string>
+    <string name="legacy_was_moto_hub_s_switch_greyed_out_android_blocks__b5233420">Was MOTO-HUB\'s switch greyed out? Android blocks it for apps that were not installed from a store, and MOTO-HUB is downloaded from GitHub. Open App info, tap ⋮ at the top right, choose \"Allow restricted settings\", then come back and turn the switch on.</string>
+    <string name="legacy_open_app_info_7c77c863">Open App info</string>
+    <string name="legacy_where_allow_restricted_settings_lives_8f29fea1">Where \"Allow restricted settings\" lives</string>
+    <string name="legacy_avrcp_media_keys_f50e20c7">AVRCP (media keys)</string>
+    <string name="legacy_hid_d_pad_a247f04a">HID (D-pad)</string>
+    <string name="legacy_default_the_dashboard_sends_bluetooth_media_key__ccbdfbf7">Default. The dashboard sends Bluetooth media-key commands for play/pause, track and volume.</string>
+    <string name="legacy_for_remotes_that_pair_as_a_bluetooth_keyboard_an_25055a66">For remotes that pair as a Bluetooth keyboard and send D-pad presses. Requires turning on MOTO-HUB\'s Accessibility Service below.</string>
 </resources>

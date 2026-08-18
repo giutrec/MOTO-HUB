@@ -1272,8 +1272,7 @@
     <!-- Source: feature/pairing/UnverifiedQrDialog.kt -->
     <string name="legacy_use_these_details_52f852ac">이 정보 사용</string>
 
-    <!-- ==================================================================
-         Catalogue sweep, 2026-08-13: strings this worktree draws but had
+    <!-- ===========================================================         Catalogue sweep, 2026-08-13: strings this worktree draws but had
          no identifier for. Values come from the pro-poc catalogues, where
          the same source strings are already translated.
          ================================================================== -->
@@ -1529,4 +1528,33 @@
     <!-- Source: feature/trips/TripLibraryUi.kt -->
     <string name="legacy_enhanced_9c6c8376">전체 기록</string>
     <string name="legacy_gps_only_e6f03982">GPS만</string>
+=======
+    <!-- Source: feature/controls/HandlebarHidCaptureService.kt -->
+    <string name="handlebar_hid_capture_description">핸들바 버튼 설정에서 HID 모드가 선택된 경우, MOTO-HUB가 블루투스 HID 핸들바 리모컨의 D패드 입력을 읽을 수 있도록 합니다.</string>
+
+    <!-- ==================================================================
+         Handlebar HID mode, phone-only Android Auto and the teach
+         prerequisite dialog (PR #8, rebased 2026-08-18).
+         ================================================================== -->
+    <string name="legacy_android_auto_isn_t_running_9f167e30">Android Auto가 실행 중이 아닙니다</string>
+    <string name="legacy_teaching_the_handlebar_needs_a_live_android_auto_697217d0">핸들 버튼을 학습하려면 입력을 감지할 수 있는 Android Auto 세션이 실행 중이어야 합니다. 모터사이클에 연결하거나, T-Box 없이 이 휴대폰에서 시작하세요.</string>
+    <string name="legacy_connect_to_1_s_579387aa">%1$s에 연결</string>
+    <string name="legacy_start_on_this_phone_no_t_box_f1bcc79f">이 휴대폰에서 시작 (T-Box 없이)</string>
+    <string name="legacy_bluetooth_is_off_turn_it_on_then_pair_the_remote_356459fc">블루투스가 꺼져 있습니다 — 켠 다음 리모컨을 키보드로 페어링하세요.</string>
+    <string name="legacy_allow_bluetooth_access_so_the_app_can_read_the_r_bf160fa2">앱이 리모컨의 버튼 입력을 읽을 수 있도록 블루투스 접근을 허용하세요.</string>
+    <string name="legacy_bluetooth_is_on_a_hid_remote_doesn_t_show_up_her_77795af8">블루투스가 켜져 있습니다. HID 리모컨은 연결된 기기로 여기에 표시되지 않습니다 — 입력이 계속 인식되지 않으면 시스템 블루투스 설정에서 페어링되어 있는지, 접근성이 켜져 있는지 확인하세요.</string>
+    <string name="legacy_or_right_now_without_the_t_box_21ba0502">또는 T-BOX 없이 지금 바로</string>
+    <string name="legacy_android_auto_straight_to_your_phone_f0cc540c">Android Auto — 휴대폰에서 바로</string>
+    <string name="legacy_input_protocol_8ff4fe4e">입력 프로토콜</string>
+    <string name="legacy_most_dashboards_send_buttons_as_avrcp_media_keys_6e1dd82c">대부분의 계기판은 버튼을 AVRCP 미디어 키로 보냅니다 — AVRCP로 두세요. 리모컨이 블루투스 키보드로 페어링되고 아래에 입력이 전혀 표시되지 않을 때만 HID를 선택하세요.</string>
+    <string name="legacy_hid_mode_also_needs_moto_hub_s_accessibility_ser_c0cdf4cc">HID 모드에는 MOTO-HUB의 접근성 서비스도 켜져 있어야 하며, 그렇지 않으면 입력이 감지되지 않습니다.</string>
+    <string name="legacy_open_accessibility_settings_a01c954b">접근성 설정 열기</string>
+    <string name="legacy_turn_on_moto_hub_so_handlebar_presses_reach_the__b41c5310">어느 화면에서든 핸들 입력이 앱에 전달되도록 MOTO-HUB를 켜세요</string>
+    <string name="legacy_was_moto_hub_s_switch_greyed_out_android_blocks__b5233420">MOTO-HUB의 스위치가 회색으로 표시되었나요? Android는 스토어에서 설치하지 않은 앱에 대해 이를 차단하며, MOTO-HUB는 GitHub에서 내려받습니다. 앱 정보를 열고 오른쪽 위의 ⋮ 를 누른 뒤 \"제한된 설정 허용\"을 선택하고, 돌아와서 스위치를 켜세요.</string>
+    <string name="legacy_open_app_info_7c77c863">앱 정보 열기</string>
+    <string name="legacy_where_allow_restricted_settings_lives_8f29fea1">\"제한된 설정 허용\"이 있는 곳</string>
+    <string name="legacy_avrcp_media_keys_f50e20c7">AVRCP (미디어 키)</string>
+    <string name="legacy_hid_d_pad_a247f04a">HID (D-패드)</string>
+    <string name="legacy_default_the_dashboard_sends_bluetooth_media_key__ccbdfbf7">기본값. 계기판이 재생/일시정지, 트랙, 볼륨에 대한 블루투스 미디어 키 명령을 보냅니다.</string>
+    <string name="legacy_for_remotes_that_pair_as_a_bluetooth_keyboard_an_25055a66">블루투스 키보드로 페어링되어 D-패드 입력을 보내는 리모컨용. 아래에서 MOTO-HUB의 접근성 서비스를 켜야 합니다.</string>
 </resources>

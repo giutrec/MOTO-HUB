@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Deliberately minimal. accessibilityEventTypes is omitted (i.e. none): this service exists
+    ONLY to filter hardware key events from a HID handlebar remote, and key filtering is granted
+    by canRequestFilterKeyEvents + flagRequestFilterKeyEvents, never by event types. Declaring
+    none means the service cannot receive window or screen-content events at all - it is unable
+    to read the screen, which is both the honest description of what it does and the smallest
+    possible footprint for a capability Google scrutinises on sideloaded apps.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRequestFilterKeyEvents"
+    android:canRequestFilterKeyEvents="true"
+    android:notificationTimeout="0"
+    android:description="@string/handlebar_hid_capture_description" />

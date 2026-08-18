@@ -1534,4 +1534,31 @@
     <!-- Source: feature/trips/TripLibraryUi.kt -->
     <string name="legacy_enhanced_9c6c8376">COMPLET</string>
     <string name="legacy_gps_only_e6f03982">GPS SEUL</string>
+
+    <!-- ==================================================================
+         Handlebar HID mode, phone-only Android Auto and the teach
+         prerequisite dialog (PR #8, rebased 2026-08-18).
+         ================================================================== -->
+    <string name="handlebar_hid_capture_description">Permet à MOTO-HUB de lire les appuis du D-pad d\'une télécommande HID Bluetooth au guidon tant que le mode HID est sélectionné dans les réglages Boutons au guidon.</string>
+    <string name="legacy_android_auto_isn_t_running_9f167e30">Android Auto n\'est pas lancé</string>
+    <string name="legacy_teaching_the_handlebar_needs_a_live_android_auto_697217d0">Apprendre les commandes au guidon demande une session Android Auto active pour capter les appuis. Connectez-vous à la moto, ou lancez-la sur ce téléphone sans T-Box.</string>
+    <string name="legacy_connect_to_1_s_579387aa">Se connecter à %1$s</string>
+    <string name="legacy_start_on_this_phone_no_t_box_f1bcc79f">Lancer sur ce téléphone (sans T-Box)</string>
+    <string name="legacy_bluetooth_is_off_turn_it_on_then_pair_the_remote_356459fc">Le Bluetooth est éteint — activez-le, puis associez la télécommande en tant que clavier.</string>
+    <string name="legacy_allow_bluetooth_access_so_the_app_can_read_the_r_bf160fa2">Autorisez l\'accès au Bluetooth pour que l\'application puisse lire les appuis de la télécommande.</string>
+    <string name="legacy_bluetooth_is_on_a_hid_remote_doesn_t_show_up_her_77795af8">Le Bluetooth est activé. Une télécommande HID n\'apparaît pas ici comme appareil connecté — si les appuis ne sont toujours pas reconnus, vérifiez qu\'elle est associée dans les réglages Bluetooth du système et que l\'Accessibilité est activée.</string>
+    <string name="legacy_or_right_now_without_the_t_box_21ba0502">OU TOUT DE SUITE, SANS T-BOX</string>
+    <string name="legacy_android_auto_straight_to_your_phone_f0cc540c">Android Auto — directement sur le téléphone</string>
+    <string name="legacy_input_protocol_8ff4fe4e">PROTOCOLE D\'ENTRÉE</string>
+    <string name="legacy_most_dashboards_send_buttons_as_avrcp_media_keys_6e1dd82c">La plupart des tableaux de bord envoient les boutons comme touches multimédia AVRCP — laissez AVRCP. Choisissez HID seulement si la télécommande s\'associe comme clavier Bluetooth et que ses appuis n\'apparaissent jamais ci-dessous.</string>
+    <string name="legacy_hid_mode_also_needs_moto_hub_s_accessibility_ser_c0cdf4cc">Le mode HID nécessite aussi que le service d\'Accessibilité de MOTO-HUB soit activé, sinon les appuis ne sont pas vus.</string>
+    <string name="legacy_open_accessibility_settings_a01c954b">Ouvrir les réglages d\'Accessibilité</string>
+    <string name="legacy_turn_on_moto_hub_so_handlebar_presses_reach_the__b41c5310">Activez MOTO-HUB pour que les appuis au guidon atteignent l\'application depuis n\'importe quel écran</string>
+    <string name="legacy_was_moto_hub_s_switch_greyed_out_android_blocks__b5233420">L\'interrupteur de MOTO-HUB était-il grisé ? Android le bloque pour les applications qui n\'ont pas été installées depuis une boutique, et MOTO-HUB se télécharge depuis GitHub. Ouvrez Infos sur l\'application, appuyez sur ⋮ en haut à droite, choisissez « Autoriser les paramètres restreints », puis revenez activer l\'interrupteur.</string>
+    <string name="legacy_open_app_info_7c77c863">Ouvrir Infos sur l\'application</string>
+    <string name="legacy_where_allow_restricted_settings_lives_8f29fea1">Où se trouve « Autoriser les paramètres restreints »</string>
+    <string name="legacy_avrcp_media_keys_f50e20c7">AVRCP (touches multimédia)</string>
+    <string name="legacy_hid_d_pad_a247f04a">HID (D-pad)</string>
+    <string name="legacy_default_the_dashboard_sends_bluetooth_media_key__ccbdfbf7">Par défaut. Le tableau de bord envoie des commandes Bluetooth de touche multimédia pour lecture/pause, piste et volume.</string>
+    <string name="legacy_for_remotes_that_pair_as_a_bluetooth_keyboard_an_25055a66">Pour les télécommandes qui s\'associent comme clavier Bluetooth et envoient des appuis de D-pad. Nécessite d\'activer le service d\'Accessibilité de MOTO-HUB ci-dessous.</string>
 </resources>
