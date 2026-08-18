@@ -1,15 +1,13 @@
 package io.motohub.android.feature.pairing
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.unit.dp
 import io.motohub.android.i18n.motoHubText
+import io.motohub.android.ui.components.MotoHubDialogBody
 
 /**
  * Asks before saving credentials that decoded cleanly but did not come from a Carbit provisioning
@@ -27,7 +25,7 @@ fun UnverifiedQrDialog(
         onDismissRequest = onDismiss,
         title = { Text(motoHubText("Unfamiliar pairing code")) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            MotoHubDialogBody {
                 Text(
                     motoHubText(
                         "This code carries Wi-Fi details for %1\$s, but it was not issued by a " +
