@@ -2,6 +2,7 @@ package io.motohub.android.tbox
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Test
 import io.motohub.android.androidauto.AndroidAutoDisplayMode
 import io.motohub.android.androidauto.TBoxScreenMargins
@@ -304,8 +305,56 @@ class TBoxModelProfileTest {
         assertEquals(true, TBoxModelProfile.GENERIC.allowsPlainVideoFraming)
         val opted = TBoxModelProfile.entries.filter { it.allowsPlainVideoFraming }
         assertEquals(
-            listOf(TBoxModelProfile.ZONTES_368G_TEST_B, TBoxModelProfile.GENERIC),
+            listOf(
+                TBoxModelProfile.ZONTES_368G_TEST_B,
+                TBoxModelProfile.VOGE_TEST,
+                TBoxModelProfile.GENERIC
+            ),
             opted
+        )
+    }
+
+    @Test
+    fun `the Voge experiment is GENERIC with the KOVE's stream`() {
+        // The whole point of the profile is that only the video stream moves: if a tester's log
+        // still shows the dash rebooting, that has to rule the stream out rather than leave a
+        // second changed variable to argue about.
+        val voge = TBoxModelProfile.VOGE_TEST
+        val generic = TBoxModelProfile.GENERIC
+        assertEquals(generic.allowsPlainVideoFraming, voge.allowsPlainVideoFraming)
+        assertEquals(generic.requiresProactivePxcHeartbeat, voge.requiresProactivePxcHeartbeat)
+        assertEquals(generic.requiresSockAuth, voge.requiresSockAuth)
+        assertEquals(generic.advertisedSupportFunction, voge.advertisedSupportFunction)
+        assertEquals(generic.supportsScreenTouch, voge.supportsScreenTouch)
+        assertEquals(generic.defaultAndroidAutoDisplayMode, voge.defaultAndroidAutoDisplayMode)
+        // GENERIC is all-intra; this profile is the plain 1s-IDR stream that cured the KOVE.
+        assertEquals(0, generic.encoderKeyframeIntervalSeconds)
+        assertEquals(1, voge.encoderKeyframeIntervalSeconds)
+        assertEquals(true, voge.encoderPlainGopWithoutIntraRefresh)
+        assertEquals(
+            TBoxModelProfile.KOVE_800X.encoderPlainGopWithoutIntraRefresh,
+            voge.encoderPlainGopWithoutIntraRefresh
+        )
+        // No bitrate or frame-rate cap: those would be extra variables.
+        assertNull(voge.encoderBitRate)
+        assertNull(voge.encoderFrameRate)
+    }
+
+    @Test
+    fun `detection never claims the Voge experiment`() {
+        // A Voge reports flavor 51 / channel 37504 and lands on GENERIC today. Scoring must
+        // keep sending it there, or riders whose dash streams fine would change wire format
+        // without asking.
+        val voge = TBoxCapabilities(
+            versionName = "V0.0.1",
+            packageName = "com.cfmoto.cfmotointernational",
+            sdkVersion = "1.0.13.1",
+            supportFunction = 128
+        )
+        assertEquals(TBoxModelProfile.GENERIC, TBoxModelProfile.resolve("37504", voge))
+        assertEquals(
+            TBoxModelProfile.VOGE_TEST,
+            TBoxModelProfile.resolve("37504", voge, ProfileOverride.VOGE_TEST)
         )
     }
 

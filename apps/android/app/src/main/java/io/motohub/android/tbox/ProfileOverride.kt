@@ -30,6 +30,11 @@ enum class ProfileOverride(
         "Zontes 368G (test B)",
         "Same experiment with plain framing instead: the dash's ext byte decides, plus a 1s GOP"
     ),
+    VOGE_TEST(
+        "voge_test",
+        "Voge (test)",
+        "Experiment for Voge dashes that reboot mid-ride: 1s plain-IDR GOP instead of all-intra"
+    ),
     KOVE_800X("kove_800x", "KOVE 800X (ThinkerRide)", "BLE-paired ThinkerRide dash, 600x1024 portrait"),
     MORINI_XCAPE_1200(
         "morini_xcape_1200",
@@ -56,6 +61,7 @@ enum class ProfileOverride(
         CL_C450 -> TBoxModelProfile.CL_C450
         ZONTES_368G_TEST -> TBoxModelProfile.ZONTES_368G_TEST
         ZONTES_368G_TEST_B -> TBoxModelProfile.ZONTES_368G_TEST_B
+        VOGE_TEST -> TBoxModelProfile.VOGE_TEST
         KOVE_800X -> TBoxModelProfile.KOVE_800X
         MORINI_XCAPE_1200 -> TBoxModelProfile.MORINI_XCAPE_1200
         MORINI_XCAPE_1200_MIRROR -> TBoxModelProfile.MORINI_XCAPE_1200_MIRROR

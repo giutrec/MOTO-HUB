@@ -196,13 +196,13 @@ internal class ThinkerRideBleLink(
      * Suspends until every queued command has left the phone, so a teardown does not close the
      * link out from under the mirror-stop packets.
      */
-    suspend fun awaitWritesDrained(timeoutMillis: Long) {
+    suspend fun awaitWritesDrained(timeoutMillis: Long): Boolean =
         withTimeoutOrNull(timeoutMillis) {
             while (synchronized(queueLock) { inFlight != null || writeQueue.isNotEmpty() }) {
                 delay(WRITE_DRAIN_POLL_MS)
             }
-        }
-    }
+            true
+        } == true
 
     fun close() {
         if (!closed.compareAndSet(false, true)) {
@@ -369,7 +369,8 @@ internal class ThinkerRideBleLink(
         return runCatching {
             connectedGatt.setCharacteristicNotification(notify, true)
             val descriptor = notify.getDescriptor(cccUuid) ?: return@runCatching false
-            connectedGatt.writeDescriptor(
+            BleCompat.writeDescriptor(
+                connectedGatt,
                 descriptor,
                 BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
             ) == BluetoothStatusCodes.SUCCESS
@@ -426,7 +427,8 @@ internal class ThinkerRideBleLink(
             return
         }
         val submitted = runCatching {
-            activeGatt.writeCharacteristic(
+            BleCompat.writeCharacteristic(
+                activeGatt,
                 characteristic,
                 json.toByteArray(StandardCharsets.UTF_8),
                 BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE

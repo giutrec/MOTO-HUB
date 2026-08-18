@@ -152,10 +152,20 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
             )
             active.mirrorArea = area
             active.ble.sendMirrorStatus(true)
+            // "Sent" used to mean "queued", which is not the same claim at all: on a dash that
+            // ignores mirror-start, whether the bytes actually left this phone is the difference
+            // between our bug and its firmware. Wait for the queue to drain and say which it was.
+            val drained = active.ble.awaitWritesDrained(MIRROR_START_DRAIN_TIMEOUT_MS)
             ProjectionEventLog.record(
                 "THINKERRIDE",
-                "Mirror-start sent over Bluetooth; waiting for the dash video connection " +
-                    "(stream ${area.width}x${area.height})."
+                if (drained) {
+                    "Mirror-start left the phone over Bluetooth; waiting for the dash video " +
+                        "connection (stream ${area.width}x${area.height})."
+                } else {
+                    "Mirror-start is still queued after ${MIRROR_START_DRAIN_TIMEOUT_MS}ms; " +
+                        "waiting for the dash video connection anyway " +
+                        "(stream ${area.width}x${area.height})."
+                }
             )
             val video = withTimeoutOrNull(VIDEO_CONNECT_TIMEOUT_MS) { active.videoConnected.await() }
                 ?: error(
@@ -446,11 +456,33 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
             // The control channel is where an unknown ThinkerRide model would identify itself,
             // so keep whatever readable content arrives; a future profile is written from these
             // lines the same way EasyConn profiles are written from CLIENT_INFO logs.
+            //
+            // Binary replies used to be dropped here, which left every diagnostic log showing
+            // only our side of this conversation: a dash answering our five handshake commands
+            // in binary said nothing we could read. On a dash that accepts mirror-start and then
+            // never mirrors (KOVE 800X PRO, 2026-08-17) that silence is the whole question, so
+            // anything unreadable is hex-dumped instead of discarded.
+            // The 6-byte keep-alive arrives every few seconds and is answered, not read; hex
+            // dumping it would bury everything else.
+            if (ThinkerRideProtocol.isKeepaliveProbe(buffer, length)) return
             val text = String(buffer, 0, length, StandardCharsets.UTF_8)
             val printable = text.count { it.code in 32..126 }
             if (printable >= length / 2 && text.isNotBlank()) {
                 ProjectionEventLog.record("THINKERRIDE", "Dash control payload: ${text.trim()}")
+                return
             }
+            val shown = minOf(length, CONTROL_HEX_DUMP_LIMIT)
+            val hex = buildString(shown * 3) {
+                for (index in 0 until shown) {
+                    if (index > 0) append(' ')
+                    append("%02X".format(buffer[index]))
+                }
+            }
+            val suffix = if (length > shown) " … (+${length - shown} bytes)" else ""
+            ProjectionEventLog.record(
+                "THINKERRIDE",
+                "Dash control payload (binary, $length bytes): $hex$suffix"
+            )
         }
 
         fun close() {
@@ -485,5 +517,15 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
 
         /** How long [stop] gives the mirror-stop packets to leave the phone. */
         const val BLE_DRAIN_TIMEOUT_MS = 1_500L
+
+        /** Bytes of an unreadable control payload written to the log before truncating. */
+        const val CONTROL_HEX_DUMP_LIMIT = 64
+
+        /**
+         * How long [start] waits for the mirror-start packets to actually leave the phone before
+         * it stops claiming they did. Two packets [ThinkerRideProtocol.BLE_WRITE_SPACING_MS]
+         * apart clear well inside this even after a retry or two.
+         */
+        const val MIRROR_START_DRAIN_TIMEOUT_MS = 3_000L
     }
 }

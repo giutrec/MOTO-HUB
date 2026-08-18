@@ -267,6 +267,50 @@ enum class TBoxModelProfile(
         encoderKeyframeIntervalSeconds = 1
     ),
     /**
+     * Compatibility experiment for the Voge dashes (flavor 51, channel 37504, 592x752 portrait
+     * panel) whose riders report the clock falling back to 00:00 after a ride. The clock is the
+     * symptom, not the fault: the field logs of 2026-08-17 show the dash *rebooting*.
+     * `currentHUTime` tracked wall time to within 10ms over 87s across three back-to-back
+     * sessions - so it is a real clock, not a drifting counter - and then zeroed twice. The
+     * second zero landed 3.4s after the dash stopped answering PXC mid-session, and the
+     * recovery attempt that followed found the dash's own Wi-Fi Direct group gone. Two bikes,
+     * two phones, one shape: 45-60s of video and the panel goes down.
+     *
+     * These dashes land on [GENERIC], which is all-intra - 592x752@30 at 4 Mbps where every
+     * frame is an IDR, and a keyframe is split into three wire frames. [KOVE_800X] records the
+     * same failure from the other side: that panel froze ignition-cycle hard 15-30s into every
+     * session until it was given a plain 1s-IDR stream. So this profile is [GENERIC]'s wire
+     * format with one video delta, the stream the KOVE needed: a 1s GOP on plain periodic IDR
+     * instead of all-intra. Everything else that touches the wire - plain framing decided by
+     * the dash's own ext byte, the proactive PXC heartbeat, no sock auth - is copied from
+     * [GENERIC] verbatim, so a log that still shows the reboot rules the video stream out
+     * instead of leaving two variables in play.
+     *
+     * The geometry is not a third variable: these dashes report their 592x752 area live and it
+     * is learned per SSID, so the declared portrait preset only reproduces what the saved
+     * geometry already resolves to (720x1280, field log 2026-08-17). Declaring it matters
+     * anyway, because a non-GENERIC profile's preset counts as validated evidence about the
+     * hardware - see [hasValidatedAndroidAutoPreset] - and inheriting GENERIC's 800x480
+     * landscape would state the opposite of what the panel is.
+     *
+     * Manual selection only: [score] never claims it, so no Voge that streams fine today can
+     * land here by detection.
+     */
+    VOGE_TEST(
+        key = "voge_test",
+        displayName = "Voge (test)",
+        modelIds = emptySet(),
+        mapTilesRequireCellular = true,
+        defaultAndroidAutoPreset = AndroidAutoVideoPreset.PORTRAIT_720X1280,
+        fallbackTBoxVideoArea = TBoxEvent.VideoArea(592, 752),
+        requiresSockAuth = false,
+        advertisedSupportFunction = 0,
+        allowsPlainVideoFraming = true,
+        requiresProactivePxcHeartbeat = true,
+        encoderKeyframeIntervalSeconds = 1,
+        encoderPlainGopWithoutIntraRefresh = true
+    ),
+    /**
      * KOVE 800X (and, until they earn their own profiles, other ThinkerRide-family dashes): a
      * 600x1024 portrait TFT paired over BLE, reached through [TBoxTransportFamily.THINKERRIDE].
      * The ThinkerRide protocol never reports a panel size — the phone declares the stream
@@ -569,6 +613,9 @@ enum class TBoxModelProfile(
                 // whose Zontes dashes already stream fine would silently change wire format.
                 ZONTES_368G_TEST -> 0
                 ZONTES_368G_TEST_B -> 0
+                // Same rule for the Voge stream experiment: a Voge that streams fine today
+                // must never be moved off all-intra by detection.
+                VOGE_TEST -> 0
                 // ThinkerRide dashes never produce CLIENT_INFO (an EasyConn concept), so scoring
                 // has nothing to say; they resolve by the QR's pseudo modelId or a manual pin.
                 KOVE_800X -> 0
