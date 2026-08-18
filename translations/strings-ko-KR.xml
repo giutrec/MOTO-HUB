@@ -1528,7 +1528,6 @@
     <!-- Source: feature/trips/TripLibraryUi.kt -->
     <string name="legacy_enhanced_9c6c8376">전체 기록</string>
     <string name="legacy_gps_only_e6f03982">GPS만</string>
-=======
     <!-- Source: feature/controls/HandlebarHidCaptureService.kt -->
     <string name="handlebar_hid_capture_description">핸들바 버튼 설정에서 HID 모드가 선택된 경우, MOTO-HUB가 블루투스 HID 핸들바 리모컨의 D패드 입력을 읽을 수 있도록 합니다.</string>
 

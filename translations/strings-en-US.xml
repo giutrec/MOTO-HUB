@@ -1533,7 +1533,6 @@
     <!-- Source: feature/trips/TripLibraryUi.kt -->
     <string name="legacy_enhanced_9c6c8376">ENHANCED</string>
     <string name="legacy_gps_only_e6f03982">GPS ONLY</string>
-=======
     <!-- Source: feature/controls/HandlebarHidCaptureService.kt (system Accessibility settings
          description; rendered outside the app's own Compose runtime, so it is a plain string
          resource rather than a motoHubText() call). -->

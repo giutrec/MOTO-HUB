@@ -957,7 +957,6 @@
     <!-- Source: feature/trips/TripLibraryUi.kt -->
     <string name="legacy_enhanced_9c6c8376">COMPLETO</string>
     <string name="legacy_gps_only_e6f03982">SOLO GPS</string>
-=======
     <!-- Source: feature/controls/HandlebarHidCaptureService.kt -->
     <string name="handlebar_hid_capture_description">Consente a MOTO-HUB di leggere le pressioni del D-pad da un telecomando manubrio Bluetooth HID quando la modalità HID è selezionata nelle impostazioni dei pulsanti manubrio.</string>
 
