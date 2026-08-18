@@ -6,6 +6,7 @@ import android.net.Network
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.util.Log
@@ -919,12 +920,19 @@ class RideDaemonTransport(
         ProjectionEventLog.debug("DISCOVERY", "mDNS multicast lock acquired.")
         lateinit var listener: NsdManager.DiscoveryListener
         var serviceCallback: NsdManager.ServiceInfoCallback? = null
+        // The <API-34 resolution slot: NsdManager.resolveService is one-shot, so at most one
+        // legacy resolve may be in flight, mirroring the single-ServiceInfoCallback rule above.
+        val legacyResolveActive = AtomicBoolean(false)
         val discoveryStopped = AtomicBoolean(false)
 
         fun stopDiscovery() {
             if (!discoveryStopped.compareAndSet(false, true)) return
-            serviceCallback?.let { callback ->
-                runCatching { nsdManager.unregisterServiceInfoCallback(callback) }
+            // serviceCallback is only ever assigned on API 34+, but the call itself must stay
+            // behind the gate too or NewApi flags it at minSdk 31.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                serviceCallback?.let { callback ->
+                    runCatching { nsdManager.unregisterServiceInfoCallback(callback) }
+                }
             }
             runCatching { nsdManager.stopServiceDiscovery(listener) }
             if (multicastLock.isHeld) multicastLock.release()
@@ -945,6 +953,151 @@ class RideDaemonTransport(
 
             override fun onServiceFound(serviceInfo: NsdServiceInfo?) {
                 if (serviceInfo == null || !serviceInfo.serviceType.endsWith(SERVICE_TYPE)) return
+
+                // Shared acceptance logic for both resolution paths. The API-34 path
+                // (ServiceInfoCallback) carries the resolved Network and every host address;
+                // the legacy resolveService() used on Android 12/13 has a single host and no
+                // Network attached, so [networkAware] is false there and acceptance falls back
+                // to the address checks alone - exactly the pre-API-33 NSD world.
+                fun handleResolved(
+                    resolved: NsdServiceInfo,
+                    resolvedNetwork: Network?,
+                    resolvedHostAddresses: List<InetAddress>,
+                    networkAware: Boolean,
+                    releaseSlot: () -> Unit
+                ) {
+                    if (networkAware && !link.matchesResolvedNetwork(resolvedNetwork)) {
+                        // Only ONE candidate can hold the resolution slot (see onServiceFound).
+                        // A candidate pinned to the WRONG network will never migrate to the
+                        // T-Box link, so keeping the slot occupied silently blocked every
+                        // later (correct) candidate until the discovery window expired. A
+                        // null network is different: with network-scoped discovery it can be
+                        // a transient of the resolution in progress, so that candidate keeps
+                        // the slot and the next update decides.
+                        if (resolvedNetwork != null) {
+                            ProjectionEventLog.warning(
+                                "DISCOVERY",
+                                "Candidate ${resolved.serviceName} resolved on the wrong " +
+                                    "network ($resolvedNetwork); releasing the resolution " +
+                                    "slot for the next candidate."
+                            )
+                            releaseSlot()
+                        }
+                        return
+                    }
+                    val attributes = resolved.attributes
+                    val simulatorProfileRequested =
+                        TBoxModelProfile.fromModelId(expectedModelId) == TBoxModelProfile.MOTO_HUB_SIMULATOR
+                    val advertisedModelId = attributes[MODEL_ID_ATTRIBUTE]
+                        ?.toString(Charsets.UTF_8)
+                        ?.trim()
+                    if (
+                        simulatorProfileRequested &&
+                        !isMotoHubSimulatorAdvertisement(resolved.serviceName, advertisedModelId)
+                    ) {
+                        ProjectionEventLog.warning(
+                            "DISCOVERY",
+                            "Ignoring EasyConn candidate ${resolved.serviceName}: " +
+                                "it is not an identified MOTO-HUB simulator preset (modelId=$advertisedModelId)."
+                        )
+                        releaseSlot()
+                        return
+                    }
+                    val packageName = decodeEasyConnPackage(attributes[PACKAGE_ATTRIBUTE])
+                    if (packageName == null) {
+                        Log.w(TAG, "EasyConn service resolved without package metadata")
+                        ProjectionEventLog.warning("DISCOVERY", "Resolved EasyConn service has no package metadata.")
+                        return
+                    }
+
+                    val advertisedIp = attributes[IP_ATTRIBUTE]
+                        ?.toString(Charsets.UTF_8)
+                        ?.let(::parseUsableEasyConnIpv4Literal)
+                    val resolvedIp = resolvedHostAddresses
+                        .filterIsInstance<Inet4Address>()
+                        .firstOrNull(::isUsableTBoxIpv4Address)
+                        ?.hostAddress
+                    val unusableResolvedIp = resolvedHostAddresses
+                        .filterIsInstance<Inet4Address>()
+                        .firstOrNull()
+                        ?.hostAddress
+                    val derivedIp = if (!simulatorProfileRequested && advertisedIp == null && resolvedIp == null) {
+                        link.peerHint?.hostAddress ?: link.network?.let { activeNetwork ->
+                            connectivityManager.getLinkProperties(activeNetwork)?.let { linkProperties ->
+                                deriveTBoxPeerIpv4(
+                                    gateways = linkProperties.routes
+                                        .filter { it.isDefaultRoute }
+                                        .mapNotNull { it.gateway },
+                                    dnsServers = linkProperties.dnsServers,
+                                    localAddresses = linkProperties.linkAddresses
+                                        .map { it.address to it.prefixLength }
+                                )
+                            }?.hostAddress
+                        }
+                    } else {
+                        null
+                    }
+                    val ipAddress = advertisedIp ?: resolvedIp ?: derivedIp
+                    val port = resolved.port
+                    if (ipAddress.isNullOrBlank() || port !in 1..65535) {
+                        Log.w(TAG, "EasyConn service resolved without a usable host")
+                        ProjectionEventLog.warning(
+                            "DISCOVERY",
+                            "Resolved EasyConn service has invalid endpoint: " +
+                                "advertisedIp=${attributes[IP_ATTRIBUTE]?.toString(Charsets.UTF_8)}, " +
+                                "resolvedIp=$unusableResolvedIp, port=$port."
+                        )
+                        return
+                    }
+                    if (derivedIp != null) {
+                        ProjectionEventLog.warning(
+                            "DISCOVERY",
+                            "EasyConn advertised no IPv4 host; using network-derived peer $derivedIp."
+                        )
+                    }
+                    ProjectionEventLog.record(
+                        "DISCOVERY",
+                        "NSD resolution accepted: $ipAddress:$port, package=$packageName, network=$resolvedNetwork."
+                    )
+                    finish(Result.success(TBoxHost(ipAddress, port, packageName)))
+                }
+
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    // registerServiceInfoCallback is API 34; Android 12/13 resolve the old way.
+                    if (!legacyResolveActive.compareAndSet(false, true)) return
+                    ProjectionEventLog.record(
+                        "DISCOVERY",
+                        "NSD candidate found: name=${serviceInfo.serviceName}, type=${serviceInfo.serviceType}."
+                    )
+                    @Suppress("DEPRECATION")
+                    nsdManager.resolveService(
+                        serviceInfo,
+                        object : NsdManager.ResolveListener {
+                            override fun onServiceResolved(resolved: NsdServiceInfo) {
+                                @Suppress("DEPRECATION")
+                                val addresses = listOfNotNull(resolved.host)
+                                handleResolved(
+                                    resolved,
+                                    resolvedNetwork = null,
+                                    resolvedHostAddresses = addresses,
+                                    networkAware = false,
+                                    releaseSlot = { legacyResolveActive.set(false) }
+                                )
+                            }
+
+                            override fun onResolveFailed(failed: NsdServiceInfo?, errorCode: Int) {
+                                legacyResolveActive.set(false)
+                                Log.w(TAG, "Legacy NSD resolve failed: $errorCode")
+                                ProjectionEventLog.warning(
+                                    "DISCOVERY",
+                                    "Legacy NSD resolve failed: code=$errorCode."
+                                )
+                            }
+                        }
+                    )
+                    return
+                }
+
                 if (serviceCallback != null) return
                 ProjectionEventLog.record(
                     "DISCOVERY",
@@ -952,102 +1105,16 @@ class RideDaemonTransport(
                 )
                 val callback = object : NsdManager.ServiceInfoCallback {
                     override fun onServiceUpdated(resolved: NsdServiceInfo) {
-                        if (!link.matchesResolvedNetwork(resolved.network)) {
-                            // Only ONE candidate can hold the resolution slot (see onServiceFound).
-                            // A candidate pinned to the WRONG network will never migrate to the
-                            // T-Box link, so keeping the slot occupied silently blocked every
-                            // later (correct) candidate until the discovery window expired. A
-                            // null network is different: with network-scoped discovery it can be
-                            // a transient of the resolution in progress, so that candidate keeps
-                            // the slot and the next update decides.
-                            if (resolved.network != null) {
-                                ProjectionEventLog.warning(
-                                    "DISCOVERY",
-                                    "Candidate ${resolved.serviceName} resolved on the wrong " +
-                                        "network (${resolved.network}); releasing the resolution " +
-                                        "slot for the next candidate."
-                                )
+                        handleResolved(
+                            resolved,
+                            resolvedNetwork = resolved.network,
+                            resolvedHostAddresses = resolved.hostAddresses,
+                            networkAware = true,
+                            releaseSlot = {
                                 serviceCallback = null
                                 runCatching { nsdManager.unregisterServiceInfoCallback(this) }
                             }
-                            return
-                        }
-                        val attributes = resolved.attributes
-                        val simulatorProfileRequested =
-                            TBoxModelProfile.fromModelId(expectedModelId) == TBoxModelProfile.MOTO_HUB_SIMULATOR
-                        val advertisedModelId = attributes[MODEL_ID_ATTRIBUTE]
-                            ?.toString(Charsets.UTF_8)
-                            ?.trim()
-                        if (
-                            simulatorProfileRequested &&
-                            !isMotoHubSimulatorAdvertisement(resolved.serviceName, advertisedModelId)
-                        ) {
-                            ProjectionEventLog.warning(
-                                "DISCOVERY",
-                                "Ignoring EasyConn candidate ${resolved.serviceName}: " +
-                                    "it is not an identified MOTO-HUB simulator preset (modelId=$advertisedModelId)."
-                            )
-                            serviceCallback = null
-                            runCatching { nsdManager.unregisterServiceInfoCallback(this) }
-                            return
-                        }
-                        val packageName = decodeEasyConnPackage(attributes[PACKAGE_ATTRIBUTE])
-                        if (packageName == null) {
-                            Log.w(TAG, "EasyConn service resolved without package metadata")
-                            ProjectionEventLog.warning("DISCOVERY", "Resolved EasyConn service has no package metadata.")
-                            return
-                        }
-
-                        val advertisedIp = attributes[IP_ATTRIBUTE]
-                            ?.toString(Charsets.UTF_8)
-                            ?.let(::parseUsableEasyConnIpv4Literal)
-                        val resolvedIp = resolved.hostAddresses
-                            .filterIsInstance<Inet4Address>()
-                            .firstOrNull(::isUsableTBoxIpv4Address)
-                            ?.hostAddress
-                        val unusableResolvedIp = resolved.hostAddresses
-                            .filterIsInstance<Inet4Address>()
-                            .firstOrNull()
-                            ?.hostAddress
-                        val derivedIp = if (!simulatorProfileRequested && advertisedIp == null && resolvedIp == null) {
-                            link.peerHint?.hostAddress ?: link.network?.let { activeNetwork ->
-                                connectivityManager.getLinkProperties(activeNetwork)?.let { linkProperties ->
-                                    deriveTBoxPeerIpv4(
-                                        gateways = linkProperties.routes
-                                            .filter { it.isDefaultRoute }
-                                            .mapNotNull { it.gateway },
-                                        dnsServers = linkProperties.dnsServers,
-                                        localAddresses = linkProperties.linkAddresses
-                                            .map { it.address to it.prefixLength }
-                                    )
-                                }?.hostAddress
-                            }
-                        } else {
-                            null
-                        }
-                        val ipAddress = advertisedIp ?: resolvedIp ?: derivedIp
-                        val port = resolved.port
-                        if (ipAddress.isNullOrBlank() || port !in 1..65535) {
-                            Log.w(TAG, "EasyConn service resolved without a usable host")
-                            ProjectionEventLog.warning(
-                                "DISCOVERY",
-                                "Resolved EasyConn service has invalid endpoint: " +
-                                    "advertisedIp=${attributes[IP_ATTRIBUTE]?.toString(Charsets.UTF_8)}, " +
-                                    "resolvedIp=$unusableResolvedIp, port=$port."
-                            )
-                            return
-                        }
-                        if (derivedIp != null) {
-                            ProjectionEventLog.warning(
-                                "DISCOVERY",
-                                "EasyConn advertised no IPv4 host; using network-derived peer $derivedIp."
-                            )
-                        }
-                        ProjectionEventLog.record(
-                            "DISCOVERY",
-                            "NSD resolution accepted: $ipAddress:$port, package=$packageName, network=${resolved.network}."
                         )
-                        finish(Result.success(TBoxHost(ipAddress, port, packageName)))
                     }
 
                     override fun onServiceLost() = Unit

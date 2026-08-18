@@ -277,12 +277,14 @@ private fun GeneralDetail(
         backLabel = "‹ ${context.getString(R.string.settings_title)}",
         onBack = onBack
     ) {
-        MotoHubActionRow(
-            title = context.getString(R.string.language_title),
-            description = context.getString(R.string.language_description),
-            value = context.getString(AppLanguageManager.current(context).labelRes),
-            onClick = onOpenLanguage
-        )
+        if (AppLanguageManager.isSupported) {
+            MotoHubActionRow(
+                title = context.getString(R.string.language_title),
+                description = context.getString(R.string.language_description),
+                value = context.getString(AppLanguageManager.current(context).labelRes),
+                onClick = onOpenLanguage
+            )
+        }
         MotoHubActionRow(
             title = motoHubText("Start automatically"),
             description = motoHubText("Put a screen on the TFT as soon as the motorcycle connects"),

@@ -3,10 +3,16 @@ source_repository=https://github.com/vincenzobpt/ridedaemon-lib
 source_commit=de02c4c6edfbd0662a9b64a2f6ab7497fc22c409
 source_dirty=false
 source_checkout=refs/ridedaemon-lib-motohub
-gomobile_android_api=34
+gomobile_android_api=31
 artifact=apps/android/app/libs/hudlib.aar
-sha256=7a5ac3ff3dfb45088fd45dd561a4fbd72b0f5fdb03bc6ea7903108b854dd8c88
+sha256=2183e57436ed4de40feee5be6b8bbf6c079cc18ac87e4fc13a999e0cd266f206
 license=GPL-3.0-only
+
+# Rebuilt 2026-08-18 from the SAME clean commit de02c4c as the previous build,
+# with one change: -androidapi 34 -> 31, because CORE now installs on Android
+# 12+ and the manifest merger refuses a library whose minSdk exceeds the app's.
+# No Go source changed; binding surface diffed against the previous AAR:
+# identical. The API-31 AAR is also valid on 14+ phones.
 
 # Rebuilt 2026-08-10, second time that day, and the second build REVERSES the
 # first. The morning build made the phone advertise supportSyncCorrectTime in

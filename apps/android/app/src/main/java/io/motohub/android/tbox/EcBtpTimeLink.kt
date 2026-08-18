@@ -186,7 +186,8 @@ internal class EcBtpTimeLink(
                 if (reply == null) return
                 val target = dataCharacteristic ?: return
                 val written = runCatching {
-                    gatt.writeCharacteristic(
+                    BleCompat.writeCharacteristic(
+                        gatt,
                         target,
                         reply,
                         BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
@@ -222,7 +223,7 @@ internal class EcBtpTimeLink(
         runCatching { gatt.setCharacteristicNotification(characteristic, true) }
         val descriptor = runCatching { characteristic.getDescriptor(CCC_UUID) }.getOrNull() ?: return
         runCatching {
-            gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+            BleCompat.writeDescriptor(gatt, descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
         }
     }
 

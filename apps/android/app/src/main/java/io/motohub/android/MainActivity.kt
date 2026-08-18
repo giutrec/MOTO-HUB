@@ -1544,10 +1544,14 @@ class MainActivity : ComponentActivity() {
  */
 private fun tboxConnectPermissions(profile: MotorcycleProfile?): Array<String> {
     val permissions = mutableListOf(
-        Manifest.permission.NEARBY_WIFI_DEVICES,
         Manifest.permission.ACCESS_COARSE_LOCATION,
         Manifest.permission.ACCESS_FINE_LOCATION
     )
+    // NEARBY_WIFI_DEVICES exists only from Android 13; requesting an unknown permission on 12
+    // gets an instant auto-denial. There the location pair above IS the Wi-Fi join gate.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        permissions += Manifest.permission.NEARBY_WIFI_DEVICES
+    }
     if (ThinkerRideGate.requiresBle(profile)) {
         permissions += ThinkerRideGate.blePermissions
     }

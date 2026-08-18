@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 
 /**
@@ -32,12 +33,26 @@ import android.provider.Settings
  */
 internal object WifiDirectGate {
 
+    /**
+     * The runtime permission `WifiP2pManager` gates every call on for this OS release:
+     * `NEARBY_WIFI_DEVICES` exists only from Android 13; on Android 12/12L the framework runs
+     * the very same gate on `ACCESS_FINE_LOCATION` instead. Checking the 13+ permission on a
+     * 12 phone would always report DENIED (an unknown permission is never granted), bricking
+     * every Wi-Fi Direct join there.
+     */
+    val requiredPermission: String
+        get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.NEARBY_WIFI_DEVICES
+        } else {
+            Manifest.permission.ACCESS_FINE_LOCATION
+        }
+
     /** True when [packageName] holds the runtime permission `WifiP2pManager` gates every call on. */
     fun hasNearbyDevicesPermission(
         context: Context,
         packageName: String = context.packageName
     ): Boolean = context.packageManager.checkPermission(
-        Manifest.permission.NEARBY_WIFI_DEVICES,
+        requiredPermission,
         packageName
     ) == PackageManager.PERMISSION_GRANTED
 
@@ -54,7 +69,7 @@ internal object WifiDirectGate {
         return runCatching { locationManager.isLocationEnabled }.getOrDefault(true)
     }
 
-    /** Shown to the rider when the joining app has no `NEARBY_WIFI_DEVICES` grant. */
+    /** Shown to the rider when the joining app has no grant for [requiredPermission]. */
     fun missingPermissionMessage(appName: String): String =
         "$appName does not have the $PERMISSION_MARKER, which Android requires to join " +
             "a Wi-Fi Direct dashboard. Allow it in $appName's app info, then tap Connect again."
@@ -66,7 +81,15 @@ internal object WifiDirectGate {
      */
     fun isMissingPermissionMessage(message: String): Boolean = PERMISSION_MARKER in message
 
-    private const val PERMISSION_MARKER = "\"Nearby devices\" permission"
+    // The marker names the permission the rider must actually flip: "Nearby devices" is the
+    // 13+ toggle, "Location" the 12/12L one. Generated and matched on the same phone, so the
+    // two sides of isMissingPermissionMessage always agree.
+    private val PERMISSION_MARKER: String
+        get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            "\"Nearby devices\" permission"
+        } else {
+            "\"Location\" permission"
+        }
 
     /** Appended to a P2P failure when location services are off - a cause, not a certainty. */
     const val LOCATION_OFF_HINT: String =

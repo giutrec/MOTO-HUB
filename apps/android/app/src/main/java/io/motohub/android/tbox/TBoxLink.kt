@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.Network
+import android.os.Build
+import androidx.core.content.ContextCompat
 import android.net.nsd.NsdManager
 import android.net.wifi.p2p.WifiP2pInfo
 import android.net.wifi.p2p.WifiP2pManager
@@ -69,7 +71,15 @@ sealed interface TBoxLink {
             executor: Executor,
             listener: NsdManager.DiscoveryListener
         ) {
-            nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, network, executor, listener)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, network, executor, listener)
+            } else {
+                // Network-scoped discovery is API 33. The unscoped overload listens on every
+                // network; on Android 12 the legacy resolve carries no Network either, so
+                // RideDaemonTransport skips matchesResolvedNetwork and acceptance falls back
+                // to the address checks.
+                nsdManager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, listener)
+            }
         }
 
         override fun matchesResolvedNetwork(resolvedNetwork: Network?): Boolean =
@@ -161,10 +171,15 @@ sealed interface TBoxLink {
                 override fun onReceive(receiverContext: Context, intent: Intent) {
                     when (intent.action) {
                         WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION -> {
-                            val info = intent.getParcelableExtra(
-                                WifiP2pManager.EXTRA_WIFI_P2P_INFO,
-                                WifiP2pInfo::class.java
-                            )
+                            val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                intent.getParcelableExtra(
+                                    WifiP2pManager.EXTRA_WIFI_P2P_INFO,
+                                    WifiP2pInfo::class.java
+                                )
+                            } else {
+                                @Suppress("DEPRECATION")
+                                intent.getParcelableExtra(WifiP2pManager.EXTRA_WIFI_P2P_INFO)
+                            }
                             if (info != null && !info.groupFormed) fire()
                         }
                         WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION -> {
@@ -179,7 +194,12 @@ sealed interface TBoxLink {
                 addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION)
                 addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION)
             }
-            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            ContextCompat.registerReceiver(
+                context,
+                receiver,
+                filter,
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
             val closer = object : AutoCloseable {
                 private val closed = AtomicBoolean(false)
                 override fun close() {

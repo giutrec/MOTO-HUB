@@ -77,7 +77,9 @@ android {
 
     defaultConfig {
         applicationId = "io.motohub.android"
-        minSdk = 34
+        // 31 = Android 12: everything Android-12-specific is behind SDK_INT gates, so on 14+
+        // the executed code paths are identical to the old minSdk-34 builds.
+        minSdk = 31
         targetSdk = 36
         // CORE and ADVANCED ship as a pair, under one tag, and talk to each other over AIDL:
         // keep this identical to the PRO worktree's build.gradle.kts. They drifted after v1.1.4
@@ -120,11 +122,12 @@ android {
             )
         }
         release {
-            // Published APKs carry one architecture. minSdk is 34, and every phone that runs
-            // Android 14 is arm64 - x86/x86_64 exist only for Intel emulators, and armeabi-v7a
-            // for hardware that cannot run this minSdk at all. Shipping all four put ~50MB of
-            // native libraries no rider can execute into every download (libmaplibre.so alone
-            // was 15MB per ABI). The debug variant keeps every ABI, so emulators still work.
+            // Published APKs carry one architecture. Since 2019 every new chipset is arm64, so
+            // even at minSdk 31 the realistic install base is arm64 - x86/x86_64 exist only for
+            // Intel emulators, and armeabi-v7a for pre-2019 hardware we deliberately leave out.
+            // Shipping all four put ~50MB of native libraries no rider can execute into every
+            // download (libmaplibre.so alone was 15MB per ABI). The debug variant keeps every
+            // ABI, so emulators still work.
             ndk {
                 abiFilters.clear()
                 abiFilters.add("arm64-v8a")

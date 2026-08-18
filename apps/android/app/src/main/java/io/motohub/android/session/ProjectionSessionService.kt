@@ -621,7 +621,11 @@ class ProjectionSessionService : Service() {
     }
 
     private fun Intent.parcelableIntent(key: String): Intent? =
-        getParcelableExtra(key, Intent::class.java)
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            getParcelableExtra(key, Intent::class.java)
+        } else {
+            @Suppress("DEPRECATION") getParcelableExtra(key) as? Intent
+        }
 
     companion object {
         private const val SESSION_CONSUMER = "mirroring"

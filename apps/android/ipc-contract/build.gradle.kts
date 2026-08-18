@@ -9,7 +9,8 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        minSdk = 34
+        // Follows the app module (Android 12+). The AIDL wire contract is SDK-independent.
+        minSdk = 31
     }
 
     buildFeatures {
