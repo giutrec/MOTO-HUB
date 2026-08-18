@@ -14,7 +14,8 @@ class YunmoProfileRoutingTest {
     /** The X-Cape profile and its mirror variant; everything else must stay EasyConn. */
     private val yunmoProfiles = setOf(
         TBoxModelProfile.MORINI_XCAPE_1200,
-        TBoxModelProfile.MORINI_XCAPE_1200_MIRROR
+        TBoxModelProfile.MORINI_XCAPE_1200_MIRROR,
+        TBoxModelProfile.MORINI_XCAPE_1200_JPEG
     )
 
     @Test
@@ -113,5 +114,26 @@ class YunmoProfileRoutingTest {
             assertNotEquals(profile, TBoxModelProfile.resolve("00297", null))
             assertEquals(profile, TBoxModelProfile.resolve("00297", null, overrideFor(profile)))
         }
+    }
+
+    @Test
+    fun onlyTheJpegProfileEverCapturesStills() {
+        // The guarantee that matters for every other motorcycle: this flag is what diverts a
+        // session away from the AVC encoder, so exactly one profile may carry it.
+        val jpegProfiles = TBoxModelProfile.entries.filter { it.yunmoJpegVideo }
+        assertEquals(listOf(TBoxModelProfile.MORINI_XCAPE_1200_JPEG), jpegProfiles)
+    }
+
+    @Test
+    fun theJpegProfileCannotBeReachedWithoutTheRiderPinningIt() {
+        // It answers to no modelId, so no QR and no capability score can land a bike here.
+        // The shared ProductID must keep resolving to the EasyConn Morinis, not to this.
+        assertTrue(TBoxModelProfile.fromModelId("00297") != TBoxModelProfile.MORINI_XCAPE_1200_JPEG)
+        assertTrue(TBoxModelProfile.fromModelId("21322") != TBoxModelProfile.MORINI_XCAPE_1200_JPEG)
+        // A rider pinning it is the only way in.
+        assertEquals(
+            TBoxModelProfile.MORINI_XCAPE_1200_JPEG,
+            ProfileOverride.MORINI_XCAPE_1200_JPEG.resolve()
+        )
     }
 }

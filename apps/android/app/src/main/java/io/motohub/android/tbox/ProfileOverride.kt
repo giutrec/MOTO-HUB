@@ -46,6 +46,11 @@ enum class ProfileOverride(
         "X-Cape 1200 (mirror)",
         "Same dash, asked for plain mirroring instead of the navigation display mode"
     ),
+    MORINI_XCAPE_1200_JPEG(
+        "morini_xcape_1200_jpeg",
+        "Moto Morini X-Cape 1200 (JPEG)",
+        "Sends still images instead of video, the way the bike's own app does. Try this if the dash stays black."
+    ),
     MOTO_HUB_SIMULATOR("moto_hub_simulator", "MOTO-HUB Simulator", "Development simulator profile");
 
     fun resolve(): TBoxModelProfile? = when (this) {
@@ -65,6 +70,7 @@ enum class ProfileOverride(
         KOVE_800X -> TBoxModelProfile.KOVE_800X
         MORINI_XCAPE_1200 -> TBoxModelProfile.MORINI_XCAPE_1200
         MORINI_XCAPE_1200_MIRROR -> TBoxModelProfile.MORINI_XCAPE_1200_MIRROR
+        MORINI_XCAPE_1200_JPEG -> TBoxModelProfile.MORINI_XCAPE_1200_JPEG
         MOTO_HUB_SIMULATOR -> TBoxModelProfile.MOTO_HUB_SIMULATOR
     }
 

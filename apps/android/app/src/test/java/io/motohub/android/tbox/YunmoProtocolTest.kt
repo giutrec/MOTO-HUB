@@ -213,4 +213,40 @@ class YunmoProtocolTest {
         assertFalse(YunmoProtocol.isMapNaviConfirm(ByteArray(0)))
         assertFalse(YunmoProtocol.isSimpleNaviSwitch(ByteArray(0)))
     }
+
+    @Test
+    fun encodeJpegExWritesTypeZeroAndARealFrameId() {
+        val jpeg = ByteArray(10) { 3 }
+        val frame = YunmoProtocol.encodeJpegEx(jpeg, frameId = 0x01020304)
+
+        // Envelope identical to the H.264 form: padded to 32, 40-byte header, block count in [5..6].
+        assertEquals(72, frame.size)
+        assertEquals(0x1D, frame[4].toInt() and 0xFF)
+        assertEquals(0, frame[5].toInt())
+        assertEquals(2, frame[6].toInt())
+        assertEquals(2, frame[7].toInt())
+
+        // The two bytes that differ, and the whole reason this path exists.
+        assertEquals("media type must be 0 (JPEG), not the H.264 legacy 2", 0, frame[15].toInt())
+        assertEquals(0x04, frame[16].toInt())
+        assertEquals(0x03, frame[17].toInt())
+        assertEquals(0x02, frame[18].toInt())
+        assertEquals(0x01, frame[19].toInt())
+
+        // Length and checksum still belong to the transport layer, unchanged.
+        assertEquals(10, frame[8].toInt())
+        assertEquals(30, frame[12].toInt())
+        assertArrayEquals(jpeg, frame.copyOfRange(40, 50))
+    }
+
+    @Test
+    fun theJpegFrameIdIsTheOnlyLivenessSignalSoItMustNotBeZeroed() {
+        // The H.264 path leaves the id zero, which is why every ack on that path reports frame 0
+        // and why neither implementation has ever had a usable sign of life from this dash. If this
+        // ever regresses to writing zero, that signal is gone again.
+        val frame = YunmoProtocol.encodeJpegEx(ByteArray(4), frameId = 7)
+        assertEquals(7, frame[16].toInt())
+        assertEquals(YunmoProtocol.MEDIA_TYPE_JPEG, frame[15].toInt())
+        assertTrue(YunmoProtocol.MEDIA_TYPE_JPEG != YunmoProtocol.MEDIA_TYPE_LEGACY)
+    }
 }

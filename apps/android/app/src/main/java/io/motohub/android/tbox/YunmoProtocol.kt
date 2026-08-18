@@ -219,6 +219,56 @@ object YunmoProtocol {
         }
     }
 
+    /**
+     * Media-type byte for a JPEG still, written at header offset [15].
+     *
+     * This is the value the OEM app actually ships. Ride MO 1.0.23 never streams H.264 at all:
+     * `ParamSettings.deviceStreamType` is initialised to `Image` and its only setter has zero call
+     * sites in the APK, so `createDisplayAndLiveAdapter` always takes the image branch. Both this
+     * project and the reference implementation spent weeks tuning an H.264 stream against a class
+     * the OEM never instantiates, which is the best available explanation for a dash that
+     * acknowledges every frame and paints none of them.
+     */
+    const val MEDIA_TYPE_JPEG = 0
+
+    /**
+     * Frames one JPEG still the way the OEM's image path does.
+     *
+     * Two differences from [encodeH264Ex], and they are the whole point:
+     *  - the media-type byte is [MEDIA_TYPE_JPEG], not the legacy 2;
+     *  - the frame id **is written** at [16..19]. The H.264 path leaves it zero, which is why
+     *    every ack on that path comes back reporting frame 0 and why neither implementation has
+     *    had a usable liveness signal. On this path the acks should carry real ids back.
+     *
+     * Everything else - sync bytes, the block count in [5..6], the length and payload checksum the
+     * transport layer owns at [8..13] - is identical, because it belongs to the envelope rather
+     * than to the codec.
+     */
+    fun encodeJpegEx(jpeg: ByteArray, frameId: Int): ByteArray {
+        val padded = ((jpeg.size + 31) / 32) * 32
+        val frame = ByteArray(padded + 40)
+        jpeg.copyInto(frame, destinationOffset = 40)
+        frame[0] = SYNC
+        frame[1] = SYNC
+        frame[2] = SYNC
+        frame[3] = SYNC
+        frame[4] = CMD_H264_EX.toByte()
+        val blocks = (padded + 32) / 32
+        val bHi = (blocks ushr 8).toByte()
+        val bLo = blocks.toByte()
+        frame[5] = bHi
+        frame[6] = bLo
+        frame[7] = ((bHi.toInt() and 0xFF) + (bLo.toInt() and 0xFF)).toByte()
+        frame[14] = 0
+        frame[15] = MEDIA_TYPE_JPEG.toByte()
+        putLe(frame, 16, frameId, 4)
+        putLe(frame, 8, jpeg.size, 4)
+        var sum = 0
+        for (b in jpeg) sum += b.toInt() and 0xFF
+        putLe(frame, 12, sum and 0xFFFF, 2)
+        return frame
+    }
+
     /** Parses the canvas size out of an OK (`0x32`/`0x33`) payload; both axes are big-endian. */
     fun parseOkDimension(payload: ByteArray): DimensionReport? {
         if (payload.size < 8) return null

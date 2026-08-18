@@ -90,6 +90,18 @@ enum class TBoxModelProfile(
      * UI sized for a screen three times its width.
      */
     val virtualDisplayDpi: Int? = null,
+    /**
+     * Yunmo only: capture the display as JPEG stills instead of an H.264 stream.
+     *
+     * The OEM app for the X-Cape 1200 does exactly this and never runs its own H.264 path - that
+     * code exists but nothing in the APK can reach it. A dash that acknowledges every frame while
+     * painting none is what you would expect from feeding it a format it does not decode, and no
+     * amount of H.264 parameter tuning has moved it in two independent implementations.
+     *
+     * Off everywhere else, and it can only ever be reached through a Yunmo profile a rider pinned
+     * by hand, so no dash that streams today can land on this path.
+     */
+    val yunmoJpegVideo: Boolean = false,
     /** Which wire protocol the dash speaks; routes the session to the matching transport. */
     val transportFamily: TBoxTransportFamily = TBoxTransportFamily.EASYCONN,
     /**
@@ -425,6 +437,40 @@ enum class TBoxModelProfile(
      * sends no display command at all and its author reports a working connection, which is the
      * other end of the same question: whether this firmware paints without being put into map-nav.
      */
+    /**
+     * Moto Morini X-Cape 1200 over Yunmo, sending **JPEG stills** rather than H.264.
+     *
+     * The one wire variable neither this project nor the public reference had ever tested. Ride MO
+     * 1.0.23 - the app that does paint this dash - streams JPEG: `deviceStreamType` defaults to
+     * `Image` and nothing in the APK ever sets it, so its H.264 live threads are unreachable. Both
+     * implementations derived their encoder settings from those unreachable classes and both ended
+     * with a dash that acknowledges every frame and shows nothing.
+     *
+     * Encoder settings are irrelevant here - there is no encoder. The geometry stays what the vc60
+     * dumpsys of the OEM measured, 1024x464 at 187 dpi, which the dash reports for itself anyway.
+     *
+     * There is a cheap way to tell whether this is working even if the screen stays dark: the JPEG
+     * path writes a real frame id into the header, where the H.264 path leaves it zero. Acks that
+     * come back with **non-zero** ids would be the first genuine sign of life either project has
+     * had from this dash.
+     */
+    MORINI_XCAPE_1200_JPEG(
+        key = "morini_xcape_1200_jpeg",
+        displayName = "Moto Morini X-Cape 1200 (JPEG, experimental)",
+        modelIds = emptySet(),
+        mapTilesRequireCellular = true,
+        supportsScreenTouch = false,
+        defaultAndroidAutoPreset = AndroidAutoVideoPreset.LANDSCAPE_800X480,
+        fallbackTBoxVideoArea = TBoxEvent.VideoArea(800, 480),
+        requiresSockAuth = false,
+        advertisedSupportFunction = 0,
+        encoderFrameRate = 10,
+        virtualDisplayDpi = 187,
+        transportFamily = TBoxTransportFamily.YUNMO,
+        yunmoMapNavExperiment = true,
+        yunmoJpegVideo = true
+    ),
+
     MORINI_XCAPE_1200_MIRROR(
         key = "morini_xcape_1200_mirror",
         displayName = "Moto Morini X-Cape 1200 (mirror)",
@@ -622,7 +668,11 @@ enum class TBoxModelProfile(
                 // Yunmo dashes never produce CLIENT_INFO either, and the X-Cape 1200 shares its
                 // QR ProductID with EasyConn Morinis, so detection must never claim it: it is a
                 // manual pin only.
-                MORINI_XCAPE_1200, MORINI_XCAPE_1200_MIRROR -> 0
+                // All three Morini Yunmo profiles score zero on purpose: ProductID 00297 is
+                // shared with the EasyConn X-Cape 649/700 and the Seiemmezzo, so letting any
+                // of them win on capabilities would route those bikes to the wrong wire.
+                // They are reachable only by a rider pinning them.
+                MORINI_XCAPE_1200, MORINI_XCAPE_1200_MIRROR, MORINI_XCAPE_1200_JPEG -> 0
                 GENERIC -> 0
             }
         }

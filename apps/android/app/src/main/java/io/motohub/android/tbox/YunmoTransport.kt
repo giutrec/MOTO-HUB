@@ -175,6 +175,18 @@ class YunmoTransport(context: Context) : TBoxTransport {
         }
     }
 
+    /**
+     * Offers one JPEG still, for the profile that captures instead of encoding.
+     *
+     * Deliberately NOT part of [TBoxTransport]: no other transport has any use for it, and adding
+     * it to the interface would force EasyConn and ThinkerRide to carry a method about a format
+     * they never speak. The session service reaches it through [SelectingTBoxTransport].
+     */
+    fun offerJpegFrame(jpeg: ByteArray, frameId: Int): Boolean {
+        val active = session ?: return false
+        return active.offerJpegFrame(jpeg, frameId)
+    }
+
     override fun offerAccessUnit(avcc: ByteArray): Boolean {
         val active = session ?: return false
         return active.offerAccessUnit(avcc)
@@ -396,6 +408,28 @@ class YunmoTransport(context: Context) : TBoxTransport {
             } catch (_: RejectedExecutionException) {
                 // A frame is already queued behind a slow socket; drop this one instead of
                 // building latency. VideoBackpressureGuard turns a persistent streak into a stop.
+                false
+            }
+        }
+
+        fun offerJpegFrame(jpeg: ByteArray, frameId: Int): Boolean {
+            if (!running.get()) return false
+            // The dash draws its own arrows in SimpleNavi and discards whatever arrives; skipping
+            // keeps the capture draining so the resume is immediate.
+            if (simpleNaviActive) return true
+            return try {
+                frameExecutor.execute {
+                    try {
+                        if (!waitForSendWindow() || !running.get()) return@execute
+                        write(YunmoProtocol.encodeJpegEx(jpeg, frameId))
+                        phaseOnce("jpeg") { "first JPEG still out (${jpeg.size}b, id=$frameId)" }
+                        unackedSinceAck++
+                    } catch (failure: IOException) {
+                        reportFatal("The dashboard video connection dropped: ${failure.message}")
+                    }
+                }
+                true
+            } catch (_: RejectedExecutionException) {
                 false
             }
         }
