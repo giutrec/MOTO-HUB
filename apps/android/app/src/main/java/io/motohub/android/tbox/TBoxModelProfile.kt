@@ -276,7 +276,14 @@ enum class TBoxModelProfile(
         advertisedSupportFunction = 0,
         allowsPlainVideoFraming = true,
         requiresProactivePxcHeartbeat = true,
-        encoderKeyframeIntervalSeconds = 1
+        encoderKeyframeIntervalSeconds = 1,
+        // The 1s GOP IS the experiment, so it must survive whatever the tester's phone can do.
+        // Since 1.1.74 a requested GOP falls back to all-intra on a codec without intra refresh
+        // (the MTX800 green-macroblock fix), which on the wrong phone would silently turn this
+        // profile back into GENERIC and test nothing. Plain periodic IDRs are also exactly what
+        // the one Zontes known to work elsewhere is fed - zanderp's open-cfmoto encodes a 1s
+        // GOP with no intra refresh at all, and its 125X is community-confirmed.
+        encoderPlainGopWithoutIntraRefresh = true
     ),
     /**
      * Compatibility experiment for the Voge dashes (flavor 51, channel 37504, 592x752 portrait

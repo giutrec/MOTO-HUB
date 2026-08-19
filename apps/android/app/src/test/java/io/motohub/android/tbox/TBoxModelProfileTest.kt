@@ -296,6 +296,9 @@ class TBoxModelProfileTest {
         assertEquals(a.fallbackTBoxVideoArea, b.fallbackTBoxVideoArea)
         assertEquals(a.advertisedSupportFunction, b.advertisedSupportFunction)
         assertEquals(a.requiresProactivePxcHeartbeat, b.requiresProactivePxcHeartbeat)
+        // B's GOP must reach the wire as real periodic IDRs on any phone: the all-intra fallback
+        // for codecs without intra refresh would otherwise erase the only variable left to test.
+        assertEquals(true, b.encoderPlainGopWithoutIntraRefresh)
     }
 
     @Test
