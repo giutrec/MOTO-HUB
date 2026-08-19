@@ -67,6 +67,12 @@ class MediaButtonBridge(
     private var pinnedVolume = -1
     private var previousVolume = -1
     private var pendingCapture = false
+    /** Set once the track appearance has been put on the AVRCP wire, so the keep-alive stops
+     *  re-announcing it every four seconds — see [publishMetadata]. */
+    private var appearancePublished = false
+    /** Same idea for the MediaStyle notification: re-posting an identical one every tick buys
+     *  nothing and is the other half of what [refreshPlayingAppearance] used to redo. */
+    private var notificationPosted = false
     @Volatile private var ignoreVolumeChanges = false
     /** Set at audio-focus loss, cleared once the reclaim has re-pinned the volume. The
      *  assistant's ducking moves the media stream in exactly that window (field log
@@ -142,8 +148,9 @@ class MediaButtonBridge(
             handler.postDelayed({
                 if (!captureActive || session == null) return@postDelayed
                 session?.isActive = true
-                publishMetadata()
-                postMediaNotification()
+                // Forced: the whole point of this path is a transition the AVRCP peer notices.
+                publishMetadata(force = true)
+                postMediaNotification(force = true)
                 if (usesVolumeGestures) pinVolume()
                 startKeepAlive()
                 log("[BTN] $targetName media focus re-asserted; handlebar input ready")
@@ -550,10 +557,23 @@ class MediaButtonBridge(
         }.onFailure { log("[BTN] reclaim failed: ${it.message}") }
     }
 
-    /** Keep metadata / PLAYING state / MediaStyle notification fresh so we stay the button target. */
+    /**
+     * Keep the session ACTIVE — and its MediaStyle notification up — so we stay the button target.
+     *
+     * The keep-alive calls this every [KEEP_ALIVE_MILLIS], so it must stay silent on the AVRCP
+     * wire: only a deliberate re-announcement re-publishes the track appearance, because every
+     * publish puts the dash's "now playing" card back on the rider's screen (see
+     * [publishMetadata]). `isActive` and the notification are local — the dash does not react
+     * to them — so those are safe to re-assert on every tick.
+     */
     private fun refreshPlayingAppearance(reason: String) {
         runCatching {
-            publishMetadata()
+            // The frequent reasons stay silent on the AVRCP wire: the keep-alive fires every
+            // four seconds, and a duck fires at every notification sound or navigation prompt.
+            // Only the rare, genuine transitions - focus regained, session reclaimed - are worth
+            // making the dash re-read the track, at the price of its "now playing" card.
+            val announce = reason != "keep-alive" && reason != "ducked"
+            publishMetadata(force = announce)
             session?.isActive = true
             postMediaNotification()
             if (reason != "keep-alive") log("[BTN] playing appearance refreshed ($reason)")
@@ -564,6 +584,8 @@ class MediaButtonBridge(
         if (!captureActive && focusRequest == null) return
         captureActive = false
         focusLossVolumeGuard = false
+        // The next capture has to announce itself to the dash from scratch.
+        appearancePublished = false
         selectDownAt = 0L
         repeatLatched.clear()
         trackDownAt.clear()
@@ -1272,7 +1294,27 @@ class MediaButtonBridge(
         silentTrack = null
     }
 
-    private fun publishMetadata() {
+    /**
+     * Publishes this session's track appearance — once.
+     *
+     * Neither the metadata nor the playback state ever changes: the title is a constant, the
+     * artist is derived from [targetName], which is fixed for the life of the bridge, and the
+     * state is always PLAYING. But `setMetadata`/`setPlaybackState` are not free even when the
+     * content is identical — each call makes the connected AVRCP peer emit a track-changed /
+     * play-status-changed notification, and a CFMOTO dash answers every one of those by putting
+     * its "now playing" card back on the screen, over whatever the rider was looking at. The
+     * keep-alive ticks every four seconds, so the rider got that popup fifteen times a minute
+     * for the whole ride (field report 2026-08-18).
+     *
+     * What actually keeps this session the AVRCP button target is staying ACTIVE and holding
+     * audio focus, which [refreshPlayingAppearance] and the keep-alive still do every tick.
+     * Re-sending unchanged metadata was never part of that.
+     *
+     * [force] is for the deliberate re-announcements — after a transport re-assert or a focus
+     * reclaim — where making the dash notice a transition IS the point.
+     */
+    private fun publishMetadata(force: Boolean = false) {
+        if (appearancePublished && !force) return
         session?.setMetadata(
             MediaMetadata.Builder()
                 .putString(MediaMetadata.METADATA_KEY_TITLE, "MOTO-HUB controls")
@@ -1286,9 +1328,11 @@ class MediaButtonBridge(
                 .setState(PlaybackState.STATE_PLAYING, 0, 1f)
                 .build()
         )
+        appearancePublished = true
     }
 
-    private fun postMediaNotification() {
+    private fun postMediaNotification(force: Boolean = false) {
+        if (notificationPosted && !force) return
         runCatching {
             val manager = context.getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(
@@ -1305,11 +1349,13 @@ class MediaButtonBridge(
                     .setVisibility(Notification.VISIBILITY_PUBLIC)
                     .build()
             )
+            notificationPosted = true
         }.onFailure { log("[BTN] media notification failed: ${it.message}") }
     }
 
     private fun cancelMediaNotification() {
         runCatching { context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID) }
+        notificationPosted = false
     }
 
     private fun mediaActions() = PlaybackState.ACTION_PLAY or
