@@ -82,15 +82,17 @@ fun AboutScreen(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 MonoLabel(motoHubText("ABOUT THE PROJECT"))
                 Text(
-                    text = "Your phone.\nYour motorcycle display.",
+                    text = motoHubText("Your phone.\nYour motorcycle display."),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "MOTO-HUB connects an Android 14+ phone to a motorcycle dashboard that " +
-                        "pairs over EasyConn — the Carbit software several manufacturers ship, " +
-                        "CFMOTO among them. It supports screen and app mirroring, Android Auto " +
-                        "projection, saved motorcycle profiles, and on-device diagnostics.",
+                    text = motoHubText(
+                        "MOTO-HUB connects an Android 14+ phone to a motorcycle dashboard that " +
+                            "pairs over EasyConn — the Carbit software several manufacturers ship, " +
+                            "CFMOTO among them. It supports screen and app mirroring, Android Auto " +
+                            "projection, saved motorcycle profiles, and on-device diagnostics."
+                    ),
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -106,7 +108,7 @@ fun AboutScreen(
                 ) {
                     MonoLabel(motoHubText("COMMUNITY & SOURCE"))
                     Text(
-                        text = "Follow development, join our community, report issues, and download releases.",
+                        text = motoHubText("Follow development, join our community, report issues, and download releases."),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -148,10 +150,12 @@ fun AboutScreen(
             DisclaimerCard()
 
             Text(
-                text = "MOTO-HUB is an independent project. It is not affiliated with, endorsed by, " +
-                    "or sponsored by Carbit, CFMOTO, any other manufacturer whose dashboard uses " +
-                    "EasyConn, Google, or Android Auto. All product names and marks belong to " +
-                    "their respective owners.",
+                text = motoHubText(
+                    "MOTO-HUB is an independent project. It is not affiliated with, endorsed by, " +
+                        "or sponsored by Carbit, CFMOTO, any other manufacturer whose dashboard uses " +
+                        "EasyConn, Google, or Android Auto. All product names and marks belong to " +
+                        "their respective owners."
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp)
@@ -286,22 +290,26 @@ private fun DisclaimerCard() {
         ) {
             MonoLabel(motoHubText("EXPERIMENTAL SOFTWARE"))
             Text(
-                text = "MOTO-HUB is an experimental proof-of-concept, not a production-grade product.",
+                text = motoHubText("MOTO-HUB is an experimental proof-of-concept, not a production-grade product."),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Development and testing happen on a CFMOTO 700MT-ADV dashboard with " +
-                    "OnePlus 13 / Galaxy Z Fold4 phones. Other motorcycles, brands, T-Box " +
-                    "firmware versions and phones are untested here: expect different behaviour, " +
-                    "retries, or no connection at all. If the dashboard shows a pairing QR code, " +
-                    "it is worth trying.",
+                text = motoHubText(
+                    "Development and testing happen on a CFMOTO 700MT-ADV dashboard with " +
+                        "OnePlus 13 / Galaxy Z Fold4 phones. Other motorcycles, brands, T-Box " +
+                        "firmware versions and phones are untested here: expect different behaviour, " +
+                        "retries, or no connection at all. If the dashboard shows a pairing QR code, " +
+                        "it is worth trying."
+                ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "Do not rely on it as your only source of critical navigation. Configure " +
-                    "navigation while parked and use the software at your own risk.",
+                text = motoHubText(
+                    "Do not rely on it as your only source of critical navigation. Configure " +
+                        "navigation while parked and use the software at your own risk."
+                ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.Bold

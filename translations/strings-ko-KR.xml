@@ -35,15 +35,15 @@
     <string name="video_quality_smoother_description">낮은 비트 전송률, 더 적은 열 및 네트워크 부하.</string>
     <string name="video_quality_balanced">균형 잡힌</string>
     <string name="video_quality_balanced_description">현재 MOTO-HUB 품질 및 권장 기본값.</string>
-    <string name="video_quality_sharper">사기꾼</string>
+    <string name="video_quality_sharper">더 선명하게</string>
     <string name="video_quality_sharper_description">더 선명한 지도와 텍스트를 위한 더 높은 비트 전송률.</string>
     <string name="video_power_auto">자동</string>
     <string name="video_power_auto_description">휴대전화 온도와 Wi-Fi 품질에 맞게 비트 전송률과 프레임 속도를 조정하세요.</string>
-    <string name="video_power_smooth">매끄러운</string>
+    <string name="video_power_smooth">부드럽게</string>
     <string name="video_power_smooth_description">선택한 비디오 품질의 경우 30FPS입니다.</string>
     <string name="video_power_balanced">균형 잡힌</string>
     <string name="video_power_balanced_description">선택한 비디오 품질로 안정적인 24FPS를 제공합니다.</string>
-    <string name="video_power_saver">절약기</string>
+    <string name="video_power_saver">절전</string>
     <string name="video_power_saver_description">발열과 배터리 사용을 줄이기 위한 20FPS.</string>
     <string name="android_auto_resolution_auto">자동</string>
     <string name="android_auto_resolution_auto_description">학습된 T-Box 형상을 기반으로 MOTO-HUB 자동 방향을 유지합니다.</string>
@@ -61,11 +61,11 @@
     <string name="android_auto_insets_manual_description">Android Auto에 오토바이별 TFT 안전 여백을 광고합니다.</string>
     <string name="distance_units_kilometers">킬로미터</string>
     <string name="distance_units_kilometers_description">거리와 속도(km 및 km/h)</string>
-    <string name="distance_units_miles">마일리지</string>
+    <string name="distance_units_miles">마일</string>
     <string name="distance_units_miles_description">mi와 mph 단위의 거리와 속도입니다.</string>
     <string name="route_preference_fastest">가장 빠른</string>
     <string name="route_preference_fastest_description">가장 빠른 경로, 고속도로 허용.</string>
-    <string name="route_preference_scenic">풍경화</string>
+    <string name="route_preference_scenic">경치 우선</string>
     <string name="route_preference_scenic_description">뒷길을 향하고 고속도로에서 멀리 떨어져 있습니다.</string>
 
     <!-- Core/Pro bridge -->
@@ -80,7 +80,7 @@
     <string name="projection_notification_title">MOTO-HUB가 활성화되었습니다</string>
     <string name="projection_notification_text">화면 투영이 활성화되었습니다.</string>
     <string name="projection_notification_dimmed_text">프로젝션이 활성화되고 휴대폰 디스플레이가 어두워집니다.</string>
-    <string name="stop_projection">멈추다</string>
+    <string name="stop_projection">중지</string>
     <string name="dim_phone_display">희미한 디스플레이</string>
     <string name="restore_phone_display">디스플레이 복원</string>
 
@@ -103,7 +103,7 @@
     <!-- Source: feature/about/AboutScreen.kt -->
     <string name="legacy_check_for_updates_66a2b53b">업데이트 확인</string>
     <!-- Source: feature/about/AboutScreen.kt -->
-    <string name="legacy_close_3e2edd8">닫다</string>
+    <string name="legacy_close_3e2edd8">닫기</string>
     <!-- Source: feature/about/AboutScreen.kt -->
     <string name="legacy_experimental_software_e22071df">실험적 소프트웨어</string>
     <!-- Source: feature/about/AboutScreen.kt -->
@@ -119,11 +119,11 @@
     <!-- Source: feature/controls/ControlsScreen.kt -->
     <string name="legacy_address_or_coordinates_9e7a90a">주소 또는 좌표</string>
     <!-- Source: feature/controls/ControlsScreen.kt -->
-    <string name="legacy_back_1f7907">뒤쪽에</string>
+    <string name="legacy_back_1f7907">뒤로</string>
     <!-- Source: feature/controls/ControlsScreen.kt -->
-    <string name="legacy_controls_e20faad6">통제 수단</string>
+    <string name="legacy_controls_e20faad6">컨트롤</string>
     <!-- Source: feature/controls/ControlsScreen.kt -->
-    <string name="legacy_cycle_panels_c623ab89">사이클 패널</string>
+    <string name="legacy_cycle_panels_c623ab89">패널 순환</string>
     <!-- Source: feature/controls/ControlsScreen.kt -->
     <string name="legacy_everything_on_this_page_controls_the_projection__88534bf1">이 페이지의 모든 내용은 현재 모터사이클에 표시되는 투영을 제어합니다.</string>
     <!-- Source: feature/controls/ControlsScreen.kt -->
@@ -133,7 +133,7 @@
     <!-- Source: feature/controls/ControlsScreen.kt -->
     <string name="legacy_handlebar_controls_cf2abe6b">핸들바 컨트롤</string>
     <!-- Source: feature/controls/ControlsScreen.kt -->
-    <string name="legacy_home_2268ff">집</string>
+    <string name="legacy_home_2268ff">홈</string>
     <!-- Source: feature/controls/ControlsScreen.kt -->
     <string name="legacy_open_glove_friendly_fullscreen_controller_2d746356">장갑 친화적인 전체 화면 컨트롤러 열기</string>
     <!-- Source: feature/controls/ControlsScreen.kt -->
@@ -149,13 +149,13 @@
     <!-- Source: feature/controls/ControlsScreen.kt -->
     <string name="legacy_use_the_motorcycle_buttons_without_looking_down__1b06094c">아래를 내려다보지 않고 오토바이 버튼을 사용하세요. 활성 투영이 먼저 명령을 받습니다.</string>
     <!-- Source: feature/controls/ControlsScreen.kt -->
-    <string name="legacy_voice_4eff112">목소리</string>
+    <string name="legacy_voice_4eff112">음성</string>
     <!-- Source: feature/controls/MediaButtonBridge.kt -->
     <string name="legacy_motorcycle_buttons_control_targetname_c5bca78f">오토바이 버튼 제어 $targetName</string>
     <!-- Source: feature/diagnostics/ApplicationLogScreen.kt -->
     <string name="legacy_application_logs_ca54c69f">애플리케이션 로그</string>
     <!-- Source: feature/diagnostics/ApplicationLogScreen.kt -->
-    <string name="legacy_clear_3e2c62d">분명한</string>
+    <string name="legacy_clear_3e2c62d">지우기</string>
     <!-- Source: feature/diagnostics/ApplicationLogScreen.kt -->
     <string name="legacy_copy_log_e59a8039">로그 복사</string>
     <!-- Source: feature/diagnostics/ApplicationLogScreen.kt -->
@@ -163,7 +163,7 @@
     <!-- Source: feature/diagnostics/ApplicationLogScreen.kt -->
     <string name="legacy_persistent_events_from_wi_fi_t_box_mirroring_enc_679d01c0">Wi-Fi, T-Box, 미러링, 인코더, Android Auto의 지속적인 이벤트입니다.</string>
     <!-- Source: feature/diagnostics/ApplicationLogScreen.kt -->
-    <string name="legacy_share_4c25fbf">공유하다</string>
+    <string name="legacy_share_4c25fbf">공유</string>
     <!-- Source: feature/diagnostics/ApplicationLogScreen.kt -->
     <string name="legacy_troubleshooting_f6bb8e3a">문제 해결</string>
     <!-- Source: feature/diagnostics/NetworkDiagnosticsScreen.kt -->
@@ -183,7 +183,7 @@
     <!-- Source: feature/garage/GarageScreen.kt -->
     <string name="legacy_add_motorcycle_397b0e90">오토바이 추가</string>
     <!-- Source: feature/garage/GarageScreen.kt -->
-    <string name="legacy_edit_20e22a">편집하다</string>
+    <string name="legacy_edit_20e22a">편집</string>
     <!-- Source: feature/garage/GarageScreen.kt -->
     <string name="legacy_motorcycles_2c9478e2">오토바이</string>
     <!-- Source: feature/garage/GarageScreen.kt -->
@@ -197,7 +197,7 @@
     <!-- Source: feature/garage/GarageScreen.kt -->
     <string name="legacy_use_this_motorcycle_1204179a">이 오토바이를 사용해 보세요</string>
     <!-- Source: feature/garage/GarageScreen.kt -->
-    <string name="legacy_your_garage_c0aeffb4">귀하의 차고</string>
+    <string name="legacy_your_garage_c0aeffb4">내 차고</string>
     <!-- Source: feature/garage/GarageScreen.kt -->
     <string name="legacy_your_garage_is_empty_f25b99e3">차고가 비어 있습니다</string>
     <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
@@ -229,7 +229,7 @@
     <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
     <string name="legacy_override_the_automatic_profile_detection_for_thi_dcc5245b">이 오토바이에 대한 자동 프로필 감지를 재정의합니다. 다음과 같은 경우에만 사용하세요.</string>
     <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
-    <string name="legacy_remove_91afe4a4">제거하다</string>
+    <string name="legacy_remove_91afe4a4">제거</string>
     <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
     <string name="legacy_remove_motorcycle_c0498b52">오토바이를 제거하시겠습니까?</string>
     <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
@@ -282,9 +282,9 @@
     <!-- Source: feature/home/HubHomeScreen.kt -->
     <string name="legacy_what_to_show_122be0b9">무엇을 보여줄까요?</string>
     <!-- Source: feature/home/HubHomeScreen.kt -->
-    <string name="legacy_back_fe3a848e">&lt; 뒤쪽에</string>
+    <string name="legacy_back_fe3a848e">‹ 뒤로</string>
     <!-- Source: feature/navigation/NavigationScreen.kt -->
-    <string name="legacy_arrived_ff08704d">도착했다</string>
+    <string name="legacy_arrived_ff08704d">도착</string>
     <!-- Source: feature/navigation/NavigationScreen.kt -->
     <string name="legacy_calculating_your_route_86fbe56d">경로를 계산하는 중…</string>
     <!-- Source: feature/navigation/NavigationScreen.kt -->
@@ -322,11 +322,11 @@
     <!-- Source: feature/navigation/NavigationScreen.kt -->
     <string name="legacy_optional_label_267da254">선택적 라벨</string>
     <!-- Source: feature/navigation/NavigationScreen.kt -->
-    <string name="legacy_route_type_519caed1">노선 유형</string>
+    <string name="legacy_route_type_519caed1">경로 유형</string>
     <!-- Source: feature/navigation/NavigationScreen.kt -->
     <string name="legacy_reroute_a49323d6">경로 재설정</string>
     <!-- Source: feature/navigation/NavigationScreen.kt -->
-    <string name="legacy_save_27359d">구하다</string>
+    <string name="legacy_save_27359d">저장</string>
     <!-- Source: feature/navigation/NavigationScreen.kt -->
     <string name="legacy_save_a_destination_as_a_favorite_from_a_route_pr_5669fe67">경로 미리보기에서 목적지를 즐겨찾기로 저장하세요.</string>
     <!-- Source: feature/navigation/NavigationScreen.kt -->
@@ -338,13 +338,13 @@
     <!-- Source: feature/navigation/NavigationScreen.kt -->
     <string name="legacy_start_navigation_2d34b0b2">내비게이션 시작</string>
     <!-- Source: feature/navigation/NavigationScreen.kt -->
-    <string name="legacy_stop_277c22">멈추다</string>
+    <string name="legacy_stop_277c22">중지</string>
     <!-- Source: feature/navigation/NavigationScreen.kt -->
     <string name="legacy_stop_navigation_8a243dad">내비게이션을 중지하시겠습니까?</string>
     <!-- Source: feature/navigation/NavigationScreen.kt -->
-    <string name="legacy_tap_to_dismiss_d17702a2">닫으려면 탭하세요.</string>
+    <string name="legacy_tap_to_dismiss_d17702a2">탭하면 닫힙니다</string>
     <!-- Source: feature/navigation/NavigationScreen.kt -->
-    <string name="legacy_work_293b31">일하다</string>
+    <string name="legacy_work_293b31">직장</string>
     <!-- Source: feature/navigation/NavigationScreen.kt -->
     <string name="legacy_yes_156c7">예</string>
     <!-- Source: feature/navigation/NavigationScreen.kt -->
@@ -352,13 +352,13 @@
     <!-- Source: feature/navigation/NavigationScreen.kt -->
     <string name="legacy_e_g_sunday_loop_1dd6a810">예: 일요일 루프</string>
     <!-- Source: feature/navigation/NavigationScreen.kt -->
-    <string name="legacy_label_27143b17">`` $라벨</string>
+    <string name="legacy_label_27143b17">‹ $label</string>
     <!-- Source: feature/navigation/RouteMap.kt -->
     <string name="legacy_clear_all_5a4e690e">모두 지우기</string>
     <!-- Source: feature/navigation/RouteMap.kt -->
     <string name="legacy_dest_2072c2">목적지</string>
     <!-- Source: feature/navigation/RouteMap.kt -->
-    <string name="legacy_fit_113f1">맞다</string>
+    <string name="legacy_fit_113f1">화면 맞춤</string>
     <!-- Source: feature/navigation/RouteMap.kt -->
     <string name="legacy_full_screen_22a47efd">전체 화면</string>
     <!-- Source: feature/navigation/RouteMap.kt -->
@@ -396,11 +396,11 @@
     <!-- Source: feature/ridedashboard/widget/BatteryWidget.kt -->
     <string name="legacy_motion_sensors_b224e96f">모션 센서</string>
     <!-- Source: feature/ridedashboard/widget/BatteryWidget.kt -->
-    <string name="legacy_phone_system_b2b20c1d">전화 // 시스템</string>
+    <string name="legacy_phone_system_b2b20c1d">휴대폰 // 시스템</string>
     <!-- Source: feature/ridedashboard/widget/BatteryWidget.kt -->
     <string name="legacy_turn_rate_9cfa82a3">회전율</string>
     <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
-    <string name="legacy_ahead_3b5bda1">앞으로</string>
+    <string name="legacy_ahead_3b5bda1">전방</string>
     <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
     <string name="legacy_compass_sun_45d9eeda">나침반 // 태양</string>
     <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
@@ -408,7 +408,7 @@
     <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
     <string name="legacy_right_4a5c9fc">오른쪽</string>
     <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
-    <string name="legacy_sun_horizon_6a3f3196">태양 / 지평선</string>
+    <string name="legacy_sun_horizon_6a3f3196">태양 / 수평선</string>
     <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
     <string name="legacy_sun_behind_2679a1ae">태양 뒤에</string>
     <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
@@ -416,7 +416,7 @@
     <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
     <string name="legacy_dashboard_customization_b85f9307">대시보드 사용자 정의</string>
     <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
-    <string name="legacy_grant_41dd0fc">승인하다</string>
+    <string name="legacy_grant_41dd0fc">허용</string>
     <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
     <string name="legacy_live_layout_cdba0cde">라이브 레이아웃</string>
     <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
@@ -438,17 +438,17 @@
     <!-- Source: feature/ridedashboard/widget/NavigationWidget.kt -->
     <string name="legacy_eta_10d72">도착 예정 시간</string>
     <!-- Source: feature/ridedashboard/widget/NavigationWidget.kt -->
-    <string name="legacy_nav_route_20ffc4db">탐색/경로</string>
+    <string name="legacy_nav_route_20ffc4db">내비 / 경로</string>
     <!-- Source: feature/ridedashboard/widget/NavigationWidget.kt -->
     <string name="legacy_off_route_recalculating_7a9dcf5c">경로 이탈 — 재계산 중</string>
     <!-- Source: feature/ridedashboard/widget/NavigationWidget.kt -->
     <string name="legacy_remaining_d9f0bdd6">남은</string>
     <!-- Source: feature/ridedashboard/widget/NavigationWidget.kt -->
-    <string name="legacy_rise_2662c9">증가</string>
+    <string name="legacy_rise_2662c9">일출</string>
     <!-- Source: feature/ridedashboard/widget/NavigationWidget.kt -->
-    <string name="legacy_set_14042">세트</string>
+    <string name="legacy_set_14042">일몰</string>
     <!-- Source: feature/ridedashboard/widget/NavigationWidget.kt -->
-    <string name="legacy_sun_1422c">해</string>
+    <string name="legacy_sun_1422c">태양</string>
     <!-- Source: feature/ridedashboard/widget/NowPlayingWidget.kt -->
     <string name="legacy_no_media_session_5cbc8365">-- 미디어 세션 없음 --</string>
     <!-- Source: feature/ridedashboard/widget/NowPlayingWidget.kt -->
@@ -466,17 +466,17 @@
     <string name="legacy_average_km_h_d2517b1e">평균 KM/H</string>
     <string name="legacy_average_mph_6c8da62">평균 MPH</string>
     <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
-    <string name="legacy_recent_8fd93a5b">최근의</string>
+    <string name="legacy_recent_8fd93a5b">최근</string>
     <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
     <string name="legacy_speed_profile_2c1ba290">속도 프로필</string>
     <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
-    <string name="legacy_trip_performance_8c26f32b">여행 // 성과</string>
+    <string name="legacy_trip_performance_8c26f32b">주행 // 성과</string>
     <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
     <string name="legacy_waiting_for_speed_data_91032a2d">속도 데이터를 기다리는 중</string>
     <!-- Source: feature/ridedashboard/widget/WeatherWidget.kt -->
     <string name="legacy_check_cellular_data_b94ccb68">셀룰러 데이터 확인</string>
     <!-- Source: feature/ridedashboard/widget/WeatherWidget.kt -->
-    <string name="legacy_live_23a8ec">살다</string>
+    <string name="legacy_live_23a8ec">실시간</string>
     <!-- Source: feature/ridedashboard/widget/WeatherWidget.kt -->
     <string name="legacy_loading_3edc6d1c">로딩 중</string>
     <!-- Source: feature/ridedashboard/widget/WeatherWidget.kt -->
@@ -498,7 +498,7 @@
     <!-- Source: feature/settings/SettingsScreen.kt -->
     <string name="legacy_power_mode_357a57fe">전원 모드</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
-    <string name="legacy_resolution_bd8b64ac">해결</string>
+    <string name="legacy_resolution_bd8b64ac">해상도</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
     <string name="legacy_turn_by_turn_routing_uses_your_own_stadia_maps_a_76117a71">단계별 경로 안내는 자체 Stadia Maps API 키를 사용합니다.</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
@@ -506,11 +506,11 @@
     <!-- Source: feature/trips/TripsScreen.kt -->
     <string name="legacy_delete_79cb71cb">삭제</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
-    <string name="legacy_delete_this_trip_b2d7ee2d">이 여행을 삭제하시겠습니까?</string>
+    <string name="legacy_delete_this_trip_b2d7ee2d">이 주행을 삭제하시겠습니까?</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
-    <string name="legacy_delete_trip_1d14595a">여행 삭제</string>
+    <string name="legacy_delete_trip_1d14595a">주행 삭제</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
-    <string name="legacy_discard_c6d7a07e">버리다</string>
+    <string name="legacy_discard_c6d7a07e">버리기</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
     <string name="legacy_export_gpx_83319643">GPX 내보내기</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
@@ -520,21 +520,21 @@
     <!-- Source: feature/trips/TripsScreen.kt -->
     <string name="legacy_not_saved_d22da6ba">저장되지 않음</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
-    <string name="legacy_name_this_ride_9a657605">이 차량의 이름을 지정하세요.</string>
+    <string name="legacy_name_this_ride_9a657605">이 주행의 이름을 지정하세요</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
-    <string name="legacy_opening_the_saved_trip_now_c583b843">지금 저장된 여행을 엽니다.</string>
+    <string name="legacy_opening_the_saved_trip_now_c583b843">저장된 주행을 엽니다.</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
     <string name="legacy_recorded_rides_823a26eb">기록된 라이딩</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
     <string name="legacy_recording_unavailable_9bbb7461">녹음할 수 없음</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
-    <string name="legacy_ride_archive_c06bf17a">라이드 아카이브</string>
+    <string name="legacy_ride_archive_c06bf17a">주행 보관함</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
     <string name="legacy_record_a_ride_ce0c4be6">라이딩을 기록하세요</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
     <string name="legacy_recording_was_too_short_to_keep_6761ae14">녹음이 너무 짧아서 보관할 수 없습니다.</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
-    <string name="legacy_rename_trip_584eaba7">여행 이름 바꾸기</string>
+    <string name="legacy_rename_trip_584eaba7">주행 이름 바꾸기</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
     <string name="legacy_ride_recordings_need_at_least_100_m_15_s_of_move_260f0993">라이딩 기록에는 최소 100m, 15초의 이동 시간, 2개의 GPS 포인트가 필요합니다.</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
@@ -548,23 +548,23 @@
     <!-- Source: feature/trips/TripsScreen.kt -->
     <string name="legacy_the_gps_trace_and_all_recorded_statistics_will_b_6d59f1b7">GPS 추적 및 기록된 모든 통계는 영구적으로 제거됩니다.</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
-    <string name="legacy_trip_name_5c3de586">여행 이름</string>
+    <string name="legacy_trip_name_5c3de586">주행 이름</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
-    <string name="legacy_trip_saved_to_recorded_rides_31c5533c">기록된 탑승에 여행이 저장되었습니다.</string>
+    <string name="legacy_trip_saved_to_recorded_rides_31c5533c">기록된 주행에 저장되었습니다</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
-    <string name="legacy_trips_4d520ce">여행</string>
+    <string name="legacy_trips_4d520ce">주행 기록</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
-    <string name="legacy_try_again_25aeb09b">다시 시도하세요</string>
+    <string name="legacy_try_again_25aeb09b">다시 시도</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
-    <string name="legacy_view_2832a5">보다</string>
+    <string name="legacy_view_2832a5">보기</string>
     <!-- Source: feature/trips/TripsScreen.kt -->
-    <string name="legacy_trips_ca1b8627">`` 여행</string>
+    <string name="legacy_trips_ca1b8627">‹ 주행 기록</string>
     <!-- Source: feature/update/GithubUpdateDialog.kt -->
     <string name="legacy_allow_apk_installation_a3116df5">APK 설치 허용</string>
     <!-- Source: feature/update/GithubUpdateDialog.kt -->
     <string name="legacy_checking_github_releases_7e509ccb">GitHub 릴리스 확인 중...</string>
     <!-- Source: feature/update/GithubUpdateDialog.kt -->
-    <string name="legacy_moto_hub_updates_c98ab24f">모토허브 업데이트</string>
+    <string name="legacy_moto_hub_updates_c98ab24f">MOTO-HUB 업데이트</string>
     <!-- Source: feature/update/GithubUpdateDialog.kt -->
     <string name="legacy_no_apk_asset_attached_to_this_release_7a89904d">이 릴리스에 첨부된 APK 자산이 없습니다.</string>
     <!-- Source: feature/update/GithubUpdateDialog.kt -->
@@ -572,7 +572,7 @@
     <!-- Source: feature/update/GithubUpdateDialog.kt -->
     <string name="legacy_pre_release_6bd19a9d">사전 출시</string>
     <!-- Source: feature/update/GithubUpdateDialog.kt -->
-    <string name="legacy_retry_4b33288">다시 해 보다</string>
+    <string name="legacy_retry_4b33288">다시 시도</string>
     <!-- Source: feature/update/GithubUpdateDialog.kt -->
     <string name="legacy_skip_this_version_c2d1da37">이 버전 건너뛰기</string>
     <!-- Source: session/ProjectionForegroundService.kt -->
@@ -600,7 +600,7 @@
     <!-- Source: feature/controls/ControlsScreen.kt -->
     <string name="legacy_destinations_available_to_one_press_handlebar_na_19306aee">원터치 핸들바 내비게이션으로 목적지를 선택할 수 있습니다.</string>
     <!-- Source: feature/controls/ControlsScreen.kt -->
-    <string name="legacy_double_tap_a52552f4">두 번 탭하세요.</string>
+    <string name="legacy_double_tap_a52552f4">두 번 탭</string>
     <!-- Source: feature/controls/ControlsScreen.kt -->
     <string name="legacy_map_appearance_b4c189c8">지도 모양</string>
     <!-- Source: feature/controls/ControlsScreen.kt -->
@@ -646,7 +646,7 @@
     <!-- Source: feature/home/HubHomeScreen.kt -->
     <string name="legacy_open_the_on_screen_android_auto_controls_55f559a3">화면에 표시된 Android Auto 컨트롤을 엽니다.</string>
     <!-- Source: feature/home/HubHomeScreen.kt -->
-    <string name="legacy_preview_50417ba8">시사</string>
+    <string name="legacy_preview_50417ba8">미리보기</string>
     <!-- Source: feature/home/HubHomeScreen.kt -->
     <string name="legacy_preview_touch_c103ae4d">미리보기 및 터치</string>
     <!-- Source: feature/home/HubHomeScreen.kt -->
@@ -658,7 +658,7 @@
     <!-- Source: feature/navigation/NavigationScreen.kt -->
     <string name="legacy_take_me_home_bb1e43ee">나를 집에 데려다주세요</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
-    <string name="legacy_about_moto_hub_6966e1f8">모토허브(MOTO-HUB) 소개</string>
+    <string name="legacy_about_moto_hub_6966e1f8">MOTO-HUB 소개</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
     <string name="legacy_android_auto_cb210d00">안드로이드 오토</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
@@ -666,7 +666,7 @@
     <!-- Source: feature/settings/SettingsScreen.kt -->
     <string name="legacy_auto_connect_on_launch_9e7cd0e0">실행 시 자동 연결</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
-    <string name="legacy_auto_connect_recovery_trip_recording_1bf7551f">자동 연결, 복구, 여행 기록</string>
+    <string name="legacy_auto_connect_recovery_trip_recording_1bf7551f">자동 연결, 복구, 주행 기록</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
     <string name="legacy_auto_record_rides_3d1b712a">라이딩 자동 기록</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
@@ -698,7 +698,7 @@
     <!-- Source: feature/settings/SettingsScreen.kt -->
     <string name="legacy_master_switch_for_the_diagnostic_log_off_means_n_1d7e2b81">진단 로그용 마스터 스위치입니다. 꺼짐은 아무것도 녹음되지 않았음을 의미합니다.</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
-    <string name="legacy_navigation_e5d7e634">항해</string>
+    <string name="legacy_navigation_e5d7e634">내비게이션</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
     <string name="legacy_network_tests_and_application_logs_6064f99">네트워크 테스트 및 애플리케이션 로그</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
@@ -738,9 +738,9 @@
     <!-- Source: feature/settings/SettingsScreen.kt -->
     <string name="legacy_your_own_routing_api_key_for_turn_by_turn_94d8b202">턴바이턴(turn-by-turn)을 위한 나만의 라우팅 API 키</string>
     <!-- Source: feature/settings/SettingsScreen.kt -->
-    <string name="legacy_settings_7469104a">`` 설정</string>
+    <string name="legacy_settings_7469104a">‹ 설정</string>
     <!-- Source: feature/trips/TripRecordingService.kt -->
-    <string name="legacy_gps_ride_recording_and_trip_statistics_28992d34">GPS 라이딩 기록 및 여행 통계</string>
+    <string name="legacy_gps_ride_recording_and_trip_statistics_28992d34">GPS 주행 기록 및 주행 통계</string>
     <!-- Source: session/PhoneDisplayDimmer.kt -->
     <string name="legacy_moto_hub_display_dimmer_57b6244b">MOTO-HUB 디스플레이 조광기</string>
     <!-- Dynamic UI templates. Keep positional placeholders unchanged. -->
@@ -750,15 +750,15 @@
     <string name="legacy_place_1_d_name_6bdc57c6">장소 %1$d 이름</string>
     <string name="legacy_save_place_1_d_39c7a048">장소 저장 %1$d</string>
     <string name="legacy_t_box_identifier_1_s_531e2638">T-박스 식별자: %1$s</string>
-    <string name="legacy_1_s_fe2c9a02">`` %1$s</string>
+    <string name="legacy_1_s_fe2c9a02">‹ %1$s</string>
     <string name="legacy_motorcycle_buttons_control_1_s_6e2f90ac">오토바이 버튼 제어 %1$s</string>
     <string name="legacy_rain_1_d_84b55e18">비 %1$d%%</string>
     <string name="legacy_1_d_c_41e7b8ff">%1$d°C</string>
-    <string name="legacy_1_d_km_h_6ce8c40f">%1$dkm/시</string>
+    <string name="legacy_1_d_km_h_6ce8c40f">%1$d KM/H</string>
     <string name="legacy_1_d_mph_669c2f51">%1$d MPH</string>
-    <string name="legacy_moto_hub_258caaa5">모토허브</string>
+    <string name="legacy_moto_hub_258caaa5">MOTO-HUB</string>
     <string name="legacy_recording_this_ride_1aceedab">이 라이딩을 녹화 중입니다.</string>
-    <string name="legacy_moto_hub_controls_f72ba5d1">모토허브 컨트롤</string>
+    <string name="legacy_moto_hub_controls_f72ba5d1">MOTO-HUB 컨트롤</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_1_d_available_e7e32615">%1$d 사용 가능</string>
     <!-- Source: localized UI literal / enum label -->
@@ -766,7 +766,7 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_1_s_2_s_a1c6054a">%1$s · %2$s</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_1000_mt_x_cfdl26_a07555df">1000MT-X(CFDL26)</string>
+    <string name="legacy_1000_mt_x_cfdl26_a07555df">1000 MT-X (CFDL26)</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_200_ms_snappier_singles_bddf5c9a">200ms - 더 빠른 싱글</string>
     <!-- Source: localized UI literal / enum label -->
@@ -780,13 +780,13 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_800_ms_deliberate_hold_32e73399">800ms - 의도적인 보류</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_800mt_cfdl26_9a9a6453">800MT(CFDL26)</string>
+    <string name="legacy_800mt_cfdl26_9a9a6453">800MT (CFDL26)</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_800nk_advanced_cfdl26_8796cfe5">800NK 고급(CFDL26)</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_active_profile_dcb9be6f">활성 프로필</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_android_auto_4d461ce0">안드로이드 자동</string>
+    <string name="legacy_android_auto_4d461ce0">안드로이드 오토</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_atms_1ed139">ATM</string>
     <!-- Source: localized UI literal / enum label -->
@@ -824,7 +824,7 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_bars_pubs_8301b610">바 &amp; 펍</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_battery_phone_fc45d1a1">배터리 및 전화</string>
+    <string name="legacy_battery_phone_fc45d1a1">배터리 및 휴대폰</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_battery_charging_connectivity_temperature_and_mo_59cfa2d5">배터리, 충전, 연결, 온도 및 모션 센서</string>
     <!-- Source: localized UI literal / enum label -->
@@ -874,23 +874,23 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_d_pad_6049d29c">D 패드 ▲</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_d_pad_6049d2a0">방향 패드 ▶</string>
+    <string name="legacy_d_pad_6049d2a0">D 패드 ▶</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_d_pad_6049d2a6">D 패드 ▼</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_d_pad_6049d2aa">방향 패드 ◀</string>
+    <string name="legacy_d_pad_6049d2aa">D 패드 ◀</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_dist_2005a6">DIST</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_distance_3fd77bf5">거리</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_day_light_2f4e1b57">낮(빛)</string>
+    <string name="legacy_day_light_2f4e1b57">주간(밝게)</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_detect_from_the_motorcycle_recommended_9fd07c6f">오토바이에서 감지(권장)</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_development_simulator_profile_45f9bdc8">개발 시뮬레이터 프로필</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_do_nothing_a83eb158">아무것도 하지 마세요</string>
+    <string name="legacy_do_nothing_a83eb158">동작 없음</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_down_double_press_c52a55d2">아래로 두 번 누르기</string>
     <!-- Source: localized UI literal / enum label -->
@@ -912,7 +912,7 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_favorites_3baf7a37">즐겨찾기</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_favorite_427c2dbc">가장 좋아하는</string>
+    <string name="legacy_favorite_427c2dbc">즐겨찾기</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_fire_stations_e5a3dc49">소방서</string>
     <!-- Source: localized UI literal / enum label -->
@@ -956,17 +956,17 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_max_speed_6338424b">최대 속도</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_mode_2431a3">방법</string>
+    <string name="legacy_mode_2431a3">모드</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_moto_hub_simulator_72ee829">모토허브 시뮬레이터</string>
+    <string name="legacy_moto_hub_simulator_72ee829">MOTO-HUB 시뮬레이터</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_moving_87e69c4e">움직이는</string>
+    <string name="legacy_moving_87e69c4e">주행 중</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_manage_88ef8985">관리하다</string>
+    <string name="legacy_manage_88ef8985">관리</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_manage_guidance_search_a_new_destination_or_resu_7899102a">안내를 관리하고, 새로운 목적지를 검색하거나, 경로를 재개하세요.</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_manual_recording_73634e37">수동녹화</string>
+    <string name="legacy_manual_recording_73634e37">수동 녹화</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_mirroring_8b513fa3">미러링</string>
     <!-- Source: localized UI literal / enum label -->
@@ -976,7 +976,7 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_motorcycle_service_4f005f46">오토바이 서비스</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_navigation_8beff614">항해</string>
+    <string name="legacy_navigation_8beff614">내비게이션</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_no_key_set_25cc0b82">키 설정 없음</string>
     <!-- Source: localized UI literal / enum label -->
@@ -1000,7 +1000,7 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_next_turn_eta_sun_position_daylight_remaining_48ea2589">다음 회전, 예상 시간, 태양 위치, 남은 일광</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_night_dark_e807e573">밤(어두움)</string>
+    <string name="legacy_night_dark_e807e573">야간(어둡게)</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_none_252358">없음</string>
     <!-- Source: localized UI literal / enum label -->
@@ -1008,11 +1008,11 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_ok_select_85c307d1">확인/선택</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_off_1354f">끄다</string>
+    <string name="legacy_off_1354f">꺼짐</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_openstreetmap_12cdd70f">오픈스트리트맵</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_phone_489454e">핸드폰</string>
+    <string name="legacy_phone_489454e">휴대폰</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_pad_fullscreen_screen_stays_on_tap_exit_to_leave_fed4fb3e">패드 전체 화면 - 화면이 계속 켜져 있습니다. 나가려면 종료를 탭하세요.</string>
     <!-- Source: localized UI literal / enum label -->
@@ -1034,7 +1034,7 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_ride_dashboard_7a0ca94c">라이드 대시보드</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_rides_4a5be5b">놀이기구</string>
+    <string name="legacy_rides_4a5be5b">주행</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_route_options_30bc2f87">경로 옵션</string>
     <!-- Source: localized UI literal / enum label -->
@@ -1052,13 +1052,13 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_right_single_a4f68975">오른쪽 · 싱글</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_rotary_back_875f5656">로터리 백</string>
+    <string name="legacy_rotary_back_875f5656">로터리 뒤로</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_rotary_forward_5bd716f6">로타리 포워드</string>
+    <string name="legacy_rotary_forward_5bd716f6">로터리 앞으로</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_saved_routes_18cdcb23">저장된 경로</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_search_results_3469955e">검색결과</string>
+    <string name="legacy_search_results_3469955e">검색 결과</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_selected_for_1_s_49f82b77">%1$s에 대해 선택됨</string>
     <!-- Source: localized UI literal / enum label -->
@@ -1102,7 +1102,7 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_touch_controller_53c8733d">터치 컨트롤러</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_trip_metrics_7c88c7c8">이동 지표</string>
+    <string name="legacy_trip_metrics_7c88c7c8">주행 지표</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_trip_distance_duration_average_speed_and_speed_p_97ed123f">이동 거리, 지속 시간, 평균 속도 및 속도 프로필</string>
     <!-- Source: localized UI literal / enum label -->
@@ -1116,13 +1116,13 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_up_double_press_5e63a079">위로 두 번 누르기</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_up_press_df788a9e">업프레스</string>
+    <string name="legacy_up_press_df788a9e">위로 누르기</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_up_double_6854af1f">업·더블</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_up_single_8195b796">업 · 싱글</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_viewpoints_390623e8">관점</string>
+    <string name="legacy_viewpoints_390623e8">전망대</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_weather_ac24cfd4">날씨</string>
     <!-- Source: localized UI literal / enum label -->
@@ -1146,9 +1146,9 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_android_auto_live_564f882c">안드로이드 오토 라이브</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_android_auto_standby_9525974d">안드로이드 자동 대기</string>
+    <string name="legacy_android_auto_standby_9525974d">안드로이드 오토 대기</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_phone_preview_live_290cbf6">전화 미리보기 라이브</string>
+    <string name="legacy_phone_preview_live_290cbf6">휴대폰 미리보기 라이브</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_starting_7d22d040">시작</string>
     <!-- Source: localized UI literal / enum label -->
@@ -1235,7 +1235,7 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_installed_version_1_s_2_d_29cd3201">설치된 버전: %1$s(%2$d)</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_location_and_notifications_are_required_while_re_4f6ceb2b">여행을 기록하는 동안 위치 및 알림이 필요합니다.</string>
+    <string name="legacy_location_and_notifications_are_required_while_re_4f6ceb2b">주행을 기록하는 동안 위치 및 알림 권한이 필요합니다</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_opening_in_1_d_s_42389c34">%1$d초 후에 여는 중…</string>
     <!-- Source: localized UI literal / enum label -->
@@ -1251,7 +1251,7 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_no_open_ports_found_8533cd9d">열린 포트가 없습니다</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_open_1_s_e55a596b">영업중: %1$s</string>
+    <string name="legacy_open_1_s_e55a596b">열림: %1$s</string>
     <!-- Android Auto pre-flight: the official MotoPlay client is installed, but may not be active. -->
     <string name="legacy_cfmoto_motoplay_detected_ca887791">CFMOTO MotoPlay가 감지되었습니다.</string>
     <string name="legacy_moto_hub_starts_google_android_auto_not_motoplay_1ab1d3e9">MOTO-HUB는 MotoPlay가 아닌 Google Android Auto를 시작합니다.</string>
@@ -1429,7 +1429,7 @@
     <string name="legacy_waiting_for_the_obd_adapter_b3b01207">OBD 어댑터를 기다리는 중</string>
 
     <!-- Source: feature/controls/HandlebarMappingScreen.kt -->
-    <string name="legacy_listening_2ece009b">대기 중</string>
+    <string name="legacy_listening_2ece009b">듣는 중</string>
     <string name="legacy_received_d3a64e01">수신됨</string>
     <string name="legacy_teach_again_4fb10bd5">다시 학습</string>
 
@@ -1557,4 +1557,138 @@
     <string name="legacy_hid_d_pad_a247f04a">HID (D-패드)</string>
     <string name="legacy_default_the_dashboard_sends_bluetooth_media_key__ccbdfbf7">기본값. 계기판이 재생/일시정지, 트랙, 볼륨에 대한 블루투스 미디어 키 명령을 보냅니다.</string>
     <string name="legacy_for_remotes_that_pair_as_a_bluetooth_keyboard_an_25055a66">블루투스 키보드로 페어링되어 D-패드 입력을 보내는 리모컨용. 아래에서 MOTO-HUB의 접근성 서비스를 켜야 합니다.</string>
+
+    <!-- External display service (USB AOA) - notification channel and ongoing notification -->
+    <string name="legacy_moto_hub_external_display_streaming_1be823ca">MOTO-HUB 외부 디스플레이 스트리밍</string>
+    <string name="legacy_streaming_to_external_display_via_usb_ab5c31c6">USB로 외부 디스플레이에 스트리밍 중</string>
+    <string name="legacy_stop_external_display_c050e9ab">외부 디스플레이 중지</string>
+    <string name="legacy_aap_accessory_probe_running_bcf6ccd1">AAP 액세서리 프로브 실행 중</string>
+
+    <!-- About screen -->
+    <string name="legacy_your_phone_your_motorcycle_display_c5956fcb">당신의 휴대폰.\n당신의 모터사이클 디스플레이.</string>
+    <string name="legacy_moto_hub_connects_an_android_14_phone_to_a_motor_403bf630">MOTO-HUB는 Android 14 이상 휴대폰을 EasyConn으로 페어링되는 모터사이클 계기판에 연결합니다. EasyConn은 CFMOTO를 비롯한 여러 제조사가 탑재하는 Carbit 소프트웨어입니다. 화면 및 앱 미러링, Android Auto 프로젝션, 저장된 모터사이클 프로필, 기기 내 진단을 지원합니다.</string>
+    <string name="legacy_follow_development_join_our_community_report_iss_b8b8fffa">개발 상황을 확인하고, 커뮤니티에 참여하고, 문제를 보고하고, 릴리스를 내려받으세요.</string>
+    <string name="legacy_moto_hub_is_an_independent_project_it_is_not_aff_9e4c2633">MOTO-HUB는 독립적인 프로젝트입니다. Carbit, CFMOTO, EasyConn을 사용하는 다른 제조사, Google 또는 Android Auto와 제휴하거나 이들의 승인 또는 후원을 받지 않았습니다. 모든 제품명과 상표는 각 소유자에게 귀속됩니다.</string>
+    <string name="legacy_moto_hub_is_an_experimental_proof_of_concept_not_34b4b321">MOTO-HUB는 실험적인 개념 검증이며, 상용 수준의 제품이 아닙니다.</string>
+    <string name="legacy_development_and_testing_happen_on_a_cfmoto_700mt_ac58afbf">개발과 테스트는 CFMOTO 700MT-ADV 계기판과 OnePlus 13 / Galaxy Z Fold4 휴대폰으로 진행합니다. 다른 모터사이클, 다른 브랜드, 다른 T-Box 펌웨어 버전, 다른 휴대폰은 여기서 시험하지 않았습니다. 동작이 다르거나, 재시도가 반복되거나, 아예 연결되지 않을 수 있습니다. 계기판에 페어링 QR 코드가 표시된다면 시도해 볼 가치가 있습니다.</string>
+    <string name="legacy_do_not_rely_on_it_as_your_only_source_of_critica_39775433">중요한 내비게이션을 이 앱에만 의존하지 마세요. 정차 중에 내비게이션을 설정하고, 소프트웨어 사용에 따른 책임은 본인에게 있습니다.</string>
+
+    <!-- Garage - hero tiles -->
+    <string name="legacy_scan_motorcycle_qr_code_cc47d360">모터사이클 QR 코드 스캔</string>
+    <string name="legacy_point_your_camera_at_the_t_box_sticker_1fc1811">카메라를 T-Box 스티커에 맞추세요</string>
+    <string name="legacy_no_qr_manual_setup_e8495cc4">QR이 없나요? 수동 설정</string>
+    <string name="legacy_type_the_network_in_yourself_b35606b3">네트워크를 직접 입력하세요</string>
+    <string name="legacy_scan_its_t_box_qr_code_ca4d32e3">해당 T-Box의 QR 코드 스캔</string>
+    <string name="legacy_no_qr_manual_1dd2a7a7">QR이 없나요? 수동</string>
+    <string name="legacy_type_the_network_in_b00b50ec">네트워크 입력</string>
+    <string name="legacy_used_by_phone_only_display_modes_without_a_t_box_13ed383e">T-Box 없이 휴대폰만 쓰는 디스플레이 모드에서 사용됩니다</string>
+    <string name="legacy_talk_to_a_second_phone_over_your_own_hotspot_2aec1606">내 핫스팟으로 두 번째 휴대폰과 대화하세요</string>
+    <string name="legacy_default_settings_a0578342">기본 설정</string>
+    <string name="legacy_group_intercom_c81733c6">그룹 인터콤</string>
+
+    <!-- Motorcycle details - photo and Android Auto format buttons (short labels) -->
+    <string name="legacy_add_photo_203b2dd3">사진 추가</string>
+    <string name="legacy_change_photo_ad0735e2">사진 변경</string>
+    <string name="legacy_motorcycle_photo_4fd6c703">모터사이클 사진</string>
+    <string name="legacy_fit_10ff1">맞춤</string>
+    <string name="legacy_stretch_baa072e5">늘이기</string>
+    <string name="legacy_crop_1fb290">자르기</string>
+
+    <!-- T-Box capability inspector - section titles and row labels -->
+    <string name="legacy_a_read_only_view_of_data_observed_directly_from__eb0959e6">이 T-Box에서 직접 관찰한 데이터의 읽기 전용 보기입니다.</string>
+    <string name="legacy_wi_fi_network_68c4e1ac">Wi-Fi 네트워크</string>
+    <string name="legacy_easyconn_endpoint_f9ecbf07">EasyConn 엔드포인트</string>
+    <string name="legacy_nsd_package_bfb67045">NSD 패키지</string>
+    <string name="legacy_last_discovered_a02851f2">마지막 검색</string>
+    <string name="legacy_diagnostics_54322d8c">진단</string>
+    <string name="legacy_if_easyconn_discovery_keeps_failing_briefly_reco_b8d938f8">EasyConn 검색이 계속 실패하면 이 T-Box에 잠시 다시 연결한 뒤 잘 알려진 포트(10915-10935)를 직접 조사해 실제로 응답하는 포트를 확인하세요.</string>
+    <string name="legacy_display_8e70a4a2">디스플레이</string>
+    <string name="legacy_tft_capture_area_ad3b6865">TFT 캡처 영역</string>
+    <string name="legacy_orientation_d9c9db0">방향</string>
+    <string name="legacy_reported_dpi_4b722c90">보고된 DPI</string>
+    <string name="legacy_dpi_mode_9e4a5ea6">DPI 모드</string>
+    <string name="legacy_screen_type_5d60ca4e">화면 종류</string>
+    <string name="legacy_reported_identity_b41296b">보고된 식별 정보</string>
+    <string name="legacy_head_unit_name_1d44c987">헤드 유닛 이름</string>
+    <string name="legacy_vehicle_brand_1ca30d73">차량 브랜드</string>
+    <string name="legacy_vehicle_model_1d3cbd15">차량 모델</string>
+    <string name="legacy_these_values_are_shown_exactly_as_reported_by_th_16427b8c">이 값들은 T-Box가 보고한 그대로 표시됩니다. MOTO-HUB는 QR 코드나 네트워크 이름으로 모터사이클 모델을 추정하지 않습니다.</string>
+    <string name="legacy_software_protocol_2108716b">소프트웨어 및 프로토콜</string>
+    <string name="legacy_pxc_version_5fba84f3">PXC 버전</string>
+    <string name="legacy_sdk_version_aacf3ed2">SDK 버전</string>
+    <string name="legacy_software_version_8135c77f">소프트웨어 버전</string>
+    <string name="legacy_version_code_301c55">버전 코드</string>
+    <string name="legacy_reported_package_ec9e7619">보고된 패키지</string>
+    <string name="legacy_product_type_42ccc3eb">제품 유형</string>
+    <string name="legacy_transport_type_33b665f1">전송 방식</string>
+    <string name="legacy_function_mask_a68c5a14">기능 마스크</string>
+    <string name="legacy_wi_fi_socket_timeout_c3c69476">Wi-Fi 소켓 제한 시간</string>
+    <string name="legacy_feature_flags_3e60189d">기능 플래그</string>
+    <string name="legacy_screen_mirroring_3102b12f">화면 미러링</string>
+    <string name="legacy_screen_touch_4eb406ab">화면 터치</string>
+    <string name="legacy_overlay_touch_d474eb4f">오버레이 터치</string>
+    <string name="legacy_mirror_reconnect_e70c0c56">미러링 재연결</string>
+    <string name="legacy_landscape_adaptive_4f69625b">가로 모드 적응</string>
+    <string name="legacy_socket_authentication_94d326a5">소켓 인증</string>
+    <string name="legacy_microphone_c888754a">마이크</string>
+    <string name="legacy_hid_input_9c332ccd">HID 입력</string>
+    <string name="legacy_third_party_apps_a5fc13b2">서드파티 앱</string>
+    <string name="legacy_phone_signal_e87f95ba">휴대폰 신호</string>
+    <string name="legacy_time_synchronization_62f3fb2d">시간 동기화</string>
+    <string name="legacy_bluetooth_calls_f80c25c3">Bluetooth 통화</string>
+    <string name="legacy_sensitive_client_info_fields_are_intentionally_e_4b966321">민감한 CLIENT_INFO 필드는 저장과 표시에서 의도적으로 제외됩니다.</string>
+    <string name="legacy_capability_report_captured_65a39462">성능 보고서 수집됨</string>
+    <string name="legacy_t_box_discovered_cd525276">T-Box 발견됨</string>
+    <string name="legacy_no_observations_yet_d99ce56e">아직 관찰된 내용 없음</string>
+    <string name="legacy_client_info_was_captured_during_an_easyconn_hand_f72a40e8">EasyConn 핸드셰이크 중에 CLIENT_INFO를 수집했습니다.</string>
+    <string name="legacy_start_mirroring_or_android_auto_once_to_capture__cd900a4a">CLIENT_INFO를 수집하려면 미러링이나 Android Auto를 한 번 실행하세요.</string>
+    <string name="legacy_connect_this_motorcycle_then_start_mirroring_or__176c21dd">이 모터사이클을 연결한 뒤 미러링이나 Android Auto를 한 번 실행하세요.</string>
+    <string name="legacy_wait_288975">대기</string>
+    <string name="legacy_observed_1_s_43b8d8b3">관찰 시각 %1$s</string>
+    <string name="legacy_not_reported_7aaeba0">보고되지 않음</string>
+    <string name="legacy_supported_a4e9e48e">지원됨</string>
+    <string name="legacy_not_supported_14e0b361">지원되지 않음</string>
+    <string name="legacy_not_reported_108c5fa0">보고되지 않음</string>
+
+    <!-- QR pairing - photo fallback dialog and live scanner -->
+    <string name="legacy_analyzing_qr_photo_aa205a9c">QR 사진 분석 중…</string>
+    <string name="legacy_removing_display_patterns_and_trying_qr_recognit_b1c3a1e8">디스플레이 패턴을 제거하고 QR 인식을 시도하는 중</string>
+    <string name="legacy_attempt_1_d_of_2_d_e7c367b5">%2$d회 중 %1$d회 시도</string>
+    <string name="legacy_flash_on_64bdb02f">플래시 켜짐</string>
+    <string name="legacy_flash_40cffd0">플래시</string>
+    <string name="legacy_zoom_1_s_d659e688">줌 %1$s</string>
+    <string name="legacy_max_12d44">최대</string>
+    <string name="legacy_tap_the_qr_code_to_focus_use_zoom_if_it_is_small_2607a78c">QR 코드를 눌러 초점을 맞추세요 • 작으면 줌을 사용하세요</string>
+
+    <!-- Safety disclaimer shown on first launch -->
+    <string name="legacy_safety_warning_243ef82e">안전 경고</string>
+    <string name="legacy_riding_requires_your_full_attention_never_intera_96038a24">주행에는 온전한 주의가 필요합니다. 모터사이클이 움직이는 동안에는 MOTO-HUB, Android Auto, 내비게이션, 미러링, 주행 기록 등 화면상의 어떤 조작도 하지 마세요.</string>
+    <string name="legacy_configure_and_verify_everything_only_while_parke_57e1b31b">모든 설정과 확인은 정차 중에만 하세요. 이 앱은 완전히 안전하고 통제된 상황에서만 사용하세요. 조건이 완전히 안전하지 않다면 사용하지 마세요.</string>
+    <string name="legacy_moto_hub_is_not_a_safety_device_and_cannot_preve_a3d43f2f">MOTO-HUB는 안전 장치가 아니며 주의 산만, 사고, 부상, 손상을 막을 수 없습니다. 안전하게 주행하고 관련 법규를 지킬 책임은 전적으로 본인에게 있습니다.</string>
+    <string name="legacy_i_understand_do_not_show_this_warning_again_e4526192">이해했습니다 — 이 경고를 다시 표시하지 않음</string>
+
+    <!-- GitHub update dialog -->
+    <string name="legacy_downloading_fe585f4">다운로드 중...</string>
+    <string name="legacy_download_and_install_508990da">다운로드 후 설치</string>
+
+    <!-- Home and shared UI -->
+    <string name="legacy_no_motorcycle_b58a6930">모터사이클 없음</string>
+    <string name="legacy_stop_streaming_3eba75e4">스트리밍 중지</string>
+    <string name="legacy_touch_the_preview_to_control_android_auto_91609ae0">미리보기를 터치해 Android Auto를 조작하세요</string>
+
+    <!-- Handlebar mapping - action short labels, family headers and calibration hints -->
+    <string name="legacy_up_abb">위</string>
+    <string name="legacy_down_2098c2">아래</string>
+    <string name="legacy_left_241427">왼쪽</string>
+    <string name="legacy_right_4b4d1fc">오른쪽</string>
+    <string name="legacy_ok_9dc">확인</string>
+    <string name="legacy_place_1_45c34f38">장소 1</string>
+    <string name="legacy_place_2_45c34f39">장소 2</string>
+    <string name="legacy_place_3_45c34f3a">장소 3</string>
+    <string name="legacy_move_the_cursor_78e625b4">커서 이동</string>
+    <string name="legacy_system_92af662f">시스템</string>
+    <string name="legacy_navigate_to_f20c4b8a">다음으로 안내</string>
+    <string name="legacy_this_button_has_no_hold_skipping_automatically_44873c53">이 버튼에는 길게 누르기가 없어 자동으로 건너뜁니다.</string>
+    <string name="legacy_that_was_a_single_press_press_twice_quickly_for__e774e0f2">방금은 한 번 누른 것입니다. 더블은 빠르게 두 번 누르세요.</string>
+    <string name="legacy_that_was_a_quick_tap_press_and_hold_a_moment_lon_5b9c9d4d">방금은 짧게 누른 것입니다. 조금 더 길게 누르고 있으세요.</string>
 </resources>

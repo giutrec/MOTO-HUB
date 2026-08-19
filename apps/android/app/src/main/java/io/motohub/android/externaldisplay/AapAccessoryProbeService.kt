@@ -11,6 +11,7 @@ import androidx.core.app.ServiceCompat
 import io.motohub.android.R
 import io.motohub.android.aa.AapPhoneHandshake
 import io.motohub.android.aa.UsbAoaAccessoryConnection
+import io.motohub.android.i18n.motoHubText
 import io.motohub.android.session.ProjectionEventLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -41,7 +42,7 @@ class AapAccessoryProbeService : Service() {
             NOTIFICATION_ID,
             NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle("AAP accessory probe running")
+                .setContentTitle(motoHubText("AAP accessory probe running"))
                 .build(),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
         )

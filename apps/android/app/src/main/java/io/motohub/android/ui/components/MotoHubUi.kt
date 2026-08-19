@@ -204,7 +204,7 @@ fun HubAppBar(
                     .background(dotColor, CircleShape)
             )
             Text(
-                text = motorcycleName ?: "No motorcycle",
+                text = motorcycleName ?: motoHubText("No motorcycle"),
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

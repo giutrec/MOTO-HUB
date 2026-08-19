@@ -213,7 +213,7 @@ fun TBoxQrScannerScreen(
                                     torchEnabled = enabled
                                 }
                             ) {
-                                Text(if (torchEnabled) "Flash ON" else "Flash")
+                                Text(if (torchEnabled) motoHubText("Flash ON") else motoHubText("Flash"))
                             }
                         }
                         TextButton(onClick = onClose) { Text(motoHubText("Close")) }
@@ -262,7 +262,7 @@ fun TBoxQrScannerScreen(
                 }
                 if (maxZoomRatio > minZoomRatio + 0.01f) {
                     Text(
-                        text = "Zoom ${formatZoom(zoomRatio)}",
+                        text = motoHubText("Zoom %1\$s", formatZoom(zoomRatio)),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.labelMedium
                     )
@@ -277,11 +277,11 @@ fun TBoxQrScannerScreen(
                     ) {
                         ZoomButton("1×", minZoomRatio, zoomRatio, Modifier.weight(1f), ::setZoom)
                         ZoomButton("2×", 2f, zoomRatio, Modifier.weight(1f), ::setZoom)
-                        ZoomButton("Max", maxZoomRatio, zoomRatio, Modifier.weight(1f), ::setZoom)
+                        ZoomButton(motoHubText("Max"), maxZoomRatio, zoomRatio, Modifier.weight(1f), ::setZoom)
                     }
                 }
                 Text(
-                    text = "Tap the QR code to focus • Use zoom if it is small",
+                    text = motoHubText("Tap the QR code to focus • Use zoom if it is small"),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.labelSmall
                 )

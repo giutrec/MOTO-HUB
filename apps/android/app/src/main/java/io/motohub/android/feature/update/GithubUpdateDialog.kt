@@ -141,7 +141,7 @@ private fun ReleaseEntry(
                     enabled = !installing,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(if (installing) "Downloading..." else "Download and install")
+                    Text(if (installing) motoHubText("Downloading...") else motoHubText("Download and install"))
                 }
             }
             OutlinedButton(

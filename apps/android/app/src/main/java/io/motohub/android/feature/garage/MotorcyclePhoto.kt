@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.motohub.android.i18n.motoHubText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -58,7 +59,7 @@ fun MotorcyclePhoto(
         } else {
             Image(
                 bitmap = image.asImageBitmap(),
-                contentDescription = "Motorcycle photo",
+                contentDescription = motoHubText("Motorcycle photo"),
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )

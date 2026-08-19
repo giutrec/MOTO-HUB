@@ -25,6 +25,7 @@ import androidx.core.content.ContextCompat
 import io.motohub.android.R
 import io.motohub.android.encoding.AvcEncoder
 import io.motohub.android.encoding.EncoderProfile
+import io.motohub.android.i18n.motoHubText
 import io.motohub.android.session.ProjectionEventLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -68,7 +69,7 @@ class AoaExternalService : Service() {
                 CHANNEL_ID,
                 getString(R.string.projection_channel_name),
                 NotificationManager.IMPORTANCE_DEFAULT
-            ).apply { description = "MOTO-HUB external display streaming" }
+            ).apply { description = motoHubText("MOTO-HUB external display streaming") }
         )
     }
 
@@ -333,11 +334,11 @@ class AoaExternalService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(getString(R.string.projection_notification_title))
-            .setContentText("Streaming to external display via USB")
+            .setContentText(motoHubText("Streaming to external display via USB"))
             .setOngoing(true)
             .addAction(
                 R.drawable.ic_notification,
-                "Stop external display",
+                motoHubText("Stop external display"),
                 serviceAction(ACTION_STOP, 0)
             )
             .build()

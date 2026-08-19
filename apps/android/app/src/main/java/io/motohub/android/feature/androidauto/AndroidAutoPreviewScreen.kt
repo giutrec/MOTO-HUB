@@ -52,6 +52,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.motohub.android.androidauto.AndroidAutoRuntime
 import io.motohub.android.androidauto.AndroidAutoRuntimeState
 import io.motohub.android.androidauto.AndroidAutoPreviewView
+import io.motohub.android.i18n.motoHubText
 import io.motohub.android.ui.components.LivePill
 import io.motohub.android.ui.components.MotoHubHeader
 
@@ -155,11 +156,11 @@ fun AndroidAutoPreviewScreen(onBack: () -> Unit, startFullscreen: Boolean = fals
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Android Auto",
+                            text = motoHubText("Android Auto"),
                             color = Color.White,
                             style = MaterialTheme.typography.labelLarge
                         )
-                        PreviewActionButton("Fullscreen") { fullscreen = true }
+                        PreviewActionButton(motoHubText("Fullscreen")) { fullscreen = true }
                     }
                 }
             }
@@ -180,7 +181,7 @@ fun AndroidAutoPreviewScreen(onBack: () -> Unit, startFullscreen: Boolean = fals
             ) {
                 MotoHubHeader(
                     modifier = Modifier.fillMaxWidth(),
-                    trailing = { TextButton(onClick = onBack) { Text("Close") } }
+                    trailing = { TextButton(onClick = onBack) { Text(motoHubText("Close")) } }
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -189,7 +190,7 @@ fun AndroidAutoPreviewScreen(onBack: () -> Unit, startFullscreen: Boolean = fals
                 ) {
                     PreviewStatusPill(streaming = streaming)
                     Text(
-                        text = if (streaming) "Touch the preview to control Android Auto" else status,
+                        text = if (streaming) motoHubText("Touch the preview to control Android Auto") else status,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall
                     )

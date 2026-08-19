@@ -865,7 +865,7 @@ private fun ActiveSessionContent(
         }
 
         StopAction(
-            text = "Stop streaming",
+            text = motoHubText("Stop streaming"),
             onClick = onStop
         )
     }

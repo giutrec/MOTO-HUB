@@ -229,7 +229,7 @@ private fun MotorcycleDetailsMainList(
                 onClick = onChoosePhoto,
                 modifier = Modifier.weight(1f).height(48.dp),
                 shape = RoundedCornerShape(14.dp)
-            ) { Text(if (profile.photoPath == null) "Add photo" else "Change photo") }
+            ) { Text(if (profile.photoPath == null) motoHubText("Add photo") else motoHubText("Change photo")) }
             if (profile.photoPath != null) {
                 OutlinedButton(
                     onClick = onRemovePhoto,
@@ -366,19 +366,19 @@ fun AndroidAutoDisplayDetail(
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FormatButton(
-                text = "FIT",
+                text = motoHubText("FIT"),
                 selected = displayMode == AndroidAutoDisplayMode.LETTERBOX,
                 onClick = { onDisplayModeChanged(AndroidAutoDisplayMode.LETTERBOX) },
                 modifier = Modifier.weight(1f)
             )
             FormatButton(
-                text = "STRETCH",
+                text = motoHubText("STRETCH"),
                 selected = displayMode == AndroidAutoDisplayMode.STRETCH,
                 onClick = { onDisplayModeChanged(AndroidAutoDisplayMode.STRETCH) },
                 modifier = Modifier.weight(1f)
             )
             FormatButton(
-                text = "CROP",
+                text = motoHubText("CROP"),
                 selected = displayMode == AndroidAutoDisplayMode.FILL,
                 onClick = { onDisplayModeChanged(AndroidAutoDisplayMode.FILL) },
                 modifier = Modifier.weight(1f)

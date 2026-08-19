@@ -1561,4 +1561,138 @@
     <string name="legacy_hid_d_pad_a247f04a">HID (D-pad)</string>
     <string name="legacy_default_the_dashboard_sends_bluetooth_media_key__ccbdfbf7">Par défaut. Le tableau de bord envoie des commandes Bluetooth de touche multimédia pour lecture/pause, piste et volume.</string>
     <string name="legacy_for_remotes_that_pair_as_a_bluetooth_keyboard_an_25055a66">Pour les télécommandes qui s\'associent comme clavier Bluetooth et envoient des appuis de D-pad. Nécessite d\'activer le service d\'Accessibilité de MOTO-HUB ci-dessous.</string>
+
+    <!-- External display service (USB AOA) - notification channel and ongoing notification -->
+    <string name="legacy_moto_hub_external_display_streaming_1be823ca">Diffusion MOTO-HUB vers l\'écran externe</string>
+    <string name="legacy_streaming_to_external_display_via_usb_ab5c31c6">Diffusion vers l\'écran externe via USB</string>
+    <string name="legacy_stop_external_display_c050e9ab">Arrêter l\'écran externe</string>
+    <string name="legacy_aap_accessory_probe_running_bcf6ccd1">Sonde d\'accessoire AAP en cours</string>
+
+    <!-- About screen -->
+    <string name="legacy_your_phone_your_motorcycle_display_c5956fcb">Votre téléphone.\nL\'écran de votre moto.</string>
+    <string name="legacy_moto_hub_connects_an_android_14_phone_to_a_motor_403bf630">MOTO-HUB relie un téléphone Android 14+ à un tableau de bord moto qui s\'appaire via EasyConn, le logiciel Carbit qu\'embarquent plusieurs constructeurs, dont CFMOTO. Il prend en charge la recopie de l\'écran et des applications, la projection Android Auto, les profils de moto enregistrés et les diagnostics sur l\'appareil.</string>
+    <string name="legacy_follow_development_join_our_community_report_iss_b8b8fffa">Suivez le développement, rejoignez la communauté, signalez des problèmes et téléchargez les versions.</string>
+    <string name="legacy_moto_hub_is_an_independent_project_it_is_not_aff_9e4c2633">MOTO-HUB est un projet indépendant. Il n\'est ni affilié, ni approuvé, ni parrainé par Carbit, CFMOTO, tout autre constructeur dont le tableau de bord utilise EasyConn, Google ou Android Auto. Tous les noms de produits et les marques appartiennent à leurs propriétaires respectifs.</string>
+    <string name="legacy_moto_hub_is_an_experimental_proof_of_concept_not_34b4b321">MOTO-HUB est une preuve de concept expérimentale, pas un produit de qualité commerciale.</string>
+    <string name="legacy_development_and_testing_happen_on_a_cfmoto_700mt_ac58afbf">Le développement et les tests se font sur un tableau de bord CFMOTO 700MT-ADV avec des téléphones OnePlus 13 / Galaxy Z Fold4. D\'autres motos, d\'autres marques, d\'autres versions du micrologiciel T-Box et d\'autres téléphones n\'ont pas été testés ici : attendez-vous à un comportement différent, à des tentatives répétées ou à aucune connexion. Si le tableau de bord affiche un code QR d\'appairage, cela vaut la peine d\'essayer.</string>
+    <string name="legacy_do_not_rely_on_it_as_your_only_source_of_critica_39775433">N\'en faites pas votre unique source de navigation critique. Configurez la navigation à l\'arrêt et utilisez le logiciel à vos propres risques.</string>
+
+    <!-- Garage - hero tiles -->
+    <string name="legacy_scan_motorcycle_qr_code_cc47d360">Scanner le QR de la moto</string>
+    <string name="legacy_point_your_camera_at_the_t_box_sticker_1fc1811">Visez l\'autocollant du T-Box</string>
+    <string name="legacy_no_qr_manual_setup_e8495cc4">Pas de QR ? Configuration manuelle</string>
+    <string name="legacy_type_the_network_in_yourself_b35606b3">Saisissez le réseau vous-même</string>
+    <string name="legacy_scan_its_t_box_qr_code_ca4d32e3">Scanner le QR de son T-Box</string>
+    <string name="legacy_no_qr_manual_1dd2a7a7">Pas de QR ? Manuel</string>
+    <string name="legacy_type_the_network_in_b00b50ec">Saisir le réseau</string>
+    <string name="legacy_used_by_phone_only_display_modes_without_a_t_box_13ed383e">Utilisé par les modes d\'affichage téléphone seul, sans T-Box</string>
+    <string name="legacy_talk_to_a_second_phone_over_your_own_hotspot_2aec1606">Parlez à un second téléphone via votre propre point d\'accès</string>
+    <string name="legacy_default_settings_a0578342">Réglages par défaut</string>
+    <string name="legacy_group_intercom_c81733c6">Interphone de groupe</string>
+
+    <!-- Motorcycle details - photo and Android Auto format buttons (short labels) -->
+    <string name="legacy_add_photo_203b2dd3">Ajouter une photo</string>
+    <string name="legacy_change_photo_ad0735e2">Changer la photo</string>
+    <string name="legacy_motorcycle_photo_4fd6c703">Photo de la moto</string>
+    <string name="legacy_fit_10ff1">ADAPTER</string>
+    <string name="legacy_stretch_baa072e5">ÉTIRER</string>
+    <string name="legacy_crop_1fb290">ROGNER</string>
+
+    <!-- T-Box capability inspector - section titles and row labels -->
+    <string name="legacy_a_read_only_view_of_data_observed_directly_from__eb0959e6">Une vue en lecture seule des données observées directement sur ce T-Box.</string>
+    <string name="legacy_wi_fi_network_68c4e1ac">Réseau Wi-Fi</string>
+    <string name="legacy_easyconn_endpoint_f9ecbf07">Point de terminaison EasyConn</string>
+    <string name="legacy_nsd_package_bfb67045">Paquet NSD</string>
+    <string name="legacy_last_discovered_a02851f2">Dernière détection</string>
+    <string name="legacy_diagnostics_54322d8c">DIAGNOSTICS</string>
+    <string name="legacy_if_easyconn_discovery_keeps_failing_briefly_reco_b8d938f8">Si la détection EasyConn continue d\'échouer, reconnectez-vous brièvement à ce T-Box et sondez directement ses ports connus (10915-10935) pour voir lequel répond réellement.</string>
+    <string name="legacy_display_8e70a4a2">AFFICHAGE</string>
+    <string name="legacy_tft_capture_area_ad3b6865">Zone de capture TFT</string>
+    <string name="legacy_orientation_d9c9db0">Orientation</string>
+    <string name="legacy_reported_dpi_4b722c90">DPI communiqués</string>
+    <string name="legacy_dpi_mode_9e4a5ea6">Mode DPI</string>
+    <string name="legacy_screen_type_5d60ca4e">Type d\'écran</string>
+    <string name="legacy_reported_identity_b41296b">IDENTITÉ COMMUNIQUÉE</string>
+    <string name="legacy_head_unit_name_1d44c987">Nom de l\'unité principale</string>
+    <string name="legacy_vehicle_brand_1ca30d73">Marque du véhicule</string>
+    <string name="legacy_vehicle_model_1d3cbd15">Modèle du véhicule</string>
+    <string name="legacy_these_values_are_shown_exactly_as_reported_by_th_16427b8c">Ces valeurs sont affichées telles que le T-Box les communique. MOTO-HUB ne déduit pas le modèle de la moto à partir du code QR ni du nom du réseau.</string>
+    <string name="legacy_software_protocol_2108716b">LOGICIEL ET PROTOCOLE</string>
+    <string name="legacy_pxc_version_5fba84f3">Version PXC</string>
+    <string name="legacy_sdk_version_aacf3ed2">Version du SDK</string>
+    <string name="legacy_software_version_8135c77f">Version du logiciel</string>
+    <string name="legacy_version_code_301c55">Code de version</string>
+    <string name="legacy_reported_package_ec9e7619">Paquet communiqué</string>
+    <string name="legacy_product_type_42ccc3eb">Type de produit</string>
+    <string name="legacy_transport_type_33b665f1">Type de transport</string>
+    <string name="legacy_function_mask_a68c5a14">Masque de fonctions</string>
+    <string name="legacy_wi_fi_socket_timeout_c3c69476">Délai du socket Wi-Fi</string>
+    <string name="legacy_feature_flags_3e60189d">INDICATEURS DE FONCTIONS</string>
+    <string name="legacy_screen_mirroring_3102b12f">Recopie d\'écran</string>
+    <string name="legacy_screen_touch_4eb406ab">Tactile sur l\'écran</string>
+    <string name="legacy_overlay_touch_d474eb4f">Tactile sur la surcouche</string>
+    <string name="legacy_mirror_reconnect_e70c0c56">Reconnexion de la recopie</string>
+    <string name="legacy_landscape_adaptive_4f69625b">Adaptation au format paysage</string>
+    <string name="legacy_socket_authentication_94d326a5">Authentification du socket</string>
+    <string name="legacy_microphone_c888754a">Microphone</string>
+    <string name="legacy_hid_input_9c332ccd">Entrée HID</string>
+    <string name="legacy_third_party_apps_a5fc13b2">Applications tierces</string>
+    <string name="legacy_phone_signal_e87f95ba">Signal du téléphone</string>
+    <string name="legacy_time_synchronization_62f3fb2d">Synchronisation de l\'heure</string>
+    <string name="legacy_bluetooth_calls_f80c25c3">Appels Bluetooth</string>
+    <string name="legacy_sensitive_client_info_fields_are_intentionally_e_4b966321">Les champs sensibles de CLIENT_INFO sont volontairement exclus du stockage et de l\'affichage.</string>
+    <string name="legacy_capability_report_captured_65a39462">Rapport de capacités capturé</string>
+    <string name="legacy_t_box_discovered_cd525276">T-Box détecté</string>
+    <string name="legacy_no_observations_yet_d99ce56e">Aucune observation pour l\'instant</string>
+    <string name="legacy_client_info_was_captured_during_an_easyconn_hand_f72a40e8">CLIENT_INFO a été capturé lors d\'une poignée de main EasyConn.</string>
+    <string name="legacy_start_mirroring_or_android_auto_once_to_capture__cd900a4a">Lancez la recopie d\'écran ou Android Auto une fois pour capturer CLIENT_INFO.</string>
+    <string name="legacy_connect_this_motorcycle_then_start_mirroring_or__176c21dd">Connectez cette moto, puis lancez la recopie d\'écran ou Android Auto une fois.</string>
+    <string name="legacy_wait_288975">EN ATTENTE</string>
+    <string name="legacy_observed_1_s_43b8d8b3">Observé %1$s</string>
+    <string name="legacy_not_reported_7aaeba0">Non communiqué</string>
+    <string name="legacy_supported_a4e9e48e">PRIS EN CHARGE</string>
+    <string name="legacy_not_supported_14e0b361">NON PRIS EN CHARGE</string>
+    <string name="legacy_not_reported_108c5fa0">NON COMMUNIQUÉ</string>
+
+    <!-- QR pairing - photo fallback dialog and live scanner -->
+    <string name="legacy_analyzing_qr_photo_aa205a9c">Analyse de la photo du QR…</string>
+    <string name="legacy_removing_display_patterns_and_trying_qr_recognit_b1c3a1e8">Suppression des motifs de l\'écran et tentative de reconnaissance du QR</string>
+    <string name="legacy_attempt_1_d_of_2_d_e7c367b5">Tentative %1$d sur %2$d</string>
+    <string name="legacy_flash_on_64bdb02f">Flash activé</string>
+    <string name="legacy_flash_40cffd0">Flash</string>
+    <string name="legacy_zoom_1_s_d659e688">Zoom %1$s</string>
+    <string name="legacy_max_12d44">Max</string>
+    <string name="legacy_tap_the_qr_code_to_focus_use_zoom_if_it_is_small_2607a78c">Touchez le code QR pour faire la mise au point • Utilisez le zoom s\'il est petit</string>
+
+    <!-- Safety disclaimer shown on first launch -->
+    <string name="legacy_safety_warning_243ef82e">AVERTISSEMENT DE SÉCURITÉ</string>
+    <string name="legacy_riding_requires_your_full_attention_never_intera_96038a24">La conduite exige toute votre attention. N\'interagissez jamais avec MOTO-HUB, Android Auto, la navigation, la recopie d\'écran, l\'enregistrement du trajet ou une commande à l\'écran pendant que la moto roule.</string>
+    <string name="legacy_configure_and_verify_everything_only_while_parke_57e1b31b">Configurez et vérifiez tout uniquement à l\'arrêt. N\'utilisez cette application que dans une situation parfaitement sûre et maîtrisée. Si les conditions ne sont pas totalement sûres, ne l\'utilisez pas.</string>
+    <string name="legacy_moto_hub_is_not_a_safety_device_and_cannot_preve_a3d43f2f">MOTO-HUB n\'est pas un dispositif de sécurité et ne peut pas empêcher la distraction, les accidents, les blessures ou les dommages. Vous êtes seul responsable de rouler en sécurité et de respecter toutes les lois applicables.</string>
+    <string name="legacy_i_understand_do_not_show_this_warning_again_e4526192">J\'ai compris — ne plus afficher cet avertissement</string>
+
+    <!-- GitHub update dialog -->
+    <string name="legacy_downloading_fe585f4">Téléchargement...</string>
+    <string name="legacy_download_and_install_508990da">Télécharger et installer</string>
+
+    <!-- Home and shared UI -->
+    <string name="legacy_no_motorcycle_b58a6930">Aucune moto</string>
+    <string name="legacy_stop_streaming_3eba75e4">Arrêter la diffusion</string>
+    <string name="legacy_touch_the_preview_to_control_android_auto_91609ae0">Touchez l\'aperçu pour piloter Android Auto</string>
+
+    <!-- Handlebar mapping - action short labels, family headers and calibration hints -->
+    <string name="legacy_up_abb">Haut</string>
+    <string name="legacy_down_2098c2">Bas</string>
+    <string name="legacy_left_241427">Gauche</string>
+    <string name="legacy_right_4b4d1fc">Droite</string>
+    <string name="legacy_ok_9dc">OK</string>
+    <string name="legacy_place_1_45c34f38">Lieu 1</string>
+    <string name="legacy_place_2_45c34f39">Lieu 2</string>
+    <string name="legacy_place_3_45c34f3a">Lieu 3</string>
+    <string name="legacy_move_the_cursor_78e625b4">DÉPLACER LE CURSEUR</string>
+    <string name="legacy_system_92af662f">SYSTÈME</string>
+    <string name="legacy_navigate_to_f20c4b8a">NAVIGUER VERS</string>
+    <string name="legacy_this_button_has_no_hold_skipping_automatically_44873c53">Ce bouton n\'a pas d\'appui long : il est ignoré automatiquement.</string>
+    <string name="legacy_that_was_a_single_press_press_twice_quickly_for__e774e0f2">C\'était un appui simple : appuyez deux fois rapidement pour le double.</string>
+    <string name="legacy_that_was_a_quick_tap_press_and_hold_a_moment_lon_5b9c9d4d">C\'était une pression brève : maintenez appuyé un instant de plus.</string>
 </resources>

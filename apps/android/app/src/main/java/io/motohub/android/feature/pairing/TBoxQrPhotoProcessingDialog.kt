@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.unit.dp
+import io.motohub.android.i18n.motoHubText
 
 @Composable
 fun TBoxQrPhotoProcessingDialog(
@@ -32,12 +33,12 @@ fun TBoxQrPhotoProcessingDialog(
             Column(modifier = Modifier.padding(24.dp)) {
                 CircularProgressIndicator()
                 Text(
-                    text = "Analyzing QR photo…",
+                    text = motoHubText("Analyzing QR photo…"),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(top = 18.dp)
                 )
                 Text(
-                    text = "Removing display patterns and trying QR recognition",
+                    text = motoHubText("Removing display patterns and trying QR recognition"),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp)
@@ -49,7 +50,7 @@ fun TBoxQrPhotoProcessingDialog(
                         .padding(top = 18.dp)
                 )
                 Text(
-                    text = "Attempt $completedAttempts of $totalAttempts",
+                    text = motoHubText("Attempt %1\$d of %2\$d", completedAttempts, totalAttempts),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp)
