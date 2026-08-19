@@ -957,7 +957,6 @@
     <!-- Source: feature/trips/TripLibraryUi.kt -->
     <string name="legacy_enhanced_9c6c8376">COMPLETO</string>
     <string name="legacy_gps_only_e6f03982">SÓ GPS</string>
-=======
     <!-- Source: feature/controls/HandlebarHidCaptureService.kt -->
     <string name="handlebar_hid_capture_description">Permite que a MOTO-HUB leia as pressões do D-pad de um comando Bluetooth HID do guiador quando o modo HID está selecionado nas definições de botões do guiador.</string>
 
