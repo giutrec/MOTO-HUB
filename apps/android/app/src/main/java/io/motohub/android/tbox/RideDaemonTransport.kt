@@ -1003,11 +1003,30 @@ class RideDaemonTransport(
                         releaseSlot()
                         return
                     }
-                    val packageName = decodeEasyConnPackage(attributes[PACKAGE_ATTRIBUTE])
-                    if (packageName == null) {
+                    // A Zontes 125X (modelId 21340, field log 2026-08-19) advertises
+                    // _EasyConn._tcp with a usable host and port but no packagename in its TXT
+                    // record. Rejecting the resolution over that one missing key threw away an
+                    // endpoint that was otherwise complete - and the reject did not release the
+                    // resolution slot, so the same candidate went on blocking every later one
+                    // until the window expired. Discovery then reported "never advertised" for a
+                    // dash it had just resolved four times, on a bike whose wake probe was being
+                    // acknowledged the whole time.
+                    //
+                    // The name is not ours to learn from the advertisement anyway: it travels
+                    // back to the dash in the EC init command, which is precisely what the wake
+                    // probe negotiates. So the probe's ladder answers it - the identity already
+                    // acknowledged on this device if one has been, the leading candidate
+                    // otherwise, which is the same value the Wi-Fi Direct path records where TXT
+                    // metadata does not exist at all.
+                    val advertisedPackage = decodeEasyConnPackage(attributes[PACKAGE_ATTRIBUTE])
+                    val packageName = advertisedPackage ?: EasyConnClientIdentity.probeOrder().first()
+                    if (advertisedPackage == null) {
                         Log.w(TAG, "EasyConn service resolved without package metadata")
-                        ProjectionEventLog.warning("DISCOVERY", "Resolved EasyConn service has no package metadata.")
-                        return
+                        ProjectionEventLog.warning(
+                            "DISCOVERY",
+                            "Resolved EasyConn service has no package metadata; continuing with " +
+                                "the probe identity \"$packageName\"."
+                        )
                     }
 
                     val advertisedIp = attributes[IP_ATTRIBUTE]
