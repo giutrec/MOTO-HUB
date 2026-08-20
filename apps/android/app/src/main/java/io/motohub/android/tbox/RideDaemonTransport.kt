@@ -664,7 +664,13 @@ class RideDaemonTransport(
      */
     private suspend fun probeHostedSubnet(link: TBoxLink.PhoneHotspot): Pair<Inet4Address, String>? =
         withContext(Dispatchers.IO) {
-            val candidates = TBoxHotspotScan.candidateHosts(link.subnet)
+            // A dash that reported its own address is not a candidate among 253, it is THE
+            // candidate; probing it first turns a sweep into one connect. It still only leads the
+            // list rather than replacing it, because a lease can change and the address the dash
+            // announced a minute ago may no longer be the one it holds.
+            val announced = link.peerHint
+            val candidates = listOfNotNull(announced) +
+                TBoxHotspotScan.candidateHosts(link.subnet).filterNot { it == announced }
             val reachable = mutableListOf<Inet4Address>()
             for (candidate in candidates) {
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()

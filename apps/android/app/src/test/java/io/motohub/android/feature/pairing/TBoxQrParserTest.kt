@@ -232,6 +232,36 @@ class TBoxQrParserTest {
     }
 
     @Test
+    fun anOpaqueCarbitTokenPairsOverBluetooth() {
+        // The whole code a Zontes S350 prints. No network, no password, no action bitmask - just
+        // the dash's identity - so the only transport that can use it is the Bluetooth one.
+        val payload = TBoxQrParser.parse("CARBITDC0D301738D4").getOrThrow()
+
+        assertEquals("EC301738D4", payload.ssid)
+        assertEquals("EC301738D4", payload.displayName)
+        assertEquals("", payload.password)
+        assertEquals("dc:0d:30:17:38:d4", payload.dashMacAddress)
+        assertEquals(TBoxConnectionMode.BLE_PROVISIONED, payload.suggestedConnectionMode)
+        assertEquals(TBoxQrOrigin.RECOGNISED, payload.origin)
+    }
+
+    @Test
+    fun aCarbitTokenIsRecognisedWhateverCaseItIsPrintedIn() {
+        assertEquals("EC301738D4", TBoxQrParser.parse("carbitdc0d301738d4").getOrThrow().ssid)
+    }
+
+    @Test
+    fun somethingThatMerelyStartsWithCarbitIsNotAToken() {
+        // Twelve hex digits and nothing else: a URL that happens to mention Carbit still has to
+        // go through the provisioning parser, which is the one that can read its parameters.
+        assertTrue(TBoxQrParser.parse("CARBITDC0D3017").isFailure)
+        val url = TBoxQrParser.parse(
+            "http://www.carbit.com.cn/x?ssid=EASYCONN_5G-F3116E&pwd=12345678"
+        ).getOrThrow()
+        assertEquals("EASYCONN_5G-F3116E", url.ssid)
+    }
+
+    @Test
     fun aBareMacIsAcceptedAsWellAsTheColonForm() {
         val payload = TBoxQrParser.parse(
             "http://www.carbit.com.cn/x?modelid=21322&action=128&bm=DD0D3024876D"

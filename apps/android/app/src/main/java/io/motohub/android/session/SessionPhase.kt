@@ -26,6 +26,19 @@ enum class TBoxConnectionMode {
     PHONE_HOTSPOT,
 
     /**
+     * The dash owns no network and will not tell the rider one either: it is put onto a network
+     * the phone hosts, over a Bluetooth exchange, and only then can be reached over Wi-Fi.
+     *
+     * Confirmed on a Zontes S350 (Brazil/JTZ, 2026): no access point, no Wi-Fi Direct peer, no
+     * credentials printed anywhere, and an opaque `CARBIT` + 12 hex QR. Its dash advertises the
+     * EasyConn setup service over BLE and waits to be told which network to join - which is
+     * exactly what the official app does, and what [io.motohub.android.tbox.EcBtpNetLink] does
+     * here. Unlike [PHONE_HOTSPOT] the rider configures nothing: the hotspot is created by the
+     * app, with credentials the app reads back and hands to the dash.
+     */
+    BLE_PROVISIONED,
+
+    /**
      * ThinkerRide dashboards (KOVE family): the phone joins the dash's ordinary access point,
      * but everything after that is inverted — pairing runs over a BLE GATT handshake and the
      * dash then connects to TCP servers the phone opens. Selected automatically when the

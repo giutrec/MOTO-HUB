@@ -20,6 +20,7 @@ import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxLinkResolver
 import io.motohub.android.tbox.TBoxModelProfile
 import io.motohub.android.tbox.TBoxProtocolMemory
+import io.motohub.android.tbox.ThinkerRideGate
 import io.motohub.android.tbox.ProfileOverride
 import io.motohub.android.tbox.TBoxNetworkConnector
 import io.motohub.android.tbox.TBoxNetworkEvent
@@ -343,15 +344,38 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         // tethering turns the station radio off, so that check reports false for the whole life
         // of a working PHONE_HOTSPOT session and used to block every connect through here -
         // manual and automatic alike. See WifiGate.isHostingANetwork for the field log.
-        if (profile.connectionMode == TBoxConnectionMode.PHONE_HOTSPOT) {
+        if (profile.connectionMode == TBoxConnectionMode.BLE_PROVISIONED) {
+            // Neither gate applies: this dash is reached by creating a network, not by joining
+            // one, and creating it takes the station radio down. Asking for Wi-Fi to be on would
+            // block the connect that is about to turn it off, and asking for a hotspot to already
+            // exist would block the one path that makes one. Bluetooth is the real precondition
+            // and EcBtpNetLink checks it, with a message that names it.
+            ProjectionEventLog.debug(
+                "CONNECTION",
+                "${profile.ssid} is set up over Bluetooth; the Wi-Fi checks do not apply to it."
+            )
+        } else if (profile.connectionMode == TBoxConnectionMode.PHONE_HOTSPOT) {
+            // No hotspot is not automatically the end of the road any more. Some dashes in this
+            // mode print no credentials for the rider to enter and can only be put on a network
+            // over Bluetooth, so when a scan is possible the connect is allowed through to try
+            // it; the same message still comes back seconds later if nothing answers. When it is
+            // not possible, the instant answer is the better one.
             if (!WifiGate.isHostingANetwork()) {
-                ProjectionEventLog.warning(
+                if (!ThinkerRideGate.bluetoothReady(getApplication())) {
+                    ProjectionEventLog.warning(
+                        "CONNECTION",
+                        "Connection request blocked: ${profile.ssid} expects the phone to host the " +
+                            "network, no hotspot subnet exists on this phone, and Bluetooth is not " +
+                            "available to set the dash up over instead."
+                    )
+                    showError(WifiGate.HOTSPOT_OFF_MESSAGE)
+                    return
+                }
+                ProjectionEventLog.record(
                     "CONNECTION",
-                    "Connection request blocked: ${profile.ssid} expects the phone to host the " +
-                        "network and no hotspot subnet exists on this phone."
+                    "No hotspot is running for ${profile.ssid}; trying to set the dash up over " +
+                        "Bluetooth before telling the rider to turn one on."
                 )
-                showError(WifiGate.HOTSPOT_OFF_MESSAGE)
-                return
             }
         } else if (!WifiGate.isWifiEnabled(getApplication())) {
             ProjectionEventLog.warning("CONNECTION", "Connection request blocked: phone Wi-Fi is off.")

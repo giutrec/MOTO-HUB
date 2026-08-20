@@ -109,9 +109,48 @@ object TBoxQrParser {
     fun parse(rawValue: String): Result<TBoxQrPayload> = runCatching {
         val trimmed = rawValue.trim()
         parseWifiNetworkCode(trimmed)
+            ?: parseCarbitToken(trimmed)
             ?: parseMotoFunUrl(trimmed)
             ?: parseThinkerRideUrl(trimmed)
             ?: parseProvisioningUrl(trimmed)
+    }
+
+    /**
+     * The bare `CARBIT` + 12 hex code some dashes print instead of a URL:
+     *
+     *     CARBITDC0D301738D4
+     *
+     * It carries no network, no password and no `action` bitmask, because the dash it comes from
+     * has none of those to offer. Confirmed on a Zontes S350 (Brazil/JTZ, 2026): no access point,
+     * nothing in a Wi-Fi Direct scan, and a dash screen that says only "open the app and scan
+     * this". What it does carry is the dash's identity, and that dash is reachable over Bluetooth
+     * - so this code selects [TBoxConnectionMode.BLE_PROVISIONED], the one transport that can do
+     * anything with it.
+     *
+     * The twelve digits are the dash's Wi-Fi MAC, not its Bluetooth one: on the S350 the QR reads
+     * `DC:0D:30:17:38:D4` while the BLE peripheral answers on `DD:0D:30:17:38:D4`. They are kept
+     * for identification, never used to address the radio - [io.motohub.android.tbox.EcBtpNetLink]
+     * finds the dash by the service it advertises.
+     */
+    private fun parseCarbitToken(rawValue: String): TBoxQrPayload? {
+        val digits = CARBIT_TOKEN.matchEntire(rawValue)?.groupValues?.get(1)?.uppercase() ?: return null
+        // What the dash calls itself over BLE: "EC" followed by the last four bytes of the MAC
+        // (`CARBITDC0D301738D4` -> `EC301738D4`). Used as the profile's name because a profile is
+        // keyed by SSID and this dash has none - and because it is the string the rider can see
+        // for themselves in any Bluetooth scanner.
+        val advertisedName = "EC" + digits.takeLast(8)
+        return TBoxQrPayload(
+            ssid = advertisedName,
+            password = "",
+            encryption = null,
+            modelId = null,
+            displayName = advertisedName,
+            // No other dialect prints this prefix followed by exactly twelve hex digits, which is
+            // the same standard the MotoFun shape is recognised by.
+            origin = TBoxQrOrigin.RECOGNISED,
+            suggestedConnectionMode = TBoxConnectionMode.BLE_PROVISIONED,
+            dashMacAddress = normaliseMac(digits)
+        )
     }
 
     /**
@@ -410,6 +449,9 @@ object TBoxQrParser {
 
     private fun isKnownProvisioningHost(host: String): Boolean =
         KNOWN_PROVISIONING_DOMAINS.any { host == it || host.endsWith(".$it") }
+
+    /** `CARBIT` followed by exactly twelve hex digits, and nothing else in the code. */
+    private val CARBIT_TOKEN = Regex("""CARBIT([0-9A-Fa-f]{12})""", RegexOption.IGNORE_CASE)
 
     /** `Wifi=<ssid>`, where the SSID runs up to the `#` that introduces the password. */
     private val MOTO_FUN_WIFI = Regex("""(?:^|[?&])wifi=([^&#\s]+)""", RegexOption.IGNORE_CASE)
