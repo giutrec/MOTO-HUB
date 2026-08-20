@@ -37,6 +37,7 @@ import io.motohub.android.feature.settings.VideoQuality
 import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.tbox.FormedP2pGroup
 import io.motohub.android.tbox.ProfileOverride
+import io.motohub.android.tbox.TBoxEvent
 import io.motohub.android.tbox.TBoxModelProfile
 import io.motohub.android.tbox.TBoxSessionHandle
 import io.motohub.android.tbox.TBoxSessionRegistry
@@ -65,6 +66,7 @@ class IpcBridgeService : Service() {
     private val videoStreamLock = Any()
     @Volatile private var videoStreamInput: ParcelFileDescriptor? = null
     @Volatile private var videoStreamJob: Job? = null
+    @Volatile private var transportWatchJob: Job? = null
 
     // ── T-Box transport ──────────────────────────────────────────────
 
@@ -317,6 +319,7 @@ class IpcBridgeService : Service() {
                 videoStreamJob = serviceScope.launch {
                     readVideoStream(pipe[0])
                 }
+                watchTransportForCompanion()
                 pipe[1]
             }.onFailure {
                 ProjectionEventLog.error("IPC_TBOX", "Unable to open the PRO video data pipe.", it)
@@ -331,11 +334,50 @@ class IpcBridgeService : Service() {
     }
 
     private fun closeVideoStreamPipeLocked() {
+        transportWatchJob?.cancel()
+        transportWatchJob = null
         videoStreamJob?.cancel()
         videoStreamJob = null
         videoStreamInput?.runCatching { close() }
         videoStreamInput = null
         TBoxSessionRegistry.release(SESSION_CONSUMER)
+    }
+
+    /**
+     * Carries the transport's own verdict that the session is over out to the companion app.
+     *
+     * Core's modes each collect [TBoxTransport.events] and act on `FatalError`/`Stopped`, but
+     * none of them is running when a companion app owns the session - so for a companion those
+     * events used to land nowhere. Field log 2026-08-19 (Samsung SM-A566B, Benelli TRK 702X):
+     * after a mid-ride reconnect the dash never asked for video and went quiet, Core's PXC
+     * watchdog declared the session dead at 21951ms, and nothing carried that anywhere. The
+     * companion went on offering frames for another 75 seconds while its own watchdog, which
+     * fires on a broken pipe, had no pipe to break - the rider had to stop and end the session
+     * by hand.
+     *
+     * Closing the pipe is deliberately the whole mechanism. It is the exact signal a real
+     * transport death already produces (the reader breaks, the write end returns EPIPE) and the
+     * one the companion's watchdog has recovered from in the field, so a verdict reached by the
+     * timer instead of by a socket takes a path that is already proven rather than a new one.
+     * The teardown itself stays with the companion: it owns the reconnect.
+     */
+    private fun watchTransportForCompanion() {
+        transportWatchJob?.cancel()
+        val transport = TBoxSessionRegistry.current()?.transport ?: return
+        transportWatchJob = serviceScope.launch {
+            transport.events.collect { event ->
+                val reason = when (event) {
+                    is TBoxEvent.FatalError -> event.message
+                    TBoxEvent.Stopped -> "The T-Box ended the session."
+                    else -> return@collect
+                }
+                ProjectionEventLog.warning(
+                    "IPC_TBOX",
+                    "Ending the companion video pipe because the T-Box session is over: $reason"
+                )
+                closeVideoStreamPipe()
+            }
+        }
     }
 
     private suspend fun readVideoStream(input: ParcelFileDescriptor) {
