@@ -533,10 +533,23 @@ class YunmoTransport(context: Context) : TBoxTransport {
             val deadline = System.currentTimeMillis() + SEND_WINDOW_TIMEOUT_MS
             synchronized(ackLock) {
                 while (running.get()) {
-                    val inFlight = if (mapNavMode) {
-                        unackedSinceAck
-                    } else {
+                    // Two different quantities, because the two paths number their frames
+                    // differently. Stills carry a real frame id and the dash echoes the last one
+                    // it processed, so the OEM's own measure - ids outstanding - is available and
+                    // correct. H.264 frames go out with the id field zeroed (that is what the OEM
+                    // does there), so the dash can only ever echo 0 and an id difference would
+                    // grow without bound; frames-since-the-last-ack is the only thing left to
+                    // count.
+                    //
+                    // Using frames-since-the-last-ack for stills throttled the dash to about half
+                    // its rate: it acknowledges roughly every second still, so that counter sat at
+                    // the window limit constantly while the dash was in fact fully caught up
+                    // (field log 2026-08-20: 569 frames sent, last ack carrying id 569, and 314
+                    // stills dropped waiting for a window that was never really full).
+                    val inFlight = if (jpegMode || !mapNavMode) {
                         frameId.get() - maxOf(lastAckedId, 0)
+                    } else {
+                        unackedSinceAck
                     }
                     if (inFlight < YunmoProtocol.SEND_WINDOW) return true
                     val remaining = deadline - System.currentTimeMillis()

@@ -26,7 +26,8 @@ import java.util.concurrent.atomic.AtomicInteger
  * nothing about whether the payload was understood.
  *
  * Every parameter here is read from that app rather than guessed: RGBA_8888 into an ImageReader of
- * two buffers, the bitmap halved before compression, JPEG quality 60, one frame every 100 ms.
+ * two buffers, the full-size bitmap compressed through an identity matrix, JPEG quality 60,
+ * one frame every 100 ms.
  *
  * **Nothing else in the app uses this.** It is selected only by a profile that opts in, and the
  * H.264 path it sits beside is untouched - a dash that streams today cannot reach this code.
@@ -140,8 +141,17 @@ class JpegDisplaySource(
     }
 
     private companion object {
-        /** Ride MO's `imageScale`. The dash is fed half the display and scales it back up. */
-        const val SCALE = 0.5f
+        /**
+         * Full size, because that is what the OEM actually sends.
+         *
+         * This was 0.5 on the strength of `BaseLiveThread.imageScale = 0.5f`, but that field never
+         * reaches the still path: `GoogleImageReaderLiveThread` builds its `ImageReader` at the
+         * full panel size and compresses the bitmap through an *identity* `Matrix`, so the JPEG on
+         * the wire is the whole 1024x464 frame. Sending a quarter of the pixels and trusting the
+         * dash to scale them back was a guess, and the first picture the dash ever painted came
+         * back soft and short of the right edge.
+         */
+        const val SCALE = 1.0f
 
         /** Ride MO's compression quality for the same path. */
         const val JPEG_QUALITY = 60
