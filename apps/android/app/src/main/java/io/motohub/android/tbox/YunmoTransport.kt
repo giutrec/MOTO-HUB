@@ -133,7 +133,10 @@ class YunmoTransport(context: Context) : TBoxTransport {
             val mapNav = profile?.yunmoMapNavExperiment == true
 
             teardownSession()
-            val created = Session(mapNavMode = mapNav)
+            val created = Session(
+                mapNavMode = mapNav,
+                jpegMode = profile?.yunmoJpegVideo == true
+            )
             synchronized(sessionLock) { session = created }
             try {
                 created.connect(activeLink, host)
@@ -219,8 +222,14 @@ class YunmoTransport(context: Context) : TBoxTransport {
     }
 
     /** Everything owned by one dash connection, torn down as a unit. */
-    private inner class Session(private val mapNavMode: Boolean) {
+    private inner class Session(
+        private val mapNavMode: Boolean,
+        private val jpegMode: Boolean
+    ) {
         val fatalReported = AtomicBoolean(false)
+
+        /** So a rejected H.264 stream reports the mismatch once, not once per frame. */
+        val h264RefusalReported = AtomicBoolean(false)
         private val running = AtomicBoolean(false)
 
         @Volatile
@@ -396,6 +405,21 @@ class YunmoTransport(context: Context) : TBoxTransport {
 
         fun offerAccessUnit(avcc: ByteArray): Boolean {
             if (!running.get()) return false
+            // A profile that asks for stills must never be quietly served H.264 instead. The JPEG
+            // path is wired into some session paths and not others, and a silent fallback here
+            // cost three rounds of field testing that each reported "JPEG does not work" while no
+            // JPEG had ever left the phone. Refusing loudly turns that into one clear sentence.
+            if (jpegMode) {
+                if (h264RefusalReported.compareAndSet(false, true)) {
+                    reportFatal(
+                        "This motorcycle's profile asks for JPEG stills, but the projection mode " +
+                            "you started sends H.264 video and has no still path. Nothing was " +
+                            "sent to the dashboard. Use a mode that supports stills, or pick a " +
+                            "profile without the JPEG experiment."
+                    )
+                }
+                return false
+            }
             return try {
                 frameExecutor.execute {
                     try {

@@ -22,6 +22,7 @@ import io.motohub.android.aa.SingleKeyKeyManager
 import io.motohub.android.encoding.AdaptiveVideoController
 import io.motohub.android.encoding.AvcEncoder
 import io.motohub.android.encoding.EncoderProfile
+import io.motohub.android.encoding.JpegDisplaySource
 import io.motohub.android.encoding.VideoBackpressureGuard
 import io.motohub.android.feature.controls.HandlebarControlStore
 import io.motohub.android.feature.controls.MediaButtonBridge
@@ -39,6 +40,7 @@ import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxNetworkEvent
 import io.motohub.android.tbox.TBoxModelProfile
 import io.motohub.android.tbox.TBoxTransportFamily
+import io.motohub.android.tbox.SelectingTBoxTransport
 import io.motohub.android.tbox.TBoxSessionHandle
 import io.motohub.android.tbox.TBoxSessionRegistry
 import io.motohub.android.tbox.TBoxStreamingLocks
@@ -64,6 +66,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
     private var compositor: AaCompositor? = null
     private var receiver: AaReceiver? = null
     private var encoder: AvcEncoder? = null
+    private var jpegSource: JpegDisplaySource? = null
     private val adaptiveVideoController = AdaptiveVideoController(this, ::log)
     private var tBoxHandle: TBoxSessionHandle? = null
     private var transportEventsJob: Job? = null
@@ -606,6 +609,21 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         )
         try {
             backpressureGuard = VideoBackpressureGuard()
+
+            // The one dash that is fed stills instead of video. Its OEM app never runs its own
+            // H.264 path, and a dash that acknowledges every frame while painting none is what
+            // feeding it a format it does not decode looks like. Everything below - the encoder,
+            // the adaptive controller - is the path every other motorcycle takes, untouched.
+            //
+            // Wired here as well as in ProjectionSessionService because a rider reaches this dash
+            // through whichever mode they happen to open, and a profile that silently falls back
+            // to H.264 on three of the four paths produced three rounds of field tests that each
+            // reported "JPEG does not work" without a single JPEG ever leaving the phone.
+            if (sessionModelProfile.yunmoJpegVideo) {
+                startJpegOutput(encoderProfile, capabilityProfile, handle)
+                return
+            }
+
             val activeEncoder = AvcEncoder(
                 profile = encoderProfile,
                 onAccessUnit = { accessUnit ->
@@ -682,6 +700,88 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         } catch (failure: Throwable) {
             throw IllegalStateException("Android Auto pipeline did not start: ${failure.message}", failure)
         }
+    }
+
+    /**
+     * Feeds the dash JPEG stills instead of an H.264 stream, with the Android Auto compositor
+     * drawing into the capture surface exactly as it would into the encoder's.
+     *
+     * No encoder is created, so [encoder] stays null - every later call site already tolerates
+     * that (`encoder?.`, and the adaptive controller returns immediately on a null encoder), which
+     * is also why the adaptive bitrate controller simply has nothing to do here: stills carry no
+     * bitrate to adapt.
+     */
+    private fun startJpegOutput(
+        encoderProfile: EncoderProfile,
+        capabilityProfile: AndroidAutoCapabilityProfile,
+        handle: TBoxSessionHandle
+    ) {
+        val transport = handle.transport as? SelectingTBoxTransport
+            ?: error("JPEG projection needs the selecting transport; this session has none")
+        val source = JpegDisplaySource(
+            width = encoderProfile.width,
+            height = encoderProfile.height,
+            frameRate = encoderProfile.frameRate,
+            onFrame = { jpeg, frameId ->
+                val accepted = transport.offerJpegFrame(jpeg, frameId)
+                if (accepted) {
+                    backpressureGuard.onAccepted()
+                    val sent = framesAccepted.incrementAndGet()
+                    if (sent == 1L || sent % FRAME_LOG_INTERVAL == 0L) {
+                        ProjectionEventLog.record("JPEG", "Stills sent to the dashboard: $sent.")
+                    }
+                } else {
+                    val fatal = backpressureGuard.onRejected()
+                    if (backpressureGuard.isStreakStart()) {
+                        ProjectionEventLog.warning(
+                            "JPEG",
+                            "The T-Box rejected a still; holding the session open while the " +
+                                "transport recovers. Rejected so far: " +
+                                "${backpressureGuard.totalRejections()}."
+                        )
+                    }
+                    if (fatal && transportUnavailable.compareAndSet(false, true)) {
+                        serviceScope.launch {
+                            handleRecoverableFailure(
+                                "The T-Box no longer accepts stills " +
+                                    "(${backpressureGuard.rejectionStreak()} in a row)."
+                            )
+                        }
+                    }
+                }
+                accepted
+            },
+            onFailure = { failure ->
+                serviceScope.launch {
+                    handleRecoverableFailure("JPEG capture stopped: ${failure.message}")
+                }
+            }
+        )
+        source.start()
+        val captureSurface = source.surface ?: error("JPEG capture has no surface")
+        jpegSource = source
+        compositor?.setOutput(
+            captureSurface,
+            encoderProfile.width,
+            encoderProfile.height,
+            capabilityProfile.video.width,
+            capabilityProfile.video.height
+        )
+        AndroidAutoRuntime.publish(AndroidAutoRuntimeState.Streaming)
+        ProjectionRuntime.publish(ProjectionRuntimeState.Streaming)
+        hasReachedStreaming = true
+        markWatchdogProgress()
+        startWatchdog()
+        val handlebarEnabled = HandlebarControlStore.isEnabled(this)
+        mediaButtonBridge?.setCaptureActive(handlebarEnabled)
+        if (handlebarEnabled) {
+            mediaButtonBridge?.reassertCaptureAfterTransportReady()
+        }
+        ProjectionEventLog.record(
+            "ANDROID AUTO",
+            "Android Auto streaming to the TFT as JPEG stills " +
+                "(${encoderProfile.width}x${encoderProfile.height} @${encoderProfile.frameRate}fps)."
+        )
     }
 
     private fun observeActiveSession(handle: TBoxSessionHandle) {
@@ -955,6 +1055,8 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         compositor?.clearOutput()
         encoder?.stop()
         encoder = null
+        jpegSource?.stop()
+        jpegSource = null
         adaptiveVideoController.reset()
         tBoxTouchTransform = null
         transportUnavailable.set(false)
@@ -1064,6 +1166,8 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         compositor = null
         encoder?.stop()
         encoder = null
+        jpegSource?.stop()
+        jpegSource = null
         tBoxTouchTransform = null
         releaseWakeLock()
         streamingLocks.release()
