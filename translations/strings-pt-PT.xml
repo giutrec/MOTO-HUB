@@ -1119,4 +1119,5 @@
     <string name="legacy_this_button_has_no_hold_skipping_automatically_44873c53">Este botão não tem pressão longa: é ignorado automaticamente.</string>
     <string name="legacy_that_was_a_single_press_press_twice_quickly_for__e774e0f2">Isso foi uma pressão simples: carregue duas vezes rapidamente para a dupla.</string>
     <string name="legacy_that_was_a_quick_tap_press_and_hold_a_moment_lon_5b9c9d4d">Isso foi um toque rápido: mantenha carregado mais um instante.</string>
+    <string name="legacy_open_hotspot_settings_7d1f3d4a">Abrir as definições do hotspot</string>
 </resources>

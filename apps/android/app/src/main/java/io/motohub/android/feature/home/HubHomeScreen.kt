@@ -512,7 +512,12 @@ private fun ErrorBanner(
         (officialAppHelpApplies || showPortConflictHelp) &&
         !showWifiSettingsAction && !showAndroidAutoSetupHelp
     val showOfficialAppHintProminently = officialAppMayHoldTBox && showPortConflictHelp
+    // Not threaded up as a callback like the others: a plain navigation intent with no session
+    // state behind it, and the screen it opens is fixed by the message that produced it.
+    val context = LocalContext.current
+    val showHotspotSettingsAction = message == WifiGate.HOTSPOT_OFF_MESSAGE
     val hasExtra = showPortConflictHelp || showWifiSettingsAction || showAndroidAutoSetupHelp ||
+        showHotspotSettingsAction ||
         (officialAppMayHoldTBox && !showOfficialAppHintProminently)
     Card(
         modifier = Modifier
@@ -602,6 +607,12 @@ private fun ErrorBanner(
                 }
                 if (showWifiSettingsAction) {
                     SecondaryAction("Open Wi-Fi settings", onOpenWifiSettings)
+                }
+                if (showHotspotSettingsAction) {
+                    SecondaryAction(
+                        motoHubText("Open hotspot settings"),
+                        onClick = { WifiGate.openHotspotSettings(context) }
+                    )
                 }
                 if (showAndroidAutoSetupHelp) {
                     Text(

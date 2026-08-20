@@ -1695,4 +1695,5 @@
     <string name="legacy_this_button_has_no_hold_skipping_automatically_44873c53">Ce bouton n\'a pas d\'appui long : il est ignoré automatiquement.</string>
     <string name="legacy_that_was_a_single_press_press_twice_quickly_for__e774e0f2">C\'était un appui simple : appuyez deux fois rapidement pour le double.</string>
     <string name="legacy_that_was_a_quick_tap_press_and_hold_a_moment_lon_5b9c9d4d">C\'était une pression brève : maintenez appuyé un instant de plus.</string>
+    <string name="legacy_open_hotspot_settings_7d1f3d4a">Ouvrir les paramètres du point d\'accès</string>
 </resources>

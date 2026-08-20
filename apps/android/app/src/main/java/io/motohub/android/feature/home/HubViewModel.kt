@@ -339,7 +339,21 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
             )
             return
         }
-        if (!WifiGate.isWifiEnabled(getApplication())) {
+        // "Is Wi-Fi on" is the wrong question for a dash that joins a network the phone hosts:
+        // tethering turns the station radio off, so that check reports false for the whole life
+        // of a working PHONE_HOTSPOT session and used to block every connect through here -
+        // manual and automatic alike. See WifiGate.isHostingANetwork for the field log.
+        if (profile.connectionMode == TBoxConnectionMode.PHONE_HOTSPOT) {
+            if (!WifiGate.isHostingANetwork()) {
+                ProjectionEventLog.warning(
+                    "CONNECTION",
+                    "Connection request blocked: ${profile.ssid} expects the phone to host the " +
+                        "network and no hotspot subnet exists on this phone."
+                )
+                showError(WifiGate.HOTSPOT_OFF_MESSAGE)
+                return
+            }
+        } else if (!WifiGate.isWifiEnabled(getApplication())) {
             ProjectionEventLog.warning("CONNECTION", "Connection request blocked: phone Wi-Fi is off.")
             showError(WifiGate.WIFI_OFF_MESSAGE)
             return

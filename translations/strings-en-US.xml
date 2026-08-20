@@ -1697,4 +1697,5 @@
     <string name="legacy_this_button_has_no_hold_skipping_automatically_44873c53">This button has no hold - skipping automatically.</string>
     <string name="legacy_that_was_a_single_press_press_twice_quickly_for__e774e0f2">That was a single press - press twice quickly for double.</string>
     <string name="legacy_that_was_a_quick_tap_press_and_hold_a_moment_lon_5b9c9d4d">That was a quick tap - press and hold a moment longer.</string>
+    <string name="legacy_open_hotspot_settings_7d1f3d4a">Open hotspot settings</string>
 </resources>

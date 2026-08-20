@@ -1119,4 +1119,5 @@
     <string name="legacy_this_button_has_no_hold_skipping_automatically_44873c53">Questo pulsante non ha la pressione prolungata: lo salto automaticamente.</string>
     <string name="legacy_that_was_a_single_press_press_twice_quickly_for__e774e0f2">Quella era una pressione singola: premi due volte rapidamente per la doppia.</string>
     <string name="legacy_that_was_a_quick_tap_press_and_hold_a_moment_lon_5b9c9d4d">Quello era un tocco rapido: tieni premuto un istante in più.</string>
+    <string name="legacy_open_hotspot_settings_7d1f3d4a">Apri le impostazioni dell\'hotspot</string>
 </resources>

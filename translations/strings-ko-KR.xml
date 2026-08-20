@@ -1690,4 +1690,5 @@
     <string name="legacy_this_button_has_no_hold_skipping_automatically_44873c53">이 버튼에는 길게 누르기가 없어 자동으로 건너뜁니다.</string>
     <string name="legacy_that_was_a_single_press_press_twice_quickly_for__e774e0f2">방금은 한 번 누른 것입니다. 더블은 빠르게 두 번 누르세요.</string>
     <string name="legacy_that_was_a_quick_tap_press_and_hold_a_moment_lon_5b9c9d4d">방금은 짧게 누른 것입니다. 조금 더 길게 누르고 있으세요.</string>
+    <string name="legacy_open_hotspot_settings_7d1f3d4a">핫스팟 설정 열기</string>
 </resources>
