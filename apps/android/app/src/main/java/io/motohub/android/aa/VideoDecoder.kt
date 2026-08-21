@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 // Adapted from headunit-revived (AGPLv3): decoder/VideoDecoder.kt
 // Trimmed to the H.264 (video/avc) hardware/software MediaCodec path only. HUR's H.265/HEVC,
 // bundled FFmpeg, software-YUV GL sink, and Settings dependencies are removed. MOTO-HUB requests

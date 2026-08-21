@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 // Navigation-status (instrument cluster) channel support, following the message flow of
 // headunit-revived (AGPLv3): aap/AapNavigation.kt, trimmed to a data feed — no notifications.
 package io.motohub.android.aa

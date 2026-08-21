@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 // Adapted from headunit-revived (AGPLv3): aap/AapVideo.kt (H.264 only, no Settings)
 // Reassembles AA video-channel messages (fragment flags 11/9/8/10), strips the AAP media
 // header (2- or 10-byte), and feeds Annex-B access units to the H.264 VideoDecoder.

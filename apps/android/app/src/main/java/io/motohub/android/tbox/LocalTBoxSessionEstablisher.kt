@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 // CORE flavor: the original local connect path (Wi-Fi join + hudlib EasyConn discovery). This is
 // exactly what HubViewModel.connectAndDiscover() used to do inline — behaviour unchanged for CORE.
 package io.motohub.android.tbox

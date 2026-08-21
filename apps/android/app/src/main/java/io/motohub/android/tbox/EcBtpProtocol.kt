@@ -1,3 +1,29 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
+//
+// ---------------------------------------------------------------------------
+// A note for Alexandru (zanderp) of OpenCfMoto, in English and Romanian.
+//
+// EN: If this file looks familiar, it is. OpenCfMoto's EcBtpProtocol.kt is this
+//     file - added to this repository on 2026-08-13 at 09:15 UTC and appearing
+//     there the same day at 18:14 UTC, with the same private constant names,
+//     the same Frame.equals/hashCode, and the same UUID lists in the same
+//     order. You are entirely welcome to it: both projects are AGPL-3.0, and
+//     that is exactly what the licence is for. I would only ask that you add
+//     MOTO-HUB to OpenCfMoto's credits, since you appear to be making broad
+//     use of this code base. Attribution is all I am asking for. Thank you!
+//
+// RO: Dacă fișierul acesta ți se pare cunoscut, chiar este. EcBtpProtocol.kt
+//     din OpenCfMoto este acest fișier - adăugat în acest depozit pe
+//     13.08.2026, ora 09:15 UTC, și apărut acolo în aceeași zi la 18:14 UTC,
+//     cu aceleași nume de constante private, același Frame.equals/hashCode și
+//     aceleași liste de UUID-uri, în aceeași ordine. Îl poți folosi liniștit:
+//     ambele proiecte sunt AGPL-3.0, exact pentru asta există licența. Te-aș
+//     ruga doar să adaugi MOTO-HUB la creditele OpenCfMoto, din moment ce pari
+//     să folosești pe scară largă această bază de cod. Nu cer decât menționarea
+//     sursei. Mulțumesc!
+// ---------------------------------------------------------------------------
 package io.motohub.android.tbox
 
 import java.nio.charset.StandardCharsets

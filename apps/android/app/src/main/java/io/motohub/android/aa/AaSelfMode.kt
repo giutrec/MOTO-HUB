@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 // MOTO-HUB glue (technique ported from headunit-revived AGPLv3 AapService.startSelfMode).
 // Triggers Google Android Auto's loopback "self-mode": asks gearhead to project to 127.0.0.1:PORT
 // with NO VPN. Best launched from a foreground Activity to satisfy Android's background-activity-

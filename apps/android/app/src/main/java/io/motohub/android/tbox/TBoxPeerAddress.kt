@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 // Pure IPv4 subnet math for deriving the T-Box peer address. Not GPL (no hudlib) — moved here
 // from RideDaemonTransport so it stays available to both flavors (TBoxPortScanner uses it in
 // src/main, and RideDaemonTransport uses it in the CORE-only source set).

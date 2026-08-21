@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 // CORE-only: runs the actual T-Box connection (Wi-Fi join + EasyConn discovery via the GPL
 // hudlib transport) and installs the session, so a companion app (PRO) can trigger it over AIDL
 // without containing any of this GPL code itself. Mirrors HubViewModel.connectAndDiscover()'s
