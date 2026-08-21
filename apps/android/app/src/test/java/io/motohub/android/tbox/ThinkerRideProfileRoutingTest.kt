@@ -26,6 +26,12 @@ class ThinkerRideProfileRoutingTest {
         assertEquals(ProfileOverride.KOVE_800X, ProfileOverride.byKey("kove_800x"))
     }
 
+    /**
+     * The family now decides more than the wire. AndroidAutoSessionService.handoffKeepsProcessUnbound
+     * skips the T-Box process rebind for THINKERRIDE alone, because that transport opens no
+     * outbound IP socket for the default route to carry. Moving a profile into this family
+     * therefore also changes its Android Auto hand-off - which is what this test still guards.
+     */
     @Test
     fun onlyThinkerRideProfilesRouteToTheThinkerRideTransport() {
         assertEquals(TBoxTransportFamily.THINKERRIDE, TBoxModelProfile.KOVE_800X.transportFamily)

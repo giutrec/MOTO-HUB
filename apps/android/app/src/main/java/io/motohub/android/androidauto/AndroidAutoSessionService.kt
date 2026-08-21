@@ -407,17 +407,64 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
      * directly, which tore the whole session down on the FIRST transient handshake error of a
      * recovery whose own doc promised a 120s retry budget.
      */
+    /**
+     * Whether the T-Box hand-off can leave Android's process route where Android Auto left it.
+     *
+     * `bindProcessToNetwork` moves only this process's DEFAULT route. Every socket that carries
+     * dash traffic is bound to the T-Box network explicitly instead - `TBoxLink.createSocket`
+     * goes through `network.socketFactory`, including the descriptor handed to the EasyConn Go
+     * SDK - so the route is belt-and-braces rather than load-bearing, which is why a binding
+     * Android refuses is already survivable everywhere else in the connector.
+     *
+     * It is not free, though. The AAP socket to Google's Android Auto is the one socket on this
+     * path that is deliberately NOT network-bound (`AaReceiver.openWirelessClientSocket`), and on
+     * a KOVE 800X rider's phone it went silent within seconds of the rebind, twice, and died on
+     * the 15s read timeout with the T-Box link otherwise healthy (log 2026-08-20 23:38:17 and
+     * 23:39:17). `AaReceiver.bindWirelessServerSocket` already carries a workaround for the same
+     * interference on the bind path; this is the same conflict on an established socket.
+     *
+     * Scoped to ThinkerRide because there it is provably pointless: that transport opens no
+     * outbound IP socket at all - three wildcard `ServerSocket`s and a BLE link, with the dash
+     * dialling in - so there is nothing for the default route to carry. EasyConn and Yunmo do
+     * open outbound sockets, and even though those are network-bound too, nothing in this log
+     * says their dashes need the change. They keep the behaviour they ship with.
+     */
+    private fun handoffKeepsProcessUnbound(handle: TBoxSessionHandle): Boolean =
+        resolveSessionProfile(handle).transportFamily == TBoxTransportFamily.THINKERRIDE
+
+    /**
+     * The profile this session is really speaking.
+     *
+     * The transport's own profile wins when discovery changed it - a dash that answered Yunmo
+     * after EasyConn found nothing is not the profile the saved motorcycle resolves to. It is
+     * null for every session that did NOT take that switch, though ([SelectingTBoxTransport]
+     * clears it in `configureProtocolProfile` and only the Yunmo fallback sets it), so the saved
+     * motorcycle is what answers for a KOVE or a CFMOTO - not an edge case, the normal path.
+     */
+    private fun resolveSessionProfile(handle: TBoxSessionHandle): TBoxModelProfile =
+        handle.transport.activeProtocolProfile ?: TBoxModelProfile.resolve(
+            handle.motorcycle.modelId,
+            capabilityStore.load(handle.motorcycle)?.capabilities,
+            ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
+        )
+
     private suspend fun startBikeStream(handle: TBoxSessionHandle) {
         @Suppress("NAME_SHADOWING")
         var handle = handle
         if (stopping) return
-        if (handle.link.network != null) {
+        if (handle.link.network != null && !handoffKeepsProcessUnbound(handle)) {
             val rebound = handle.networkConnector.rebindProcessToTBoxWhenAvailable(
                 TBOX_NETWORK_REBIND_TIMEOUT_MS
             )
             rebound.exceptionOrNull()?.let {
                 throw IllegalStateException("T-Box network restore failed: ${it.message}", it)
             }
+        } else if (handle.link.network != null) {
+            ProjectionEventLog.record(
+                "NETWORK",
+                "Android Auto video is ready; leaving the process route alone for the T-Box " +
+                    "hand-off (this transport opens no socket that needs it)."
+            )
         } else {
             ProjectionEventLog.record(
                 "NETWORK",
@@ -474,13 +521,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
 
         val configuration = configurationResult.getOrThrow()
         val quality = MotoHubSettings.videoQuality(this)
-        // The transport's own profile wins when discovery changed it - a dash that answered Yunmo
-        // after EasyConn found nothing is not the profile the saved motorcycle resolves to.
-        val sessionModelProfile = handle.transport.activeProtocolProfile ?: TBoxModelProfile.resolve(
-            handle.motorcycle.modelId,
-            capabilityStore.load(handle.motorcycle)?.capabilities,
-            ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
-        )
+        val sessionModelProfile = resolveSessionProfile(handle)
         val encoderProfile = configuration.encoderProfile.copy(
             // Frame rate and bitrate were previously honoured only on the native mirror path, so a
             // dash whose profile asks for a slower capture still got Android Auto's negotiated 30
