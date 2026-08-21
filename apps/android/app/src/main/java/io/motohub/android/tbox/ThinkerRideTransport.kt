@@ -20,6 +20,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -131,7 +133,8 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
             // The dash only acts on a mirror-start once its own pairing handshake has landed, so
             // never fire one into a half-finished BLE session — that is what the AA retry path
             // used to do, 8 ms after re-opening the link.
-            if (!active.ble.awaitPairConfirmation(PAIR_CONFIRM_TIMEOUT_MS)) {
+            val confirmedBeforeStart = active.ble.awaitPairConfirmation(PAIR_CONFIRM_TIMEOUT_MS)
+            if (!confirmedBeforeStart) {
                 ProjectionEventLog.record(
                     "THINKERRIDE",
                     "The dashboard has not confirmed Bluetooth pairing after " +
@@ -167,11 +170,39 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
                         "(stream ${area.width}x${area.height})."
                 }
             )
-            val video = withTimeoutOrNull(VIDEO_CONNECT_TIMEOUT_MS) { active.videoConnected.await() }
-                ?: error(
-                    "The dashboard acknowledged the session but never opened the video " +
-                        "connection. Power-cycle the dash screen and connect again."
-                )
+            // A mirror-start sent without a confirmation is a shot in the dark: in the field every
+            // session that fired one went on to wait out the full video timeout, while every
+            // session whose confirmation had landed got its video channel within 9s (KOVE 800X
+            // rider log, 2026-08-20, 3 of each). If the confirmation turns up late - it has taken
+            // 11s where the fallback allows 6 - that is new information arriving on a session that
+            // is otherwise heading for the timeout, so spend one more mirror-start on it.
+            //
+            // Deliberately NOT a repeat of the 2026-08-14 experiment described above: no pairing
+            // handshake is re-sent and nothing is added in front of a mirror-start that already
+            // had its confirmation. This fires only when the first attempt went out blind and the
+            // dash has since confirmed, so a session that works today never reaches it.
+            val video = coroutineScope {
+                val lateRetry = if (confirmedBeforeStart) null else launch {
+                    if (!active.ble.awaitPairConfirmation(LATE_PAIR_CONFIRM_WINDOW_MS)) return@launch
+                    if (active.videoConnected.isCompleted) return@launch
+                    ProjectionEventLog.record(
+                        "THINKERRIDE",
+                        "The dashboard confirmed Bluetooth pairing after the first mirror-start " +
+                            "had already gone out blind, and no video channel has opened since; " +
+                            "sending one more mirror-start now that the confirmation is in."
+                    )
+                    active.ble.sendMirrorStatus(true)
+                }
+                val connected =
+                    withTimeoutOrNull(VIDEO_CONNECT_TIMEOUT_MS) { active.videoConnected.await() }
+                // Cancel before leaving: coroutineScope waits for its children, and this one
+                // would otherwise hold the session open for the rest of its own window.
+                lateRetry?.cancel()
+                connected
+            } ?: error(
+                "The dashboard acknowledged the session but never opened the video " +
+                    "connection. Power-cycle the dash screen and connect again."
+            )
             // The dash may have dropped and reopened the channel since the first accept; the
             // newest socket is the live one, the deferred only remembers the first.
             active.beginVideo(active.latestVideoSocket ?: video, area)
@@ -547,6 +578,16 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
 
         /** How long [start] waits for `send_pairresult` before going ahead regardless. */
         const val PAIR_CONFIRM_TIMEOUT_MS = 6_000L
+
+        /**
+         * How long a blind mirror-start keeps watching for a late `send_pairresult`, so it can
+         * spend one more mirror-start on a confirmation that missed [PAIR_CONFIRM_TIMEOUT_MS].
+         * A confirmation has been seen landing 11.0s after the BLE handshake (KOVE 800X rider
+         * log, 2026-08-20 23:30:10 to 23:30:21), which the 6s fallback cannot wait for without
+         * delaying every dash that answers promptly. Kept well inside
+         * [VIDEO_CONNECT_TIMEOUT_MS] so the second attempt still has a window to be answered in.
+         */
+        const val LATE_PAIR_CONFIRM_WINDOW_MS = 20_000L
 
         /** How long [stop] gives the mirror-stop packets to leave the phone. */
         const val BLE_DRAIN_TIMEOUT_MS = 1_500L
