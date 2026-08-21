@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 // MOTO-HUB receiver glue (uses AGPLv3 code ported from headunit-revived). Orchestrates the loopback
 // "self-mode" Android Auto Projection receiver:
 //   1. Listen on TCP 127.0.0.1:5288 (+ NSD _aawireless._tcp).
@@ -72,6 +75,9 @@ class AaReceiver(
      * one to report when a newer Android Auto refuses every startup entry point.
      */
     @Volatile private var androidAutoConnected = false
+
+    /** Rate-limits the process-pin diagnosis to one line per receiver, not one per poll. */
+    @Volatile private var headUnitPinLogged = false
     val hasAndroidAutoConnected: Boolean get() = androidAutoConnected
     @Volatile private var input: AaInput? = null
     private val videoDecoder = VideoDecoder().apply {
@@ -261,12 +267,7 @@ class AaReceiver(
                 continue
             }
             val socket = try {
-                Socket().apply {
-                    connect(
-                        java.net.InetSocketAddress("127.0.0.1", HEAD_UNIT_SERVER_PORT),
-                        HEAD_UNIT_SERVER_CONNECT_TIMEOUT_MS
-                    )
-                }
+                connectHeadUnitServer()
             } catch (_: Exception) {
                 // Not running: this is the normal state until the rider starts it.
                 if (!announced) {
@@ -302,6 +303,72 @@ class AaReceiver(
     } catch (_: InterruptedException) {
         Thread.currentThread().interrupt()
         false
+    }
+
+    /**
+     * Connects to Android Auto's head unit server, stepping over a process→network pin if that is
+     * what is in the way.
+     *
+     * A process pinned to the bike network resolves 127.0.0.1 through that network's routing
+     * table, which carries no loopback route: the connect fails "network is unreachable" while
+     * the server is listening perfectly well, and [headUnitServerLoop] reports it as "not
+     * running" - the wrong diagnosis, and a remedy the rider has already applied.
+     *
+     * The Core session never meets this, because [AndroidAutoSessionService] releases the pin
+     * before it starts the receiver and does not restore it until the hand-off. The receiver
+     * ADVANCED attaches over AIDL has no such release: it starts while the bike link is up, so
+     * this is the path the retry is here for.
+     *
+     * The pin is dropped for the retry only - never on the first attempt, and never on a refused
+     * connection, which is the ordinary "the rider has not started the server yet" answer. Dash
+     * traffic does not ride on the process route (`TBoxLink.createSocket` binds every socket to
+     * the network itself) and the connector already treats an absent pin as a supported state
+     * ([TBoxNetworkConnector.releaseProcessBinding]), so the few hundred microseconds this takes
+     * cost the bike link nothing.
+     */
+    private fun connectHeadUnitServer(): Socket = try {
+        openHeadUnitServerSocket()
+    } catch (failure: Exception) {
+        if (!isStaleNetworkPinFailure(failure)) throw failure
+        val cm = context.getSystemService(ConnectivityManager::class.java) ?: throw failure
+        val pinned = runCatching { cm.boundNetworkForProcess }.getOrNull() ?: throw failure
+        if (!headUnitPinLogged) {
+            headUnitPinLogged = true
+            log(
+                "[AA] head unit server unreachable behind the process→network pin ($pinned), not " +
+                    "absent; dropping the pin for the connect and restoring it straight after"
+            )
+        }
+        try {
+            if (!runCatching { cm.bindProcessToNetwork(null) }.getOrDefault(false)) throw failure
+            openHeadUnitServerSocket()
+        } finally {
+            // Restore only what we took away. If the connector re-pinned the process while we
+            // were connecting, that binding is the current one and overwriting it would undo a
+            // decision this class knows nothing about.
+            if (runCatching { cm.boundNetworkForProcess }.getOrNull() == null) {
+                runCatching { cm.bindProcessToNetwork(pinned) }
+            }
+        }
+    }
+
+    /**
+     * A connect that closes its socket when it fails. `Socket().apply { connect(…) }` leaks the
+     * descriptor on every unsuccessful attempt, and this one runs every [HEAD_UNIT_SERVER_POLL_MS]
+     * for as long as Android Auto has not attached.
+     */
+    private fun openHeadUnitServerSocket(): Socket {
+        val socket = Socket()
+        return try {
+            socket.connect(
+                InetSocketAddress("127.0.0.1", HEAD_UNIT_SERVER_PORT),
+                HEAD_UNIT_SERVER_CONNECT_TIMEOUT_MS
+            )
+            socket
+        } catch (failure: Exception) {
+            runCatching { socket.close() }
+            throw failure
+        }
     }
 
     private fun acceptLoop() {
