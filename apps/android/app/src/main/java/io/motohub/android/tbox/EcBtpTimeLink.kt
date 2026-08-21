@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.tbox
 
 import android.annotation.SuppressLint
@@ -258,6 +261,25 @@ internal class EcBtpTimeLink(
                 dataCharacteristic = characteristic
                 subscribe(gatt, characteristic)
                 log("EC-BTP: listening to $label on ${characteristic.uuid}.")
+            }
+
+            /**
+             * The pre-33 notification callback, which is the only one Android 12 has.
+             *
+             * The value-carrying overload below is API 33. Overriding just that one compiles
+             * against compileSdk 36 and then never fires on a minSdk-31 phone, because the
+             * framework class there has no such method to dispatch to - the subscription
+             * succeeds and not one notification is ever delivered. On 33+ this is dead code:
+             * the platform's own value-carrying default is what forwards to this shape, and
+             * overriding it replaces that forwarding, so there is no double delivery.
+             */
+            @Suppress("DEPRECATION")
+            override fun onCharacteristicChanged(
+                gatt: BluetoothGatt,
+                characteristic: BluetoothGattCharacteristic
+            ) {
+                val value = characteristic.value ?: return
+                onCharacteristicChanged(gatt, characteristic, value)
             }
 
             override fun onCharacteristicChanged(
