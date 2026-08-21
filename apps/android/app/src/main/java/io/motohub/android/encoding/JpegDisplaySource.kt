@@ -77,6 +77,15 @@ class JpegDisplaySource(
     private var cropped: Bitmap? = null
     private var croppedCanvas: Canvas? = null
     private val jpegBuffer = ByteArrayOutputStream(DEFAULT_JPEG_BUFFER_BYTES)
+    /** Read by the capture thread, written by the send thread. */
+    @Volatile private var quality = QUALITY_LADDER.first()
+    private var qualityStep = 0
+    private var goodWindows = 0
+    private var adaptAtMillis = 0L
+    private var adaptTicks = 0
+    private var adaptAccepted = 0
+    private var compressedAtMillis = 0L
+    private var periodMillis = 100L
     private val cropSource = Rect()
     private val cropDestination = Rect()
 
@@ -106,8 +115,10 @@ class JpegDisplaySource(
         imageReader = reader
         surface = reader.surface
 
-        val periodMillis = (1000L / frameRate.coerceAtLeast(1)).coerceAtLeast(1L)
-        statsAtMillis = SystemClock.elapsedRealtime()
+        periodMillis = (1000L / frameRate.coerceAtLeast(1)).coerceAtLeast(1L)
+        val now = SystemClock.elapsedRealtime()
+        statsAtMillis = now
+        adaptAtMillis = now
         sender = Executors.newSingleThreadScheduledExecutor { runnable ->
             Thread(runnable, "motohub-jpeg-send")
         }.also {
@@ -116,7 +127,7 @@ class JpegDisplaySource(
 
         ProjectionEventLog.record(
             "JPEG",
-            "Capturing ${width}x$height as JPEG stills, quality $JPEG_QUALITY, " +
+            "Capturing ${width}x$height as JPEG stills, quality $quality (adaptive), " +
                 "one frame on the wire every ${periodMillis}ms (${frameRate}fps)."
         )
     }
@@ -134,7 +145,16 @@ class JpegDisplaySource(
             runCatching { reader.acquireLatestImage()?.close() }
             return
         }
+        // Compressing faster than the send tick is pure heat: the extra frames are overwritten
+        // before anyone can send them. One per tick keeps the newest picture ready for the moment
+        // a send slot opens, which is what the delay the rider notices is actually made of.
+        val now = SystemClock.elapsedRealtime()
+        if (now - compressedAtMillis < periodMillis) {
+            runCatching { reader.acquireLatestImage()?.close() }
+            return
+        }
         val image = runCatching { reader.acquireLatestImage() }.getOrNull() ?: return
+        compressedAtMillis = now
         try {
             val plane = image.planes.firstOrNull() ?: return
             val pixelStride = plane.pixelStride
@@ -155,7 +175,7 @@ class JpegDisplaySource(
             }
 
             jpegBuffer.reset()
-            frame.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, jpegBuffer)
+            frame.compress(Bitmap.CompressFormat.JPEG, quality, jpegBuffer)
             latest.set(jpegBuffer.toByteArray())
             captured.incrementAndGet()
         } catch (failure: Throwable) {
@@ -175,18 +195,68 @@ class JpegDisplaySource(
             } else {
                 if (jpeg === lastSent) repeated++
                 lastSent = jpeg
-                val id = frameId.getAndIncrement()
-                if (onFrame(jpeg, id)) {
+                // The id only advances for a frame the transport actually took. The dash echoes
+                // the last id it processed and our own flow control is keyed on that number, so
+                // numbering frames that were never sent throws the two out of step - it was
+                // running six ids ahead of reality in the field log of 2026-08-21.
+                if (onFrame(jpeg, frameId.get())) {
+                    frameId.incrementAndGet()
                     sent++
+                    adaptAccepted++
                     bytesSent += jpeg.size
                 } else {
                     refused++
                 }
             }
+            adaptTicks++
+            adaptQuality()
             reportThroughput()
         } catch (failure: Throwable) {
             if (running.get()) onFailure(failure)
         }
+    }
+
+    /**
+     * Walks the JPEG quality down until the dash can keep up, and back up when it can.
+     *
+     * The X-Cape's link is not the constraint - the field log of 2026-08-21 measured 5GHz at
+     * -33dBm and 39Mbps while we were managing 125 KB/s, about a fortieth of it. The dash itself
+     * accepts roughly 130 KB/s no matter how that is divided up: at half resolution it took 5.5
+     * stills a second of ~22 KB, at full resolution 1.7 a second of ~78 KB. Bytes are the budget,
+     * so bytes are what this spends - and quality is the only way to spend fewer of them without
+     * shrinking the picture, which this dash cannot do anything with. It blits a still at its
+     * natural size and leaves the rest of the panel black, which is what the "cut off on the
+     * right" of the half-resolution build actually was.
+     */
+    private fun adaptQuality() {
+        val now = SystemClock.elapsedRealtime()
+        if (now - adaptAtMillis < ADAPT_INTERVAL_MS || adaptTicks == 0) return
+        val acceptance = adaptAccepted.toDouble() / adaptTicks
+        val previous = qualityStep
+        if (acceptance < STARVED_BELOW && qualityStep < QUALITY_LADDER.lastIndex) {
+            qualityStep++
+            goodWindows = 0
+        } else if (acceptance > COMFORTABLE_ABOVE && qualityStep > 0) {
+            // Climb back slowly. Stepping up on a single good window makes the picture pulse
+            // between two qualities every couple of seconds, which reads worse than either.
+            if (++goodWindows >= WINDOWS_BEFORE_CLIMBING) {
+                qualityStep--
+                goodWindows = 0
+            }
+        } else {
+            goodWindows = 0
+        }
+        if (qualityStep != previous) {
+            quality = QUALITY_LADDER[qualityStep]
+            ProjectionEventLog.record(
+                "JPEG",
+                "Still quality now $quality (the dashboard was taking " +
+                    "${(acceptance * 100).toInt()}% of the frames offered)."
+            )
+        }
+        adaptAtMillis = now
+        adaptTicks = 0
+        adaptAccepted = 0
     }
 
     /**
@@ -206,7 +276,7 @@ class JpegDisplaySource(
             "%.1f fps out of the phone, %.1f fps on the wire, %.0f KB average, %.0f KB/s"
                 .format(captured.getAndSet(0) / seconds, sent / seconds, averageKb,
                     bytesSent / 1024.0 / seconds) +
-                " ($refused refused, ${idle + repeated} ticks with nothing new)"
+                " at quality $quality ($refused held back, ${idle + repeated} ticks with nothing new)"
         )
         sent = 0
         refused = 0
@@ -265,8 +335,18 @@ class JpegDisplaySource(
     }
 
     private companion object {
-        /** Ride MO's compression quality for the same path. */
-        const val JPEG_QUALITY = 60
+        /**
+         * Ride MO's compression quality is the first rung and the ceiling; the rest is headroom
+         * for a dash that cannot drink that fast. The floor is a picture that is visibly coarse in
+         * gradients but keeps road lines and labels legible, which beats a sharp one that arrives
+         * twice a second.
+         */
+        val QUALITY_LADDER = intArrayOf(60, 50, 40, 32, 25, 20)
+
+        const val ADAPT_INTERVAL_MS = 2_000L
+        const val STARVED_BELOW = 0.5
+        const val COMFORTABLE_ABOVE = 0.9
+        const val WINDOWS_BEFORE_CLIMBING = 3
 
         /** Roughly one full-size map frame at [JPEG_QUALITY]; the stream grows itself if wrong. */
         const val DEFAULT_JPEG_BUFFER_BYTES = 128 * 1024

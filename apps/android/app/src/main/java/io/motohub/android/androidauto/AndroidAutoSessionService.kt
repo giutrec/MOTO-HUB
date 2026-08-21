@@ -93,6 +93,8 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
     private var backpressureGuard = VideoBackpressureGuard()
     private val videoStreamStartRequested = AtomicBoolean(false)
     private val framesAccepted = AtomicLong(0)
+    /** When the dash last took a still. The stills path's liveness signal; see the offer below. */
+    private val lastStillAcceptedAt = AtomicLong(0)
     private val recoveryRequested = AtomicBoolean(false)
     private var capabilityProfile = AndroidAutoCapabilityProfiles.fallback()
     @Volatile private var tBoxTouchTransform: TBoxTouchTransform? = null
@@ -762,6 +764,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
     ) {
         val transport = handle.transport as? SelectingTBoxTransport
             ?: error("JPEG projection needs the selecting transport; this session has none")
+        lastStillAcceptedAt.set(SystemClock.elapsedRealtime())
         val source = JpegDisplaySource(
             width = encoderProfile.width,
             height = encoderProfile.height,
@@ -770,25 +773,23 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                 val accepted = transport.offerJpegFrame(jpeg, frameId)
                 if (accepted) {
                     backpressureGuard.onAccepted()
+                    lastStillAcceptedAt.set(SystemClock.elapsedRealtime())
                     val sent = framesAccepted.incrementAndGet()
                     if (sent == 1L || sent % FRAME_LOG_INTERVAL == 0L) {
                         ProjectionEventLog.record("JPEG", "Stills sent to the dashboard: $sent.")
                     }
                 } else {
-                    val fatal = backpressureGuard.onRejected()
-                    if (backpressureGuard.isStreakStart()) {
-                        ProjectionEventLog.warning(
-                            "JPEG",
-                            "The T-Box rejected a still; holding the session open while the " +
-                                "transport recovers. Rejected so far: " +
-                                "${backpressureGuard.totalRejections()}."
-                        )
-                    }
-                    if (fatal && transportUnavailable.compareAndSet(false, true)) {
+                    // A refused still is this path's normal resting state, not a fault. The source
+                    // offers one every 100ms and this dash takes about two a second, so the other
+                    // eight are simply the queue being busy - the guard's streak rule wrote 11,107
+                    // warnings into one field log and buried everything worth reading. What does
+                    // mean something is a dash that stops taking stills altogether, so that is
+                    // what is watched here: nothing accepted at all, for a while.
+                    val idle = SystemClock.elapsedRealtime() - lastStillAcceptedAt.get()
+                    if (idle > STILL_SILENCE_FATAL_MS && transportUnavailable.compareAndSet(false, true)) {
                         serviceScope.launch {
                             handleRecoverableFailure(
-                                "The T-Box no longer accepts stills " +
-                                    "(${backpressureGuard.rejectionStreak()} in a row)."
+                                "The T-Box has not taken a still for ${idle / 1000} seconds."
                             )
                         }
                     }
@@ -1367,6 +1368,13 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         private const val RECOVERY_RETRY_MILLIS = 5_000L
         private const val RECOVERY_GIVE_UP_MILLIS = 120_000L
         private const val WAKE_LOCK_TIMEOUT_MS = 4 * 60 * 60 * 1_000L
+
+        /**
+         * How long the dash may take no still at all before the session is treated as lost.
+         * Generous on purpose: this path expects most offers to be refused, so only complete
+         * silence means anything, and a dash that is merely slow must not be torn down.
+         */
+        private const val STILL_SILENCE_FATAL_MS = 15_000L
 
         fun start(context: Context) {
             if (io.motohub.android.proFeatureUnavailable(context, "Android Auto")) return
