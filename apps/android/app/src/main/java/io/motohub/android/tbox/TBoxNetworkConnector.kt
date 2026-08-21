@@ -642,7 +642,8 @@ class TBoxNetworkConnector(context: Context) {
                     "phone cannot see that channel, or this dash never broadcasts at all and " +
                     "expects your phone to HOST the network - check whether its pairing screen " +
                     "says \"open Android hotspot\", and if so pair it again with the " +
-                    "\"My phone hosts the hotspot\" mode."
+                    "\"My phone hosts the hotspot\" mode." +
+                    scanBlindSpotHint(target, topFiveGhzMhz, results.size)
             )
         } else {
             // The security line is the one that can convict us rather than the dash. The specifier
@@ -1410,6 +1411,50 @@ internal fun regulatoryReach(topFiveGhzMhz: Int?): String = when {
     topFiveGhzMhz >= 5745 -> "up to UNII-3"
     topFiveGhzMhz >= 5500 -> "up to UNII-2C"
     else -> "up to UNII-1/2A"
+}
+
+/**
+ * A scan this small is not evidence. Android throttles `getScanResults` hard, and a QJ rider's
+ * eight attempts came back with 1, 2, 2, 2, 3 and 10 networks (log 2026-08-12) - on the low
+ * readings "the dash is not in the scan" says more about the scan than it does about the dash.
+ */
+private const val SPARSE_SCAN_NETWORKS = 3
+
+/**
+ * The part of a "not in the scan" warning that names what the rider can actually do about it.
+ *
+ * [regulatoryReach] has existed for a while but only ever reached telemetry, so the rider-facing
+ * line offered `highest 5GHz channel seen 5220MHz` and left them to draw the conclusion. Two
+ * conclusions are worth spelling out, and both are about the PHONE rather than the dash:
+ *
+ *  - An SSID that advertises 5GHz, on a phone whose own scan never reached UNII-3, has the shape
+ *    of a dash sitting on a Chinese channel (149-165) that EU rules put out of reach. Invisible
+ *    and switched off look identical from here, and hosted-hotspot mode does not need to see it.
+ *  - A scan with almost nothing in it cannot support any conclusion at all.
+ *
+ * Returns the empty string when neither applies, so the warning keeps the wording it has today.
+ */
+internal fun scanBlindSpotHint(targetSsid: String, topFiveGhzMhz: Int?, networksSeen: Int): String {
+    val hints = buildList {
+        if (targetSsid.contains("5G", ignoreCase = true) &&
+            regulatoryReach(topFiveGhzMhz) != "up to UNII-3"
+        ) {
+            val ceiling = topFiveGhzMhz?.let { "above ${it}MHz" } ?: "any 5GHz channel"
+            add(
+                "This network's name says 5GHz, and this phone's own scan never reached $ceiling: " +
+                    "a dash on a Chinese 5GHz channel (149-165, 5745MHz and up) is invisible to a " +
+                    "phone on EU rules however well the dash is working. Hosted-hotspot mode does " +
+                    "not depend on seeing it."
+            )
+        }
+        if (networksSeen <= SPARSE_SCAN_NETWORKS) {
+            add(
+                "Only $networksSeen network(s) were in that scan, so it may be a throttled or " +
+                    "stale one rather than a true picture of the air."
+            )
+        }
+    }
+    return if (hints.isEmpty()) "" else " " + hints.joinToString(" ")
 }
 
 /** Coarse RSSI buckets: a tag carrying an exact dBm reading is a new tag value per rider. */

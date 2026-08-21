@@ -169,4 +169,41 @@ class TBoxNetworkConnectorTest {
         assertEquals("1-3", scanCountBand(3))
         assertEquals("4+", scanCountBand(4))
     }
+
+    @Test
+    fun `a 5GHz-named dash on a phone that never sees UNII-3 gets the regulatory hint`() {
+        // The QJ rider's phone topped out at 5220MHz across eight attempts (log 2026-08-12) while
+        // hunting an SSID literally called qj-5G-bde9. Channels 149-165 are ordinary in China and
+        // unreachable under EU rules, so that reading is about the phone, not the dash.
+        val hint = scanBlindSpotHint("qj-5G-bde9", topFiveGhzMhz = 5220, networksSeen = 10)
+
+        assertTrue(hint.contains("149-165"))
+        assertTrue(hint.contains("Hosted-hotspot mode"))
+    }
+
+    @Test
+    fun `a phone that does reach UNII-3 gets no regulatory hint`() {
+        // Reaching 5745MHz proves the phone can see the range in question, so the dash's silence
+        // is the dash's. Saying otherwise would send the rider chasing the wrong thing.
+        assertEquals("", scanBlindSpotHint("qj-5G-bde9", topFiveGhzMhz = 5785, networksSeen = 10))
+    }
+
+    @Test
+    fun `a 2point4GHz dash name gets no regulatory hint`() {
+        assertEquals("", scanBlindSpotHint("CQKY_4d737e1ff", topFiveGhzMhz = 5220, networksSeen = 9))
+    }
+
+    @Test
+    fun `a nearly empty scan is called out as weak evidence`() {
+        val hint = scanBlindSpotHint("CQKY_4d737e1ff", topFiveGhzMhz = 5220, networksSeen = 2)
+
+        assertTrue(hint.contains("throttled or stale"))
+        // The 2.4GHz-named dash still earns no regulatory claim; only the scan-size caveat.
+        assertFalse(hint.contains("149-165"))
+    }
+
+    @Test
+    fun `a healthy scan of an unremarkable dash leaves the warning untouched`() {
+        assertEquals("", scanBlindSpotHint("CQKY_4d737e1ff", topFiveGhzMhz = null, networksSeen = 9))
+    }
 }
