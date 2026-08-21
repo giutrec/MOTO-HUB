@@ -251,6 +251,9 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
         private var controlServer: ServerSocket? = null
         private var heartbeatServer: ServerSocket? = null
         private var videoServer: ServerSocket? = null
+
+        /** The dash repeats its TUC reply on every control reconnect; report the state once. */
+        private val activationReported = AtomicBoolean(false)
         private val liveSockets = java.util.concurrent.CopyOnWriteArrayList<Socket>()
 
         private val pulseScheduler = ScheduledThreadPoolExecutor(1) { runnable ->
@@ -452,6 +455,35 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
             }
         }
 
+        /**
+         * Reads the activation flag out of the dash's TUC reply and says so once per session.
+         * We have always asked the question - [ThinkerRideProtocol.controlOpeningQuery] goes out
+         * the moment the control channel opens - and always thrown the answer away, so a rider
+         * whose dash reports `tucs != 1` got "the dashboard never opened the video connection,
+         * power-cycle it" for a firmware gate that no power cycle clears.
+         *
+         * Reporting only; nothing is blocked on it. A dash that says it is not activated and then
+         * mirrors anyway is a fact worth having in the log rather than a session worth refusing.
+         */
+        private fun reportActivation(payload: String) {
+            val flag = ThinkerRideProtocol.parseActivationFlag(payload) ?: return
+            if (!activationReported.compareAndSet(false, true)) return
+            if (flag == ThinkerRideProtocol.ACTIVATED_TUCS) {
+                ProjectionEventLog.record(
+                    "THINKERRIDE",
+                    "Dashboard reports it is activated (tucs=$flag); projection is not gated."
+                )
+            } else {
+                ProjectionEventLog.warning(
+                    "THINKERRIDE",
+                    "Dashboard reports it is NOT activated (tucs=$flag). ThinkerRide firmware " +
+                        "refuses to open the video channel in this state, so mirroring will be " +
+                        "acknowledged and then never start. Power-cycling the dash does not " +
+                        "clear this - the dash has to be activated through the OEM app once."
+                )
+            }
+        }
+
         private fun logControlPayload(buffer: ByteArray, length: Int) {
             // The control channel is where an unknown ThinkerRide model would identify itself,
             // so keep whatever readable content arrives; a future profile is written from these
@@ -469,6 +501,7 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
             val printable = text.count { it.code in 32..126 }
             if (printable >= length / 2 && text.isNotBlank()) {
                 ProjectionEventLog.record("THINKERRIDE", "Dash control payload: ${text.trim()}")
+                reportActivation(text)
                 return
             }
             val shown = minOf(length, CONTROL_HEX_DUMP_LIMIT)

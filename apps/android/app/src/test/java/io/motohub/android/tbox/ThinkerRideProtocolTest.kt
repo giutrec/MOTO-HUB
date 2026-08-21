@@ -3,6 +3,7 @@ package io.motohub.android.tbox
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -218,5 +219,40 @@ class ThinkerRideProtocolTest {
         val messages = assembler.accept("""{"msg_id":9,"name":"a}{b","tag":-1}""")
 
         assertEquals(listOf("""{"msg_id":9,"name":"a}{b","tag":-1}"""), messages)
+    }
+
+    @Test
+    fun readsTheActivationFlagFromTheDashTucReply() {
+        // Verbatim from a KOVE 800X diagnostics log (2026-08-20).
+        val reply = """{"msg_id":27,"func":"TUC","act":"SEND","tuc":"700039886a79c2c9","tucs":1}"""
+
+        assertEquals(1, ThinkerRideProtocol.parseActivationFlag(reply))
+    }
+
+    @Test
+    fun readsAnUnactivatedFlag() {
+        val reply = """{"msg_id":27,"func":"TUC","act":"SEND","tuc":"","tucs":0}"""
+
+        assertEquals(0, ThinkerRideProtocol.parseActivationFlag(reply))
+    }
+
+    @Test
+    fun toleratesWhitespacePaddingAroundTheFlag() {
+        val reply = """{"msg_id":27,"func":"TUC","act":"SEND","tucs" :  1 }"""
+
+        assertEquals(1, ThinkerRideProtocol.parseActivationFlag(reply))
+    }
+
+    @Test
+    fun ignoresPayloadsThatCarryNoActivationFlag() {
+        // A TUC reply without the field is old firmware, not an unactivated dash - the caller
+        // must not be able to tell those apart by accident.
+        assertNull(
+            ThinkerRideProtocol.parseActivationFlag("""{"msg_id":27,"func":"TUC","act":"SEND"}""")
+        )
+        assertNull(
+            ThinkerRideProtocol.parseActivationFlag("""{"msg_id":9,"func":"NAVI","tucs":1}""")
+        )
+        assertNull(ThinkerRideProtocol.parseActivationFlag("not json at all"))
     }
 }

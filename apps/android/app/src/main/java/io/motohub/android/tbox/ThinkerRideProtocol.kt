@@ -192,6 +192,35 @@ object ThinkerRideProtocol {
     fun controlOpeningQuery(): ByteArray = frameControlJson("""{"msg_id":27,"func":"TUC","act":"GET"}""")
 
     /**
+     * The dash's answer to [controlOpeningQuery]: `tucs` is its activation flag, and the OEM
+     * stack gates projection on it. `tucs != 1` means the firmware refuses to open the video
+     * channel no matter what we send it - the dash completes the BLE pairing, acknowledges
+     * mirror-start, and then simply never dials [VIDEO_PORT]. That is indistinguishable from a
+     * wedged dash unless this field is read, which is why an unactivated rider used to be told
+     * to power-cycle a dash that was working exactly as designed.
+     *
+     * Null when the payload is not a TUC reply or carries no `tucs` at all; only an explicit
+     * value is worth acting on, and older firmware that omits the field is not "unactivated".
+     */
+    fun parseActivationFlag(payload: String): Int? {
+        // Substring work rather than JSON parsing: the control channel hands this up with its
+        // framing bytes still attached (`EE FD <len> … FF`), so the payload is not valid JSON
+        // and a parser would reject the very reply we need.
+        if (!payload.contains("\"func\":\"TUC\"")) return null
+        val key = payload.indexOf(""""tucs"""")
+        if (key < 0) return null
+        var index = key + 6
+        // Skip the colon and any whitespace the firmware pads with.
+        while (index < payload.length && (payload[index] == ':' || payload[index].isWhitespace())) index++
+        val start = index
+        while (index < payload.length && payload[index].isDigit()) index++
+        return if (index > start) payload.substring(start, index).toIntOrNull() else null
+    }
+
+    /** The activation value the dash must report before it will ever open [VIDEO_PORT]. */
+    const val ACTIVATED_TUCS = 1
+
+    /**
      * The binary command burst sent 100 ms after the dash's first control packet, followed by
      * the two [controlNaviQueries]. Fixed opcodes from the reference capture; the 262-byte
      * command 0x12 carries a rider-account identity string zero-padded to 256 bytes, which the
