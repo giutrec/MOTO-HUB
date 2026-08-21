@@ -63,6 +63,16 @@ interface TBoxTransport {
     suspend fun discover(link: TBoxLink, expectedModelId: String? = null): Result<TBoxHost>
     suspend fun start(host: TBoxHost): Result<Unit>
     fun offerAccessUnit(avcc: ByteArray): Boolean
+
+    /**
+     * Offers one JPEG still, for the dash families whose OEM app never streams H.264.
+     *
+     * Separate from [offerAccessUnit] because a still carries its own [frameId]: these dashes
+     * acknowledge by id, so an id invented downstream would throw away the link's only liveness
+     * signal. Returns false by default - a transport without a still path must refuse rather
+     * than absorb, or a profile that asked for stills gets silently served something else.
+     */
+    fun offerStillFrame(jpeg: ByteArray, frameId: Int): Boolean = false
     suspend fun stop()
     val events: Flow<TBoxEvent>
 }

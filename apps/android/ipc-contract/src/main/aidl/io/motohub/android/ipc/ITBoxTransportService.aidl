@@ -34,6 +34,21 @@ interface ITBoxTransportService {
     boolean offerAccessUnit(in byte[] accessUnit);
 
     /**
+     * Whether the dash of the ACTIVE session wants JPEG stills rather than an H.264 stream.
+     *
+     * True only for the Moto Morini X-Cape 1200 family, whose OEM app never streams H.264 - the
+     * dash acknowledges every access unit and paints none. A caller that gets true must render
+     * into stills and write them with VideoPipeFraming.writeStill(); offerAccessUnit() and plain
+     * access units on the pipe are refused for such a session rather than silently converted,
+     * because there is no pixel source on Core's side of this boundary to convert them from.
+     *
+     * False when no session is active, which is also what a Core older than
+     * AndroidAutoIpcState.CONTRACT_VERSION_VIDEO_STILLS effectively answers by not having this
+     * call at all. Check getContractVersion() first.
+     */
+    boolean videoWantsStills();
+
+    /**
      * Establishes the T-Box connection inside Core's process (Wi-Fi join + EasyConn discovery,
      * which need the GPL transport and the socket binding Core owns) and installs the session.
      * Blocking; returns true once the session is READY. Session ready/lost is also reported to

@@ -102,6 +102,14 @@ class SelectingTBoxTransport(context: Context) : TBoxTransport {
     fun offerJpegFrame(jpeg: ByteArray, frameId: Int): Boolean =
         if (active === yunmo) yunmo.offerJpegFrame(jpeg, frameId) else false
 
+    /**
+     * The [TBoxTransport] face of [offerJpegFrame], so a caller holding only the interface - the
+     * companion app's frames arriving over the AIDL video pipe - reaches the same still path the
+     * in-process session services reach directly.
+     */
+    override fun offerStillFrame(jpeg: ByteArray, frameId: Int): Boolean =
+        offerJpegFrame(jpeg, frameId)
+
     override fun offerAccessUnit(avcc: ByteArray): Boolean = active.offerAccessUnit(avcc)
 
     override suspend fun stop() {

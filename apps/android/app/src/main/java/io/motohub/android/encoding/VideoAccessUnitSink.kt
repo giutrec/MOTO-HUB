@@ -5,5 +5,12 @@ package io.motohub.android.encoding
 
 interface VideoAccessUnitSink {
     fun offerAccessUnit(accessUnit: ByteArray): Boolean
+
+    /**
+     * Offers one JPEG still with the frame id the dash acknowledges by. False by default, so a
+     * sink with no still path refuses instead of quietly dropping the frame id.
+     */
+    fun offerStill(jpeg: ByteArray, frameId: Int): Boolean = false
+
     fun close() = Unit
 }

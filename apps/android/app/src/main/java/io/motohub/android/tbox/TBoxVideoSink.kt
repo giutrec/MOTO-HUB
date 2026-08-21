@@ -10,4 +10,7 @@ class TBoxVideoSink(
 ) : VideoAccessUnitSink {
     override fun offerAccessUnit(accessUnit: ByteArray): Boolean =
         handle.transport.offerAccessUnit(accessUnit)
+
+    override fun offerStill(jpeg: ByteArray, frameId: Int): Boolean =
+        handle.transport.offerStillFrame(jpeg, frameId)
 }

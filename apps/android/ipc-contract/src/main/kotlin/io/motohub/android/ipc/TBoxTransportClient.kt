@@ -94,6 +94,14 @@ class TBoxTransportClient(
 
     fun offerAccessUnit(accessUnit: ByteArray): Boolean = service?.offerAccessUnit(accessUnit) ?: false
 
+    /**
+     * Whether the live session's dash wants JPEG stills instead of H.264. Only ask a Core at
+     * [IpcBridgeContract.CONTRACT_VERSION_VIDEO_STILLS] or later; an older one does not implement
+     * the call, and its answer - false - is right for it anyway, since it has no still path.
+     */
+    fun videoWantsStills(): Boolean =
+        runCatching { service?.videoWantsStills() }.getOrNull() ?: false
+
     /** Asks Core to establish the T-Box connection in its own process (it owns the GPL transport). */
     fun connect(request: MotorcycleConnectRequest): Boolean = service?.connect(request) ?: false
 

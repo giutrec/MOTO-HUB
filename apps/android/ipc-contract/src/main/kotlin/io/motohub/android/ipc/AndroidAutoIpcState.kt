@@ -32,14 +32,22 @@ object IpcBridgeContract {
      * 1: everything up to clearDiagnosticLog(), which had no version call.
      * 2: connectOverFormedGroup().
      * 3: getLastConnectFailure() + getLastConnectFailureStage().
+     * 4: videoWantsStills(), and the extended video-pipe frame in [VideoPipeFraming].
      */
-    const val CONTRACT_VERSION = 3
+    const val CONTRACT_VERSION = 4
 
     /** First [CONTRACT_VERSION] whose Core implements connectOverFormedGroup(). */
     const val CONTRACT_VERSION_FORMED_GROUP = 2
 
     /** First [CONTRACT_VERSION] whose Core can say why a connect failed, and at which stage. */
     const val CONTRACT_VERSION_CONNECT_FAILURE_REASON = 3
+
+    /**
+     * First [CONTRACT_VERSION] whose Core answers videoWantsStills() and understands a still on
+     * the video pipe. A companion must check this before writing one: an older Core reads the
+     * extended frame's negative length as a corrupt access unit and closes the pipe.
+     */
+    const val CONTRACT_VERSION_VIDEO_STILLS = 4
 
     /**
      * Which half of Core's connect produced the last failure, answered by

@@ -43,6 +43,7 @@ import io.motohub.android.tbox.ProfileOverride
 import io.motohub.android.tbox.TBoxEvent
 import io.motohub.android.tbox.TBoxModelProfile
 import io.motohub.android.tbox.TBoxSessionHandle
+import io.motohub.android.tbox.SelectingTBoxTransport
 import io.motohub.android.tbox.TBoxSessionRegistry
 import io.motohub.android.tbox.negotiateVideoConfiguration
 import kotlinx.coroutines.CoroutineScope
@@ -171,6 +172,26 @@ class IpcBridgeService : Service() {
 
         override fun offerAccessUnit(accessUnit: ByteArray): Boolean =
             TBoxSessionRegistry.current()?.transport?.offerAccessUnit(accessUnit) ?: false
+
+        /**
+         * Whether the active session's dash wants JPEG stills instead of an H.264 stream.
+         *
+         * The transport's own profile wins when discovery changed it - a dash that answered Yunmo
+         * after EasyConn found nothing is not the profile the saved motorcycle resolves to - which
+         * is the same precedence the in-process session services use. Capabilities are not
+         * consulted here because this service does not own the capability store; a profile that
+         * asks for stills is always reached by model id or by a rider's explicit override, never
+         * by capability scoring.
+         */
+        override fun videoWantsStills(): Boolean {
+            val handle = TBoxSessionRegistry.current() ?: return false
+            val profile = handle.transport.activeProtocolProfile ?: TBoxModelProfile.resolve(
+                handle.motorcycle.modelId,
+                null,
+                ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
+            )
+            return profile.yunmoJpegVideo
+        }
 
         // Runs Core's own GPL connect flow (hudlib) on behalf of a companion app that can't
         // contain it. Blocking on the binder thread until READY, mirroring the AIDL contract.
@@ -389,24 +410,30 @@ class IpcBridgeService : Service() {
                 DataInputStream(BufferedInputStream(raw, VIDEO_PIPE_BUFFER_BYTES)).use { stream ->
                     var consecutiveRejectedFrames = 0
                     while (currentCoroutineContext().isActive) {
-                        val size = try {
-                            stream.readInt()
+                        val frame = try {
+                            VideoPipeFraming.read(stream)
                         } catch (_: EOFException) {
                             break
                         }
-                        require(size in 1..MAX_VIDEO_ACCESS_UNIT_BYTES) {
-                            "Invalid PRO video access unit size: $size"
-                        }
-                        val accessUnit = ByteArray(size)
-                        stream.readFully(accessUnit)
                         val transport = TBoxSessionRegistry.current()?.transport ?: break
-                        if (!transport.offerAccessUnit(accessUnit)) {
+                        // A still carries its own frame id, which is the whole reason it does not
+                        // travel as a plain access unit: the dashes that want stills acknowledge
+                        // by id, so an id invented on this side would throw away the link's only
+                        // liveness signal.
+                        val accepted = if (frame.isStill) {
+                            (transport as? SelectingTBoxTransport)
+                                ?.offerJpegFrame(frame.payload, frame.frameId) ?: false
+                        } else {
+                            transport.offerAccessUnit(frame.payload)
+                        }
+                        if (!accepted) {
                             consecutiveRejectedFrames++
                             if (consecutiveRejectedFrames >= MAX_CONSECUTIVE_REJECTED_FRAMES) {
+                                val kind = if (frame.isStill) "still" else "AVC"
                                 ProjectionEventLog.warning(
                                     "IPC_TBOX",
                                     "PRO video pipe stopped because CORE rejected " +
-                                        "$consecutiveRejectedFrames consecutive AVC frames."
+                                        "$consecutiveRejectedFrames consecutive $kind frames."
                                 )
                                 break
                             }
