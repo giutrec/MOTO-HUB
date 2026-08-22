@@ -3,6 +3,10 @@
 // Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.tbox
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.NetworkInterface
@@ -19,6 +23,65 @@ import java.net.NetworkInterface
  * tested without a motorcycle. See `TBoxHotspotScanTest`.
  */
 object TBoxHotspotScan {
+
+    /**
+     * Every IPv4 address on a network this phone is using as an **uplink** - its Wi-Fi, its
+     * mobile link, a VPN. Excluding those is what stops a rider's home subnet from being swept.
+     *
+     * Networks Android marks `LOCAL_NETWORK` are deliberately kept out of the set, and that
+     * exception is load-bearing. The original version assumed a hosted hotspot is never surfaced
+     * to apps as a [android.net.Network] at all — true when it was written, and false now.
+     * Measured on a OnePlus CPH2653 on 2026-08-09 with tethering on: Android reports the SoftAP
+     * interface `wlan2` as a full `NetworkAgentInfo`, `LinkAddresses: [10.181.20.114/24]`,
+     * carrying the newer `LOCAL_NETWORK` capability. Its address therefore landed in this set,
+     * [tetheringSubnets] dropped the only correct interface, and every caller concluded no
+     * hotspot was running — the group intercom called the hosting phone a guest, and the T-Box's
+     * `PHONE_HOTSPOT` mode would have told the rider to turn on a hotspot that was already on.
+     * `isHostedName` grants immunity too, but only to names it recognises, and `wlan2` is not
+     * one of them.
+     *
+     * The first attempt at this filtered on `INTERNET` instead — "a network the phone hosts
+     * gives it no internet" — and that was wrong in a way worth recording, because it looked
+     * more principled than it was. Carrier IMS/MMS APNs have no `INTERNET` either, so
+     * `rmnet_data3`, a 30-bit carrier link, stopped being excluded, became a candidate, and won
+     * the ranking tie against `wlan2` purely by enumeration order. The host then bound its
+     * listener to the cellular interface, where no guest could ever reach it. `LOCAL_NETWORK`
+     * says what is actually meant; absence of internet merely correlates with it.
+     *
+     * Best-effort by design. If the query fails or comes back empty the scan simply runs
+     * unfiltered, which is what it did before this existed.
+     */
+    // getAllNetworks() is deprecated with no synchronous replacement: the sanctioned API is a
+    // registered NetworkCallback, which answers a question this code asks once, on demand, at the
+    // start of a connect. activeNetwork alone is not enough - behind a VPN it *is* the VPN, and
+    // the Wi-Fi whose subnet must not be swept stops being reported at all.
+    @Suppress("DEPRECATION")
+    fun addressesInUse(context: Context): Set<InetAddress> =
+        runCatching {
+            val connectivityManager =
+                context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            connectivityManager.allNetworks
+                .filterNot { network -> isLocalNetwork(connectivityManager, network) }
+                .mapNotNull { network -> connectivityManager.getLinkProperties(network) }
+                .flatMap { properties -> properties.linkAddresses }
+                .map { linkAddress -> linkAddress.address }
+                .filterIsInstance<Inet4Address>()
+                .toSet()
+        }.getOrDefault(emptySet())
+
+    /**
+     * Whether Android considers this a local network rather than one of the phone's uplinks.
+     *
+     * Guarded because the capability is recent (API 36). On a platform that does not know the
+     * value `hasCapability` can reject it outright, and on one that never surfaces tethering as
+     * a network the question does not arise: either way, "not local" is the answer that leaves
+     * the old behaviour intact.
+     */
+    private fun isLocalNetwork(manager: ConnectivityManager, network: Network): Boolean =
+        runCatching {
+            manager.getNetworkCapabilities(network)
+                ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_LOCAL_NETWORK) == true
+        }.getOrDefault(false)
 
     /**
      * Interface-name prefixes Android has used for the tethering/SoftAP side. The list is

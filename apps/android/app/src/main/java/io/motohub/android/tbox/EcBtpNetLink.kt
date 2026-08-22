@@ -326,22 +326,36 @@ internal class EcBtpNetLink(
                             "${it.name ?: "?"}=${it.ip}"
                         } + "."
                     )
-                    val currentSubnet = subnet ?: awaitHostedSubnet()
+                    val reported = interfaces.mapNotNull { entry -> parseIpv4(entry.ip) }
+                    // The dash's own address is the best evidence available about which of this
+                    // phone's interfaces it actually joined - better than the one picked before
+                    // the hotspot had finished coming up. So the address chooses the interface,
+                    // not the other way round.
+                    val landed = hostedSubnets().firstNotNullOfOrNull { candidate ->
+                        reported.firstOrNull { address -> sharesSubnet(address, candidate) }
+                            ?.let { address -> candidate to address }
+                    }
+                    val currentSubnet = landed?.first ?: subnet ?: awaitHostedSubnet()
                     if (currentSubnet == null) {
                         log("$dashName announced an address but this phone is hosting no network; ignoring it.")
                         continue
                     }
-                    // Only an address on the network the phone just built means anything here.
-                    // A dash still holding a lease from some earlier network would otherwise send
-                    // discovery to an address nothing answers on.
-                    val onOurSubnet = interfaces.asSequence()
-                        .mapNotNull { entry -> parseIpv4(entry.ip) }
-                        .firstOrNull { address -> sharesSubnet(address, currentSubnet) }
+                    if (landed == null) {
+                        // Not fatal - the sweep still runs - but it means the dash is somewhere
+                        // this phone cannot see, and a log that says so is the difference between
+                        // diagnosing that and re-reading the Bluetooth exchange for a fault that
+                        // is not there.
+                        log(
+                            "$dashName reported an address on none of this phone's hosted networks " +
+                                "(${hostedSubnets().joinToString { it.interfaceName }.ifEmpty { "none" }}); " +
+                                "discovery will have to sweep ${currentSubnet.interfaceName}."
+                        )
+                    }
                     send(EcBtpNetProtocol.buildNetFinished())
                     return Result.success(
                         Provisioned(
                             subnet = currentSubnet,
-                            dashIp = onOurSubnet,
+                            dashIp = landed?.second,
                             dashModelId = modelId,
                             dashName = dashName
                         )
@@ -644,15 +658,29 @@ internal class EcBtpNetLink(
     // ---- Hosted network ------------------------------------------------------------------------
 
     /**
+     * Every private subnet this phone holds that is not one of its own uplinks.
+     *
+     * The exclusion is the whole point, and leaving it out cost the first real session on a
+     * Zontes S350 (field log 2026-08-21). The rider's home Wi-Fi was up on `wlan0`; the hotspot
+     * had been running for 400ms and its interface had no address yet; so `wlan0` was the only
+     * candidate, the dash was told to talk to the phone's address on the home network, and
+     * discovery then swept 253 addresses of the rider's living room. The dash had joined the
+     * hotspot perfectly and said so.
+     */
+    private fun hostedSubnets(): List<TBoxHotspotScan.Subnet> =
+        TBoxHotspotScan.tetheringSubnets(
+            TBoxHotspotScan.snapshotInterfaces(),
+            TBoxHotspotScan.addressesInUse(appContext)
+        )
+
+    /**
      * A hotspot that has just started does not have an interface yet. Polling beats guessing a
      * fixed delay: the address is what the dash is about to be told to talk to.
      */
     private suspend fun awaitHostedSubnet(): TBoxHotspotScan.Subnet? {
         val deadline = System.currentTimeMillis() + SUBNET_TIMEOUT_MS
         while (System.currentTimeMillis() < deadline) {
-            val subnet = TBoxHotspotScan
-                .tetheringSubnets(TBoxHotspotScan.snapshotInterfaces())
-                .firstOrNull()
+            val subnet = hostedSubnets().firstOrNull()
             if (subnet != null) return subnet
             delay(SUBNET_POLL_MS)
         }

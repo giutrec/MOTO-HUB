@@ -255,29 +255,7 @@ object TBoxLinkResolver {
         return networkConnector.connect(profile).map { TBoxLink.Infrastructure(it) }
     }
 
-    /**
-     * Every IPv4 address on a network `ConnectivityManager` knows this phone is on - its Wi-Fi,
-     * its mobile link, a VPN. A hosted hotspot is not among them: tethering is not surfaced to
-     * apps as a [android.net.Network], which is exactly what makes this a usable "not the dash's
-     * subnet" filter rather than a guess.
-     *
-     * Best-effort by design. If the query fails or comes back empty the scan simply runs
-     * unfiltered, which is what it did before this existed.
-     */
-    // getAllNetworks() is deprecated with no synchronous replacement: the sanctioned API is a
-    // registered NetworkCallback, which answers a question this code asks once, on demand, at the
-    // start of a connect. activeNetwork alone is not enough - behind a VPN it *is* the VPN, and
-    // the Wi-Fi whose subnet must not be swept stops being reported at all.
-    @Suppress("DEPRECATION")
+    /** Moved to [TBoxHotspotScan.addressesInUse], which the Bluetooth setup path needs as well. */
     private fun addressesTheNetworkStackIsUsing(context: Context): Set<InetAddress> =
-        runCatching {
-            val connectivityManager =
-                context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-            connectivityManager.allNetworks
-                .mapNotNull { network -> connectivityManager.getLinkProperties(network) }
-                .flatMap { properties -> properties.linkAddresses }
-                .map { linkAddress -> linkAddress.address }
-                .filterIsInstance<Inet4Address>()
-                .toSet()
-        }.getOrDefault(emptySet())
+        TBoxHotspotScan.addressesInUse(context)
 }
