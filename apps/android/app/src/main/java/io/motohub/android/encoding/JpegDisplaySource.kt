@@ -82,10 +82,22 @@ class JpegDisplaySource(
     private var qualityStep = 0
     private var goodWindows = 0
     private var adaptAtMillis = 0L
-    private var adaptTicks = 0
     private var adaptAccepted = 0
     private var compressedAtMillis = 0L
     private var periodMillis = 100L
+
+    /**
+     * How often to compress, tracking the rate the transport actually accepts.
+     *
+     * Written by the send thread, read by the capture thread, like [quality]. Compressing at the
+     * tick rate when the dash takes a fifth of it is pure heat: a 1024x464 ARGB frame costs about
+     * 125ms of CPU here, and on the 75-minute ride of 2026-08-22 four of every five of those were
+     * overwritten before anyone could send them, while Android Auto's own decoder fell from 29fps
+     * to 14 underneath it.
+     */
+    @Volatile private var captureIntervalMillis = 100L
+    private var acceptedAtMillis = 0L
+    private var acceptInterval = 0.0
     private val cropSource = Rect()
     private val cropDestination = Rect()
 
@@ -116,6 +128,7 @@ class JpegDisplaySource(
         surface = reader.surface
 
         periodMillis = (1000L / frameRate.coerceAtLeast(1)).coerceAtLeast(1L)
+        captureIntervalMillis = periodMillis
         val now = SystemClock.elapsedRealtime()
         statsAtMillis = now
         adaptAtMillis = now
@@ -145,11 +158,13 @@ class JpegDisplaySource(
             runCatching { reader.acquireLatestImage()?.close() }
             return
         }
-        // Compressing faster than the send tick is pure heat: the extra frames are overwritten
-        // before anyone can send them. One per tick keeps the newest picture ready for the moment
-        // a send slot opens, which is what the delay the rider notices is actually made of.
+        // Compressing faster than the dash drinks is pure heat: the extra frames are overwritten
+        // before anyone can send them. [captureIntervalMillis] tracks the accepted rate at roughly
+        // twice its speed, which keeps a picture no older than half a send slot ready for the
+        // moment one opens - that staleness is what the delay the rider notices is made of - while
+        // leaving the CPU for Android Auto's decoder, which shares it.
         val now = SystemClock.elapsedRealtime()
-        if (now - compressedAtMillis < periodMillis) {
+        if (now - compressedAtMillis < captureIntervalMillis) {
             runCatching { reader.acquireLatestImage()?.close() }
             return
         }
@@ -190,30 +205,44 @@ class JpegDisplaySource(
         if (!running.get()) return
         try {
             val jpeg = latest.get()
-            if (jpeg == null) {
-                idle++
-            } else {
-                if (jpeg === lastSent) repeated++
-                lastSent = jpeg
+            when {
+                jpeg == null -> idle++
+                // Already on the wire. Re-sending it spends the dash's byte budget on a picture it
+                // is already showing, and that budget is the whole of what stands between the
+                // rider and a smooth image.
+                jpeg === lastSent -> repeated++
                 // The id only advances for a frame the transport actually took. The dash echoes
                 // the last id it processed and our own flow control is keyed on that number, so
                 // numbering frames that were never sent throws the two out of step - it was
                 // running six ids ahead of reality in the field log of 2026-08-21.
-                if (onFrame(jpeg, frameId.get())) {
+                onFrame(jpeg, frameId.get()) -> {
+                    lastSent = jpeg
                     frameId.incrementAndGet()
                     sent++
-                    adaptAccepted++
                     bytesSent += jpeg.size
-                } else {
-                    refused++
+                    recordAccepted()
                 }
+                else -> refused++
             }
-            adaptTicks++
             adaptQuality()
             reportThroughput()
         } catch (failure: Throwable) {
             if (running.get()) onFailure(failure)
         }
+    }
+
+    /** Notes that a still reached the transport, and paces the capture thread off that rhythm. */
+    private fun recordAccepted() {
+        adaptAccepted++
+        val now = SystemClock.elapsedRealtime()
+        val previous = acceptedAtMillis
+        acceptedAtMillis = now
+        if (previous == 0L) return
+        val gap = (now - previous).toDouble()
+        acceptInterval =
+            if (acceptInterval == 0.0) gap else acceptInterval + (gap - acceptInterval) * ACCEPT_SMOOTHING
+        captureIntervalMillis = (acceptInterval * CAPTURE_AHEAD).toLong()
+            .coerceIn(periodMillis, MAX_CAPTURE_INTERVAL_MS)
     }
 
     /**
@@ -230,13 +259,18 @@ class JpegDisplaySource(
      */
     private fun adaptQuality() {
         val now = SystemClock.elapsedRealtime()
-        if (now - adaptAtMillis < ADAPT_INTERVAL_MS || adaptTicks == 0) return
-        val acceptance = adaptAccepted.toDouble() / adaptTicks
+        val elapsed = now - adaptAtMillis
+        if (elapsed < ADAPT_INTERVAL_MS) return
+        // Stills a second, not a share of the offers made. The two used to be the same number
+        // divided by the tick rate, and stopped being so the moment the capture thread started
+        // pacing itself off the accepted rate: a ratio would then have measured this class against
+        // its own throttle and walked the quality to the floor by construction.
+        val fps = adaptAccepted * 1000.0 / elapsed
         val previous = qualityStep
-        if (acceptance < STARVED_BELOW && qualityStep < QUALITY_LADDER.lastIndex) {
+        if (fps < TARGET_FPS_LOW && qualityStep < QUALITY_LADDER.lastIndex) {
             qualityStep++
             goodWindows = 0
-        } else if (acceptance > COMFORTABLE_ABOVE && qualityStep > 0) {
+        } else if (fps > TARGET_FPS_HIGH && qualityStep > 0) {
             // Climb back slowly. Stepping up on a single good window makes the picture pulse
             // between two qualities every couple of seconds, which reads worse than either.
             if (++goodWindows >= WINDOWS_BEFORE_CLIMBING) {
@@ -250,12 +284,11 @@ class JpegDisplaySource(
             quality = QUALITY_LADDER[qualityStep]
             ProjectionEventLog.record(
                 "JPEG",
-                "Still quality now $quality (the dashboard was taking " +
-                    "${(acceptance * 100).toInt()}% of the frames offered)."
+                "Still quality now $quality (the dashboard was taking %.1f stills a second)."
+                    .format(fps)
             )
         }
         adaptAtMillis = now
-        adaptTicks = 0
         adaptAccepted = 0
     }
 
@@ -276,7 +309,8 @@ class JpegDisplaySource(
             "%.1f fps out of the phone, %.1f fps on the wire, %.0f KB average, %.0f KB/s"
                 .format(captured.getAndSet(0) / seconds, sent / seconds, averageKb,
                     bytesSent / 1024.0 / seconds) +
-                " at quality $quality ($refused held back, ${idle + repeated} ticks with nothing new)"
+                " at quality $quality, compressing every ${captureIntervalMillis}ms" +
+                " ($refused held back, ${idle + repeated} ticks with nothing new)"
         )
         sent = 0
         refused = 0
@@ -340,13 +374,34 @@ class JpegDisplaySource(
          * for a dash that cannot drink that fast. The floor is a picture that is visibly coarse in
          * gradients but keeps road lines and labels legible, which beats a sharp one that arrives
          * twice a second.
+         *
+         * The bottom two rungs were added after the X-Cape spent a whole ride pinned at 20 and
+         * still only managing 2.2 stills a second: this dash budgets bytes, so the only way to buy
+         * frames is to spend fewer of them. They are meant to be reached rarely and they do look
+         * blocky; if a rider reports the picture as mushy rather than laggy, take 12 away first.
          */
-        val QUALITY_LADDER = intArrayOf(60, 50, 40, 32, 25, 20)
+        val QUALITY_LADDER = intArrayOf(60, 50, 40, 32, 25, 20, 16, 12)
 
         const val ADAPT_INTERVAL_MS = 2_000L
-        const val STARVED_BELOW = 0.5
-        const val COMFORTABLE_ABOVE = 0.9
+
+        /**
+         * Stills a second to aim for, with a wide deadband between them: below [TARGET_FPS_LOW]
+         * the picture judders badly enough that a coarser one is the better trade, above
+         * [TARGET_FPS_HIGH] there is room to spend on looking better. Nothing between the two is
+         * worth a change - the ladder pulsing up and down reads worse than either rung.
+         */
+        const val TARGET_FPS_LOW = 5.0
+        const val TARGET_FPS_HIGH = 7.0
         const val WINDOWS_BEFORE_CLIMBING = 3
+
+        /** How much of the accepted interval to wait before compressing again. */
+        const val CAPTURE_AHEAD = 0.5
+
+        /** Weight of the newest gap in the accepted-interval average. */
+        const val ACCEPT_SMOOTHING = 0.3
+
+        /** However slow the dash gets, never let the ready picture age past this. */
+        const val MAX_CAPTURE_INTERVAL_MS = 500L
 
         /** Roughly one full-size map frame at [JPEG_QUALITY]; the stream grows itself if wrong. */
         const val DEFAULT_JPEG_BUFFER_BYTES = 128 * 1024

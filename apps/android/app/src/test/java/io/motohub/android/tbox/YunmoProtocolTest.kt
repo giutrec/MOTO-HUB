@@ -252,4 +252,36 @@ class YunmoProtocolTest {
         assertEquals(YunmoProtocol.MEDIA_TYPE_JPEG, frame[15].toInt())
         assertTrue(YunmoProtocol.MEDIA_TYPE_JPEG != YunmoProtocol.MEDIA_TYPE_LEGACY)
     }
+
+    @Test
+    fun nothingIsInFlightBeforeTheFirstStillOrAfterItIsAcked() {
+        assertEquals(0, YunmoProtocol.stillsInFlight(lastOfferedId = -1, lastAckedId = -1))
+        assertEquals(1, YunmoProtocol.stillsInFlight(lastOfferedId = 0, lastAckedId = -1))
+        assertEquals(0, YunmoProtocol.stillsInFlight(lastOfferedId = 0, lastAckedId = 0))
+        assertEquals(2, YunmoProtocol.stillsInFlight(lastOfferedId = 9, lastAckedId = 7))
+    }
+
+    @Test
+    fun theStillWindowClosesOnADashThatFallsBehind() {
+        // The regression that put fifteen seconds of delay on a rider's dash: read a counter the
+        // stills path never advances and this is negative from the first ack on, so the window
+        // never closes, the sender never yields, and the backlog moves into the socket buffers
+        // where nothing can drop it. In flight must GROW as the dash falls behind.
+        var inFlight = 0
+        for (offered in 0..40) {
+            inFlight = YunmoProtocol.stillsInFlight(lastOfferedId = offered, lastAckedId = 3)
+        }
+        assertTrue(
+            "a dash stuck at ack 3 must look further and further behind, not caught up",
+            inFlight >= YunmoProtocol.STILL_SEND_WINDOW
+        )
+    }
+
+    @Test
+    fun latestWinsGapsDoNotStrandTheWindow() {
+        // The sender replaces a still that never reached the socket, so ids skip. Measuring the
+        // distance to the newest id (rather than counting frames sent) means an ack for that
+        // newest id still empties the window.
+        assertEquals(0, YunmoProtocol.stillsInFlight(lastOfferedId = 120, lastAckedId = 120))
+    }
 }
