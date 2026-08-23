@@ -18,6 +18,7 @@ import api.Api
 import api.MobileCallback
 import api.MobileSession
 import io.motohub.android.feature.settings.MotoHubSettings
+import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.session.ProjectionEventLog
 import java.io.InputStream
 import java.io.OutputStream
@@ -127,6 +128,17 @@ class RideDaemonTransport(
     private var activeSessionGeneration = 0L
     @Volatile
     private var protocolProfile: TBoxModelProfile = TBoxModelProfile.GENERIC
+    /**
+     * The motorcycle this transport is serving, when the caller knows it. Only [TBoxWireLadder]
+     * needs it - the ladder's memory is per motorcycle - and a caller that has none (the capability
+     * inspector, a test) simply gets the profile's own wire.
+     */
+    @Volatile
+    private var motorcycleProfile: MotorcycleProfile? = null
+    /** Elapsed-time mark for the running session, so its length can be judged when it ends. */
+    private val sessionStartedElapsed = AtomicLong(0L)
+    /** One ladder verdict per session, whoever ends it first. */
+    private val ladderVerdictFiled = AtomicBoolean(false)
     private val pxcEvents = AtomicLong(0L)
     private val mediaControlEvents = AtomicLong(0L)
     private val framesOffered = AtomicLong(0L)
@@ -152,8 +164,18 @@ class RideDaemonTransport(
     private val unknownCommandsLogged =
         java.util.concurrent.ConcurrentHashMap.newKeySet<Pair<Long, Long>>()
 
-    override fun configureProtocolProfile(profile: TBoxModelProfile) {
+    override fun configureProtocolProfile(profile: TBoxModelProfile, motorcycle: MotorcycleProfile?) {
         protocolProfile = profile
+        motorcycleProfile = motorcycle
+    }
+
+    /**
+     * What this session should put on the wire: the profile's own settings when something
+     * recognised it, otherwise whichever rung [TBoxWireLadder] has reached for this motorcycle.
+     */
+    private fun wireConfigFor(profile: TBoxModelProfile): TBoxWireConfig {
+        val motorcycle = motorcycleProfile ?: return profile.wireConfig
+        return TBoxWireLadder.configFor(appContext, motorcycle, profile)
     }
 
     override suspend fun discover(link: TBoxLink, expectedModelId: String?): Result<TBoxHost> = withContext(Dispatchers.IO) {
@@ -164,6 +186,7 @@ class RideDaemonTransport(
             val host = discoverWithRetry(link, expectedModelId)
             val profile = protocolProfile.takeIf { it != TBoxModelProfile.GENERIC }
                 ?: TBoxModelProfile.resolve(expectedModelId, null)
+            val wire = wireConfigFor(profile)
             val mobileConfig = Api.newMobileConfig(
                 ByteArray(0),
                 30L,
@@ -173,12 +196,12 @@ class RideDaemonTransport(
                 3L
             ).apply {
                 setSupportFunction(profile.advertisedSupportFunction.toLong())
-                setProactivePxcHeartbeatEnabled(profile.requiresProactivePxcHeartbeat)
+                setProactivePxcHeartbeatEnabled(wire.requiresProactivePxcHeartbeat)
                 // Only a dashboard that no profile claims - or a framing experiment the rider
                 // pinned by hand - is allowed to renegotiate the video frame format from its
                 // own supportExtendProtocol byte. Every recognised unit keeps the indexed
                 // framing it already displays.
-                setPlainVideoFramingAllowed(profile.allowsPlainVideoFraming)
+                setPlainVideoFramingAllowed(wire.allowsPlainVideoFraming)
                 // The dash asks for wall-clock time over PXC and the daemon answers it,
                 // but only Android knows the zone: Go's local location on a device is
                 // UTC and carries no usable name. The id alone was not enough - it only
@@ -216,8 +239,9 @@ class RideDaemonTransport(
                 "RideDaemon live-only session configured for ${host.ipAddress}:${host.port}; " +
                     "package=${host.packageName}; profile=${profile.key}; " +
                     "supportFunction=${profile.advertisedSupportFunction}; " +
-                    "proactivePxcHeartbeat=${profile.requiresProactivePxcHeartbeat}; " +
-                    "plainVideoFramingAllowed=${profile.allowsPlainVideoFraming}; " +
+                    "wire=${wire.signature}; " +
+                    "proactivePxcHeartbeat=${wire.requiresProactivePxcHeartbeat}; " +
+                    "plainVideoFramingAllowed=${wire.allowsPlainVideoFraming}; " +
                     "timeZone=${java.util.TimeZone.getDefault().id}."
             )
             host
@@ -247,6 +271,8 @@ class RideDaemonTransport(
                 )
                 startWithNetworkSocket(activeSession, host, activeLink)
                 ProjectionEventLog.record("TBOX", "RideDaemon startSessionWithSocketFd returned successfully.")
+                sessionStartedElapsed.set(SystemClock.elapsedRealtime())
+                ladderVerdictFiled.set(false)
                 armPxcWatchdog(activeSessionGeneration)
             }.onFailure {
                 // The native call may already have opened 10920/10921/10922 before it
@@ -401,6 +427,10 @@ class RideDaemonTransport(
         }
         if (sessionToStop != null) {
             ProjectionEventLog.record("TBOX", "Stopping RideDaemon session. ${protocolSnapshot()}")
+            // A ride the rider ended is the ladder's best evidence: it is the only way a rung
+            // that works reaches TBoxSessionOutcome.STREAMED, because a dashboard that is happy
+            // never stops anything. Ending it ourselves is not held against the wire.
+            fileLadderVerdict(endedByDashboard = false)
         }
         sessionToStop?.runCatching { stopSession() }
             ?.onFailure { ProjectionEventLog.warning("TBOX", "RideDaemon stopSession failed.", it) }
@@ -1427,6 +1457,9 @@ class RideDaemonTransport(
                             "Profile scores: ${TBoxModelProfile.scoreBreakdown(capabilities)}."
                         )
                     }
+                    motorcycleProfile?.let { motorcycle ->
+                        TBoxWireLadder.onDashboardIdentified(appContext, motorcycle, capabilities)
+                    }
                     mutableEvents.tryEmit(TBoxEvent.Capabilities(capabilities))
                 }
                 return
@@ -1487,6 +1520,7 @@ class RideDaemonTransport(
                 "TBOX",
                 "RideDaemon reported that the T-Box session stopped. ${protocolSnapshot()}"
             )
+            fileLadderVerdict(endedByDashboard = true)
             mutableEvents.tryEmit(TBoxEvent.Stopped)
         }
 
@@ -1593,6 +1627,39 @@ class RideDaemonTransport(
         unknownCommandsLogged.clear()
     }
 
+    /**
+     * Hands a finished session to [TBoxWireLadder], exactly once. Both ends of a session race to
+     * report it - the dashboard's own close callback and our teardown - and the second one through
+     * must not count as a second attempt.
+     */
+    private fun fileLadderVerdict(endedByDashboard: Boolean) {
+        val motorcycle = motorcycleProfile ?: return
+        val startedAt = sessionStartedElapsed.get()
+        if (startedAt <= 0L) return
+        if (!ladderVerdictFiled.compareAndSet(false, true)) return
+        // Only Android Auto runs the format the ladder chose. Ride Dashboard sends its own, so a
+        // mirroring session would otherwise promote or condemn a rung that never reached the wire
+        // - a rider testing through the Ride Dashboard would have silently ended the search on a
+        // format nobody tried.
+        if (!TBoxSessionRegistry.everClaimed(ANDROID_AUTO_CONSUMER)) {
+            TBoxWireLadder.onSessionIgnored(appContext, motorcycle, protocolProfile)
+            return
+        }
+        TBoxWireLadder.onSessionFinished(
+            context = appContext,
+            motorcycle = motorcycle,
+            modelProfile = protocolProfile,
+            facts = TBoxSessionFacts(
+                durationMillis = (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(0L),
+                mediaControlEvents = mediaControlEvents.get(),
+                framesOffered = framesOffered.get(),
+                frameTimeouts = framesTimedOut.get(),
+                frameRejections = framesRejected.get(),
+                endedByDashboard = endedByDashboard
+            )
+        )
+    }
+
     private fun protocolSnapshot(): String {
         val now = SystemClock.elapsedRealtime()
         fun age(last: AtomicLong): String = last.get().takeIf { it > 0L }?.let {
@@ -1607,6 +1674,8 @@ class RideDaemonTransport(
     }
 
     private companion object {
+        /** AndroidAutoSessionService's own consumer name in TBoxSessionRegistry. */
+        const val ANDROID_AUTO_CONSUMER = "android-auto"
         const val TAG = "RideDaemonTransport"
         const val SERVICE_TYPE = "_EasyConn._tcp."
         const val PACKAGE_ATTRIBUTE = "packagename"

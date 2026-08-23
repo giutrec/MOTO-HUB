@@ -139,7 +139,7 @@ class CoreTBoxConnector(private val context: Context) {
                     "to that transport instead of letting EasyConn discovery time out first."
             )
         }
-        transport.configureProtocolProfile(resolvedProfile)
+        transport.configureProtocolProfile(resolvedProfile, profile)
         val discovered = transport.discover(link, profile.modelId)
         val host = discovered.getOrElse {
             ProjectionEventLog.error("IPC_TBOX", "AIDL connect: EasyConn discovery failed.", it)

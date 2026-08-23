@@ -51,15 +51,23 @@ class SelectingTBoxTransport(context: Context) : TBoxTransport {
     override var activeProtocolProfile: TBoxModelProfile? = null
         private set
 
+    /** Remembered so the Yunmo fallback below can hand the ladder the same motorcycle. */
+    @Volatile
+    private var configuredMotorcycle: io.motohub.android.session.MotorcycleProfile? = null
+
     override val events: Flow<TBoxEvent> = merge(easyConn.events, thinkerRide.events, yunmo.events)
 
-    override fun configureProtocolProfile(profile: TBoxModelProfile) {
+    override fun configureProtocolProfile(
+        profile: TBoxModelProfile,
+        motorcycle: io.motohub.android.session.MotorcycleProfile?
+    ) {
         active = when (profile.transportFamily) {
             TBoxTransportFamily.EASYCONN -> easyConn
             TBoxTransportFamily.THINKERRIDE -> thinkerRide
             TBoxTransportFamily.YUNMO -> yunmo
         }
         activeProtocolProfile = null
+        configuredMotorcycle = motorcycle
         // The one line that says which wire this session will speak. A field log without it
         // cannot distinguish "the override never reached routing" from "the transport failed"
         // (X-Cape 1200 log, 2026-08-07: session ran EasyConn NSD with no way to tell why).
@@ -68,7 +76,7 @@ class SelectingTBoxTransport(context: Context) : TBoxTransport {
             "Protocol profile: ${profile.key} (${profile.displayName}); " +
                 "transport family=${profile.transportFamily}."
         )
-        active.configureProtocolProfile(profile)
+        active.configureProtocolProfile(profile, motorcycle)
     }
 
     override suspend fun discover(link: TBoxLink, expectedModelId: String?): Result<TBoxHost> {
@@ -87,7 +95,7 @@ class SelectingTBoxTransport(context: Context) : TBoxTransport {
                 "$yunmoHost:${YunmoProtocol.DEFAULT_PORT}; switching this session to the Yunmo transport."
         )
         active = yunmo
-        yunmo.configureProtocolProfile(yunmoSessionProfile)
+        yunmo.configureProtocolProfile(yunmoSessionProfile, configuredMotorcycle)
         activeProtocolProfile = yunmoSessionProfile
         return yunmo.discover(link, expectedModelId)
     }

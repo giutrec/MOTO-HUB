@@ -72,6 +72,8 @@ import io.motohub.android.feature.garage.MotorcyclePhotoSource
 import io.motohub.android.feature.garage.TBoxCapabilityScreen
 import io.motohub.android.feature.home.HubHomeScreen
 import io.motohub.android.feature.home.HubViewModel
+import io.motohub.android.feature.home.WireNeedsAndroidAutoDialog
+import io.motohub.android.feature.home.WireVerdictDialog
 import io.motohub.android.feature.androidauto.AndroidAutoHelpScreen
 import io.motohub.android.feature.androidauto.AndroidAutoPreviewScreen
 import io.motohub.android.feature.androidauto.CompanionAppWarningDialog
@@ -1531,6 +1533,19 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     )
+                }
+                // The rider had to be on the motorcycle to answer this, so it is asked when they
+                // are back at the phone rather than the instant the session ended.
+                androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.refreshWireQuestion() }
+                state.wireQuestionFor?.let { motorcycle ->
+                    WireVerdictDialog(
+                        motorcycleName = motorcycle.displayName?.takeIf { it.isNotBlank() } ?: motorcycle.ssid,
+                        onAnswer = { seen -> viewModel.answerWireQuestion(seen) },
+                        onDismiss = { /* Ask again next time rather than guess an answer. */ }
+                    )
+                }
+                state.wireNeedsAndroidAutoFor?.let {
+                    WireNeedsAndroidAutoDialog(onDismiss = { viewModel.dismissWireAndroidAutoNudge() })
                 }
                 conflictingCompanionApp?.let { companion ->
                     var doNotShowMotoPlayWarningAgain by rememberSaveable { mutableStateOf(false) }

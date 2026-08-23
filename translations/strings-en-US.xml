@@ -1707,4 +1707,18 @@
     <string name="legacy_connecting_to_1_s_2f10e3b8">Connecting to %1$s</string>
     <string name="legacy_keep_moto_hub_open_closing_it_stops_the_search_54ec507">Keep MOTO-HUB open - closing it stops the search.</string>
     <string name="legacy_hotspot_is_up_searching_it_for_the_dashboard_thi_caab4cd3">Hotspot is up. Searching it for the dashboard - this can take up to 90 seconds, so keep MOTO-HUB open.</string>
+    <!-- Asked once per video format tried, after a session that looked healthy from the phone:
+         only the rider can see whether the dashboard actually displayed it. %1$s is the
+         motorcycle name. -->
+    <string name="legacy_did_it_show_up_on_the_dashboard_f341c05">Did it show up on the dashboard?</string>
+    <string name="legacy_last_time_you_connected_to_1_s_everything_looked_46fc9a09">Last time you connected to %1$s, everything looked right from this phone. MOTO-HUB has no way to see the dashboard\'s screen, so this is the one thing it has to ask you.</string>
+    <string name="legacy_if_it_stayed_on_the_pairing_screen_moto_hub_will_40398b69">If it stayed on the pairing screen, MOTO-HUB will try a different video format on the next ride and keep going until one works.</string>
+    <string name="legacy_yes_i_saw_it_625527f4">Yes, I saw it</string>
+    <string name="legacy_no_nothing_appeared_f92c88fc">No, nothing appeared</string>
+    <!-- Shown when the video-format search cannot progress because every session so far ran the
+         Ride Dashboard, which sends its own format. -->
+    <string name="legacy_the_video_format_search_is_waiting_ac28c9a">The video format search is waiting</string>
+    <string name="legacy_moto_hub_is_still_looking_for_a_video_format_you_44b4c53c">MOTO-HUB is still looking for a video format your dashboard can display, but it can only test one while Android Auto is running - the Ride Dashboard always sends its own format.</string>
+    <string name="legacy_connect_once_with_android_auto_and_the_search_mo_71871380">Connect once with Android Auto and the search moves on by itself.</string>
+    <string name="legacy_got_it_7f79855f">Got it</string>
 </resources>

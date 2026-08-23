@@ -1705,4 +1705,18 @@
     <string name="legacy_connecting_to_1_s_2f10e3b8">Conectando a %1$s</string>
     <string name="legacy_keep_moto_hub_open_closing_it_stops_the_search_54ec507">Mantén MOTO-HUB abierto: cerrarlo detiene la búsqueda.</string>
     <string name="legacy_hotspot_is_up_searching_it_for_the_dashboard_thi_caab4cd3">El punto de acceso está activo. Buscando el salpicadero: puede tardar hasta 90 segundos, así que mantén MOTO-HUB abierto.</string>
+    <!-- Asked once per video format tried, after a session that looked healthy from the phone:
+         only the rider can see whether the dashboard actually displayed it. %1$s is the
+         motorcycle name. -->
+    <string name="legacy_did_it_show_up_on_the_dashboard_f341c05">¿Apareció en el salpicadero?</string>
+    <string name="legacy_last_time_you_connected_to_1_s_everything_looked_46fc9a09">La última vez que te conectaste a %1$s, desde este teléfono todo parecía correcto. MOTO-HUB no puede ver la pantalla del salpicadero, así que esto es lo único que tiene que preguntarte.</string>
+    <string name="legacy_if_it_stayed_on_the_pairing_screen_moto_hub_will_40398b69">Si se quedó en la pantalla de emparejamiento, en la próxima ruta MOTO-HUB probará otro formato de vídeo y seguirá hasta que uno funcione.</string>
+    <string name="legacy_yes_i_saw_it_625527f4">Sí, lo he visto</string>
+    <string name="legacy_no_nothing_appeared_f92c88fc">No, no ha aparecido nada</string>
+    <!-- Shown when the video-format search cannot progress because every session so far ran the
+         Ride Dashboard, which sends its own format. -->
+    <string name="legacy_the_video_format_search_is_waiting_ac28c9a">La búsqueda del formato de vídeo está esperando</string>
+    <string name="legacy_moto_hub_is_still_looking_for_a_video_format_you_44b4c53c">MOTO-HUB sigue buscando un formato de vídeo que tu salpicadero pueda mostrar, pero solo puede probar uno mientras Android Auto está en marcha: el Ride Dashboard siempre envía su propio formato.</string>
+    <string name="legacy_connect_once_with_android_auto_and_the_search_mo_71871380">Conéctate una vez con Android Auto y la búsqueda continúa sola.</string>
+    <string name="legacy_got_it_7f79855f">Entendido</string>
 </resources>

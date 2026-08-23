@@ -61,7 +61,10 @@ class YunmoTransport(context: Context) : TBoxTransport {
     private var session: Session? = null
     private val sessionLock = Any()
 
-    override fun configureProtocolProfile(profile: TBoxModelProfile) {
+    override fun configureProtocolProfile(
+        profile: TBoxModelProfile,
+        motorcycle: io.motohub.android.session.MotorcycleProfile?
+    ) {
         protocolProfile = profile
     }
 

@@ -50,11 +50,19 @@ internal class SessionConsumers {
 object TBoxSessionRegistry {
     private var activeHandle: TBoxSessionHandle? = null
     private val consumers = SessionConsumers()
+    /**
+     * Everyone who held the session at any point in its life, unlike [consumers] which only knows
+     * who holds it right now. [TBoxWireLadder] needs the difference: by the time a session ends,
+     * the mode that ran it has already let go, and "which mode was this?" is exactly the question
+     * that decides whether the session is evidence about the video format or not.
+     */
+    private val consumersSeen = linkedSetOf<String>()
 
     @Synchronized
     fun install(handle: TBoxSessionHandle) {
         activeHandle = handle
         consumers.clear()
+        consumersSeen.clear()
         // Honour the rider's manual pin. Reporting the modelId's own answer here made the log
         // contradict itself for anyone who had overridden the profile - the session line said
         // "Generic EasyConn dashboard" while the mode that started moments later reported the
@@ -86,11 +94,16 @@ object TBoxSessionRegistry {
     @Synchronized
     fun claim(consumer: String): Boolean {
         if (activeHandle == null) return false
+        consumersSeen += consumer
         if (consumers.claim(consumer)) {
             ProjectionEventLog.debug("SESSION", "T-Box session claimed by $consumer.")
         }
         return true
     }
+
+    /** True when [consumer] held the running session at any point, even if it has since let go. */
+    @Synchronized
+    fun everClaimed(consumer: String): Boolean = consumer in consumersSeen
 
     /** Drops [consumer]'s claim without touching the session itself. */
     @Synchronized

@@ -1705,4 +1705,18 @@
     <string name="legacy_connecting_to_1_s_2f10e3b8">Connexion à %1$s</string>
     <string name="legacy_keep_moto_hub_open_closing_it_stops_the_search_54ec507">Gardez MOTO-HUB ouvert : le fermer arrête la recherche.</string>
     <string name="legacy_hotspot_is_up_searching_it_for_the_dashboard_thi_caab4cd3">Le point d\'accès est actif. Recherche du tableau de bord : cela peut prendre jusqu\'à 90 secondes, gardez donc MOTO-HUB ouvert.</string>
+    <!-- Asked once per video format tried, after a session that looked healthy from the phone:
+         only the rider can see whether the dashboard actually displayed it. %1$s is the
+         motorcycle name. -->
+    <string name="legacy_did_it_show_up_on_the_dashboard_f341c05">Est-ce que ça s\'est affiché sur le tableau de bord ?</string>
+    <string name="legacy_last_time_you_connected_to_1_s_everything_looked_46fc9a09">La dernière fois que vous vous êtes connecté à %1$s, tout semblait correct depuis ce téléphone. MOTO-HUB ne peut pas voir l\'écran du tableau de bord : c\'est la seule chose qu\'il doit vous demander.</string>
+    <string name="legacy_if_it_stayed_on_the_pairing_screen_moto_hub_will_40398b69">S\'il est resté sur l\'écran d\'appairage, MOTO-HUB essaiera un autre format vidéo à la prochaine sortie et continuera jusqu\'à ce que l\'un d\'eux fonctionne.</string>
+    <string name="legacy_yes_i_saw_it_625527f4">Oui, je l\'ai vu</string>
+    <string name="legacy_no_nothing_appeared_f92c88fc">Non, rien ne s\'est affiché</string>
+    <!-- Shown when the video-format search cannot progress because every session so far ran the
+         Ride Dashboard, which sends its own format. -->
+    <string name="legacy_the_video_format_search_is_waiting_ac28c9a">La recherche du format vidéo est en attente</string>
+    <string name="legacy_moto_hub_is_still_looking_for_a_video_format_you_44b4c53c">MOTO-HUB cherche encore un format vidéo que votre tableau de bord sait afficher, mais il ne peut en tester un que pendant qu\'Android Auto fonctionne : le Ride Dashboard envoie toujours son propre format.</string>
+    <string name="legacy_connect_once_with_android_auto_and_the_search_mo_71871380">Connectez-vous une fois avec Android Auto et la recherche continue toute seule.</string>
+    <string name="legacy_got_it_7f79855f">Compris</string>
 </resources>

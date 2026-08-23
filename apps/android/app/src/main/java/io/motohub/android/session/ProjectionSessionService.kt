@@ -33,6 +33,7 @@ import io.motohub.android.feature.settings.MotoHubSettings
 import io.motohub.android.tbox.TBoxEvent
 import io.motohub.android.tbox.TBoxLinkResolver
 import io.motohub.android.tbox.TBoxModelProfile
+import io.motohub.android.tbox.TBoxWireLadder
 import io.motohub.android.tbox.TBoxTransportFamily
 import io.motohub.android.tbox.ProfileOverride
 import io.motohub.android.tbox.TBoxCapabilityStore
@@ -194,6 +195,9 @@ class ProjectionSessionService : Service() {
             capabilityStore.load(handle.motorcycle)?.capabilities,
             ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
         )
+        // What this dash is actually being sent. Identical to the profile's own fields for every
+        // recognised dash; for an unidentified one it is whichever rung TBoxWireLadder has reached.
+        val sessionWire = TBoxWireLadder.configFor(applicationContext, handle.motorcycle, modelProfile)
         val profile = configuration.encoderProfile.copy(
             frameRate = modelProfile.encoderFrameRate ?: configuration.encoderProfile.frameRate,
             // The profile's rate, where it has one, is the base the rider's quality setting scales -
@@ -201,12 +205,12 @@ class ProjectionSessionService : Service() {
             bitRate = quality.bitrateFor(
                 modelProfile.encoderBitRate ?: configuration.encoderProfile.bitRate
             ),
-            keyframeIntervalSeconds = modelProfile.encoderKeyframeIntervalSeconds,
+            keyframeIntervalSeconds = sessionWire.encoderKeyframeIntervalSeconds,
             // Yunmo's split framing needs real keyframes to split; intra refresh would make them
             // rare. A profile can also demand plain IDRs for its decoder's sake (KOVE froze on
             // intra refresh); every other EasyConn dash keeps intra refresh.
             plainGopWithoutIntraRefresh =
-                modelProfile.encoderPlainGopWithoutIntraRefresh ||
+                sessionWire.encoderPlainGopWithoutIntraRefresh ||
                     modelProfile.transportFamily == TBoxTransportFamily.YUNMO,
             // ThinkerRide's video header declares the exact stream size; encode precisely that
             // instead of the 16-aligned canvas, like the reference app does.
@@ -440,7 +444,8 @@ class ProjectionSessionService : Service() {
                 previousHandle.motorcycle.modelId,
                 null,
                 ProfileOverride.byKey(previousHandle.motorcycle.profileOverrideKey)
-            )
+            ),
+            previousHandle.motorcycle
         )
         val host = previousHandle.transport.discover(link, previousHandle.motorcycle.modelId).getOrThrow()
         val recoveredHandle = previousHandle.copy(host = host, link = link)

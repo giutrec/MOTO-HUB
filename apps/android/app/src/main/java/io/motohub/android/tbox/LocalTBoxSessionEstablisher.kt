@@ -31,7 +31,8 @@ class LocalTBoxSessionEstablisher(private val context: Context) : TBoxSessionEst
                 profile.modelId,
                 null,
                 ProfileOverride.byKey(profile.profileOverrideKey)
-            )
+            ),
+            profile
         )
         val discovered = transport.discover(link, profile.modelId)
         val host = discovered.getOrElse {

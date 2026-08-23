@@ -1700,4 +1700,18 @@
     <string name="legacy_connecting_to_1_s_2f10e3b8">%1$s에 연결 중</string>
     <string name="legacy_keep_moto_hub_open_closing_it_stops_the_search_54ec507">MOTO-HUB를 열어 두세요. 닫으면 검색이 중단됩니다.</string>
     <string name="legacy_hotspot_is_up_searching_it_for_the_dashboard_thi_caab4cd3">핫스팟이 켜졌습니다. 계기판을 검색 중입니다. 최대 90초가 걸릴 수 있으니 MOTO-HUB를 열어 두세요.</string>
+    <!-- Asked once per video format tried, after a session that looked healthy from the phone:
+         only the rider can see whether the dashboard actually displayed it. %1$s is the
+         motorcycle name. -->
+    <string name="legacy_did_it_show_up_on_the_dashboard_f341c05">계기판에 표시되었나요?</string>
+    <string name="legacy_last_time_you_connected_to_1_s_everything_looked_46fc9a09">지난번 %1$s에 연결했을 때 이 휴대폰에서는 모든 것이 정상으로 보였습니다. MOTO-HUB는 계기판 화면을 볼 수 없기 때문에 이것만은 직접 여쭤봐야 합니다.</string>
+    <string name="legacy_if_it_stayed_on_the_pairing_screen_moto_hub_will_40398b69">페어링 화면에 그대로 있었다면, MOTO-HUB가 다음 주행에서 다른 영상 형식을 시도하고 작동하는 것을 찾을 때까지 계속합니다.</string>
+    <string name="legacy_yes_i_saw_it_625527f4">네, 보였습니다</string>
+    <string name="legacy_no_nothing_appeared_f92c88fc">아니요, 아무것도 나오지 않았습니다</string>
+    <!-- Shown when the video-format search cannot progress because every session so far ran the
+         Ride Dashboard, which sends its own format. -->
+    <string name="legacy_the_video_format_search_is_waiting_ac28c9a">영상 형식 검색이 대기 중입니다</string>
+    <string name="legacy_moto_hub_is_still_looking_for_a_video_format_you_44b4c53c">MOTO-HUB는 계기판이 표시할 수 있는 영상 형식을 계속 찾고 있지만, Android Auto가 실행 중일 때만 테스트할 수 있습니다. Ride Dashboard는 항상 자체 형식을 보냅니다.</string>
+    <string name="legacy_connect_once_with_android_auto_and_the_search_mo_71871380">Android Auto로 한 번만 연결하면 검색이 알아서 진행됩니다.</string>
+    <string name="legacy_got_it_7f79855f">알겠습니다</string>
 </resources>

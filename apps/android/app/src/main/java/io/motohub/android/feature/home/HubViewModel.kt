@@ -32,6 +32,8 @@ import io.motohub.android.tbox.TBoxSessionHandle
 import io.motohub.android.tbox.TBoxSessionRegistry
 import io.motohub.android.tbox.TBoxVpnDiagnostics
 import io.motohub.android.tbox.TBoxConflictDiagnostics
+import io.motohub.android.tbox.TBoxLadderState
+import io.motohub.android.tbox.TBoxWireLadder
 import io.motohub.android.tbox.WifiGate
 import io.motohub.android.tbox.CompanionAppRegistry
 import kotlinx.coroutines.Job
@@ -47,7 +49,18 @@ data class HubUiState(
     val ssid: String = "",
     val password: String = "",
     val connectionMode: TBoxConnectionMode = TBoxConnectionMode.AUTO,
-    val formError: String? = null
+    val formError: String? = null,
+    /**
+     * The motorcycle whose last session streamed happily and now needs the one thing the protocol
+     * cannot report: whether anything appeared on the dashboard. Null unless the wire ladder is
+     * waiting on that answer.
+     */
+    val wireQuestionFor: MotorcycleProfile? = null,
+    /**
+     * Set when the search is stuck because every session so far ran the Ride Dashboard, which
+     * sends its own video format and so teaches the search nothing.
+     */
+    val wireNeedsAndroidAutoFor: MotorcycleProfile? = null
 )
 
 class HubViewModel(application: Application) : AndroidViewModel(application) {
@@ -488,7 +501,8 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
                 transport.configureProtocolProfile(
-                    learnedProfile ?: TBoxModelProfile.resolve(profile.modelId, null, requestedOverride)
+                    learnedProfile ?: TBoxModelProfile.resolve(profile.modelId, null, requestedOverride),
+                    profile
                 )
                 val discovered = transport.discover(establishedLink, profile.modelId)
                 val discoveryFailure = discovered.exceptionOrNull()
@@ -671,6 +685,41 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
             connectionMode = TBoxConnectionMode.PHONE_HOTSPOT,
             formError = null
         )
+    }
+
+    /**
+     * Asked when the app comes back to the foreground, not the moment a session ends: the rider is
+     * on a motorcycle when it ends, and the question is about something they have to look at.
+     */
+    fun refreshWireQuestion() {
+        val motorcycle = profileStore.load()
+        val pending = motorcycle?.takeIf {
+            TBoxWireLadder.load(getApplication(), it).state == TBoxLadderState.AWAITING_RIDER
+        }
+        // The nudge only matters while nothing is being asked: one question at a time.
+        val nudge = motorcycle?.takeIf {
+            pending == null && TBoxWireLadder.needsAndroidAutoNudge(getApplication(), it)
+        }
+        if (pending?.id != mutableUiState.value.wireQuestionFor?.id ||
+            nudge?.id != mutableUiState.value.wireNeedsAndroidAutoFor?.id
+        ) {
+            mutableUiState.value = mutableUiState.value.copy(
+                wireQuestionFor = pending,
+                wireNeedsAndroidAutoFor = nudge
+            )
+        }
+    }
+
+    fun dismissWireAndroidAutoNudge() {
+        val motorcycle = mutableUiState.value.wireNeedsAndroidAutoFor ?: return
+        TBoxWireLadder.markAndroidAutoNudgeShown(getApplication(), motorcycle)
+        mutableUiState.value = mutableUiState.value.copy(wireNeedsAndroidAutoFor = null)
+    }
+
+    fun answerWireQuestion(projectionSeen: Boolean) {
+        val motorcycle = mutableUiState.value.wireQuestionFor ?: return
+        TBoxWireLadder.onRiderVerdict(getApplication(), motorcycle, projectionSeen)
+        mutableUiState.value = mutableUiState.value.copy(wireQuestionFor = null)
     }
 
     /**

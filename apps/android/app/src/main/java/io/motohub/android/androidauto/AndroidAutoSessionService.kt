@@ -42,6 +42,7 @@ import io.motohub.android.tbox.ProfileOverride
 import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxNetworkEvent
 import io.motohub.android.tbox.TBoxModelProfile
+import io.motohub.android.tbox.TBoxWireLadder
 import io.motohub.android.tbox.TBoxTransportFamily
 import io.motohub.android.tbox.SelectingTBoxTransport
 import io.motohub.android.tbox.TBoxSessionHandle
@@ -527,6 +528,13 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         val configuration = configurationResult.getOrThrow()
         val quality = MotoHubSettings.videoQuality(this)
         val sessionModelProfile = resolveSessionProfile(handle)
+        // What this dash is actually being sent. Identical to the profile's own fields for every
+        // recognised dash; for an unidentified one it is whichever rung TBoxWireLadder has reached.
+        val sessionWire = TBoxWireLadder.configFor(
+            applicationContext,
+            handle.motorcycle,
+            sessionModelProfile
+        )
         val encoderProfile = configuration.encoderProfile.copy(
             // Frame rate and bitrate were previously honoured only on the native mirror path, so a
             // dash whose profile asks for a slower capture still got Android Auto's negotiated 30
@@ -537,12 +545,12 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
             bitRate = quality.bitrateFor(
                 sessionModelProfile.encoderBitRate ?: configuration.encoderProfile.bitRate
             ),
-            keyframeIntervalSeconds = sessionModelProfile.encoderKeyframeIntervalSeconds,
+            keyframeIntervalSeconds = sessionWire.encoderKeyframeIntervalSeconds,
             // Yunmo's split framing needs real keyframes to split; intra refresh would make them
             // rare. A profile can also demand plain IDRs for its decoder's sake (KOVE froze on
             // intra refresh); every other EasyConn dash keeps intra refresh.
             plainGopWithoutIntraRefresh =
-                sessionModelProfile.encoderPlainGopWithoutIntraRefresh ||
+                sessionWire.encoderPlainGopWithoutIntraRefresh ||
                     sessionModelProfile.transportFamily == TBoxTransportFamily.YUNMO,
             // ThinkerRide's video header declares the exact stream size; encode precisely that
             // instead of the 16-aligned canvas, like the reference app does.
@@ -1121,7 +1129,8 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                 previousHandle.motorcycle.modelId,
                 null,
                 ProfileOverride.byKey(previousHandle.motorcycle.profileOverrideKey)
-            )
+            ),
+            previousHandle.motorcycle
         )
         val host = previousHandle.transport.discover(
             link,
