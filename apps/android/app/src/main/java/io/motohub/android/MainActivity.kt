@@ -68,6 +68,7 @@ import io.motohub.android.feature.about.MOTO_HUB_DISCORD_URL
 import io.motohub.android.feature.about.MOTO_HUB_GITHUB_URL
 import io.motohub.android.feature.garage.GarageTabContent
 import io.motohub.android.feature.garage.MotorcycleDetailsScreen
+import io.motohub.android.feature.garage.MotorcyclePhotoSource
 import io.motohub.android.feature.garage.TBoxCapabilityScreen
 import io.motohub.android.feature.home.HubHomeScreen
 import io.motohub.android.feature.home.HubViewModel
@@ -404,26 +405,59 @@ class MainActivity : ComponentActivity() {
                 val projectionManager = context.getSystemService(
                     MediaProjectionManager::class.java
                 )
-                val motorcyclePhotoLauncher = rememberLauncherForActivityResult(
-                    ActivityResultContracts.PickVisualMedia()
-                ) { uri ->
+                // Shared tail of every photo source (gallery, document picker, camera).
+                val storeMotorcyclePhoto: (Uri?) -> Unit = { uri ->
                     val profileId = photoTargetProfileId
                     photoTargetProfileId = null
                     val profile = state.motorcycles.firstOrNull { it.id == profileId }
-                    if (uri == null || profile == null) return@rememberLauncherForActivityResult
-                    motorcyclePhotoStore.copyFromUri(profile.id, uri)
-                        .onSuccess { photoPath ->
-                            if (viewModel.updateMotorcycle(profile.copy(photoPath = photoPath))) {
-                                motorcyclePhotoStore.delete(profile.photoPath)
-                            } else {
-                                motorcyclePhotoStore.delete(photoPath)
+                    if (uri != null && profile != null) {
+                        motorcyclePhotoStore.copyFromUri(profile.id, uri)
+                            .onSuccess { photoPath ->
+                                if (viewModel.updateMotorcycle(profile.copy(photoPath = photoPath))) {
+                                    motorcyclePhotoStore.delete(profile.photoPath)
+                                } else {
+                                    motorcyclePhotoStore.delete(photoPath)
+                                }
+                                ProjectionEventLog.record("GARAGE", "Photo updated for motorcycle ${profile.ssid}.")
                             }
-                            ProjectionEventLog.record("GARAGE", "Photo updated for motorcycle ${profile.ssid}.")
-                        }
-                        .onFailure {
-                            ProjectionEventLog.error("GARAGE", "Unable to store the selected motorcycle photo.", it)
-                            Toast.makeText(context, motoHubText("Unable to save the motorcycle photo"), Toast.LENGTH_SHORT).show()
-                        }
+                            .onFailure {
+                                ProjectionEventLog.error("GARAGE", "Unable to store the selected motorcycle photo.", it)
+                                Toast.makeText(context, motoHubText("Unable to save the motorcycle photo"), Toast.LENGTH_SHORT).show()
+                            }
+                    }
+                }
+                val motorcyclePhotoLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.PickVisualMedia()
+                ) { uri -> storeMotorcyclePhoto(uri) }
+                // The document picker reaches Downloads, SD cards and cloud providers the media picker hides.
+                val motorcyclePhotoFileLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.OpenDocument()
+                ) { uri -> storeMotorcyclePhoto(uri) }
+                var motorcycleCameraCaptureUri by rememberSaveable { mutableStateOf<String?>(null) }
+                val motorcyclePhotoCameraLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.TakePicture()
+                ) { captured ->
+                    val captureUri = motorcycleCameraCaptureUri?.let(Uri::parse)
+                    motorcycleCameraCaptureUri = null
+                    storeMotorcyclePhoto(captureUri.takeIf { captured })
+                    motorcyclePhotoStore.discardCameraCapture(captureUri)
+                }
+                val launchMotorcycleCamera = {
+                    val captureUri = motorcyclePhotoStore.createCameraCaptureUri()
+                    motorcycleCameraCaptureUri = captureUri.toString()
+                    motorcyclePhotoCameraLauncher.launch(captureUri)
+                }
+                // CAMERA is declared in the manifest, so even the system camera intent needs the grant.
+                val motorcyclePhotoCameraPermissionLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission()
+                ) { granted ->
+                    ProjectionEventLog.record("PERMISSION", "Camera permission for the garage photo: granted=$granted.")
+                    if (granted) {
+                        launchMotorcycleCamera()
+                    } else {
+                        photoTargetProfileId = null
+                        Toast.makeText(context, motoHubText("Camera permission is required to take a photo"), Toast.LENGTH_SHORT).show()
+                    }
                 }
                 val projectionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.StartActivityForResult()
@@ -1090,11 +1124,23 @@ class MainActivity : ComponentActivity() {
                                 screenMarginsStore.save(profile, margins)
                                 ProjectionEventLog.record("ANDROID_AUTO", "TFT screen margins changed for ${profile.ssid}: $margins.")
                             },
-                           onChoosePhoto = {
+                           onChoosePhoto = { source ->
                                 photoTargetProfileId = profile.id
-                                motorcyclePhotoLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                )
+                                ProjectionEventLog.record("GARAGE", "Photo source chosen for ${profile.ssid}: $source.")
+                                when (source) {
+                                    MotorcyclePhotoSource.GALLERY -> motorcyclePhotoLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                    MotorcyclePhotoSource.FILES -> motorcyclePhotoFileLauncher.launch(arrayOf("image/*"))
+                                    MotorcyclePhotoSource.CAMERA ->
+                                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                                            PackageManager.PERMISSION_GRANTED
+                                        ) {
+                                            launchMotorcycleCamera()
+                                        } else {
+                                            motorcyclePhotoCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                                        }
+                                }
                             },
                             onRemovePhoto = {
                                 val oldPath = profile.photoPath

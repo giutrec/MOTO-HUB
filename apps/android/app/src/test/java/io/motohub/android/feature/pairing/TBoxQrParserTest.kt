@@ -235,6 +235,21 @@ class TBoxQrParserTest {
     }
 
     @Test
+    fun theTopologyClaimReadsBackInWords() {
+        val both = TBoxQrParser.parse(
+            "http://www.carbit.com.cn/x?ssid=ZT_e0082100e5ff_3&pwd=12345678&action=9"
+        ).getOrThrow()
+        val hotspot = TBoxQrParser.parse(
+            "http://www.carbit.com.cn/x?modelid=21322&action=128&bm=DD0D3024876D"
+        ).getOrThrow()
+        val silent = TBoxQrParser.parse("http://www.carbit.com.cn/x?ssid=EASYCONN_5G-A1").getOrThrow()
+
+        assertEquals("access point, Wi-Fi Direct (action=9)", both.topology.describe())
+        assertEquals("phone hosts the hotspot (action=128)", hotspot.topology.describe())
+        assertEquals("nothing (no action bitmask in the code)", silent.topology.describe())
+    }
+
+    @Test
     fun anOpaqueCarbitTokenPairsOverBluetooth() {
         // The whole code a Zontes S350 prints. No network, no password, no action bitmask - just
         // the dash's identity - so the only transport that can use it is the Bluetooth one.

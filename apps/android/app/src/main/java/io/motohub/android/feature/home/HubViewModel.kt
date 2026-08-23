@@ -212,7 +212,15 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         ProjectionEventLog.record(
             "PAIRING",
             "Valid T-Box QR decoded: ssid=${payload.ssid}, modelId=${payload.modelId ?: "not provided"}, " +
-                "passwordPresent=${payload.password.isNotEmpty()}."
+                "passwordPresent=${payload.password.isNotEmpty()}, " +
+                // What the dash says about how it can be reached, which is the first thing worth
+                // knowing when a rider reports "it connects but the screen stays on the QR code".
+                // It was parsed all along and never written down: a Zontes 368G (modelId 21334)
+                // joined its access point perfectly on 2026-08-22 and then refused every port,
+                // and nothing in that log says whether the code had claimed an access point, a
+                // Wi-Fi Direct group, both, or neither.
+                "advertises=${payload.topology.describe()}, " +
+                "dashMac=${payload.dashMacAddress ?: "not provided"}."
         )
         val existing = mutableUiState.value.motorcycles.firstOrNull { it.ssid == payload.ssid }
         val profile = existing?.copy(

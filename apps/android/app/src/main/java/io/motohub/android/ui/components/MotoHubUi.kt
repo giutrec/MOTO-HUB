@@ -462,7 +462,11 @@ fun MotoHubDetailScreen(
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.SemiBold
         )
-        Text(title, style = MaterialTheme.typography.displaySmall)
+        Text(
+            title,
+            style = MaterialTheme.typography.displaySmall,
+            color = MaterialTheme.colorScheme.onBackground
+        )
         content()
         Spacer(Modifier.height(8.dp))
     }

@@ -91,7 +91,7 @@ fun AboutScreen(
                 )
                 Text(
                     text = motoHubText(
-                        "MOTO-HUB connects an Android 14+ phone to a motorcycle dashboard that " +
+                        "MOTO-HUB connects an Android 12+ phone to a motorcycle dashboard that " +
                             "pairs over EasyConn — the Carbit software several manufacturers ship, " +
                             "CFMOTO among them. It supports screen and app mirroring, Android Auto " +
                             "projection, saved motorcycle profiles, and on-device diagnostics."
@@ -225,7 +225,7 @@ private fun VersionCard(onUnlockPrototype: (() -> Unit)? = null) {
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 MonoLabel(motoHubText("PLATFORM"))
                 Text(
-                    text = "Android 14+",
+                    text = "Android 12+",
                     style = MaterialTheme.typography.titleMedium,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold

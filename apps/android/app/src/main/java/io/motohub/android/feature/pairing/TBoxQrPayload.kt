@@ -48,6 +48,21 @@ value class TBoxQrTopology(val bits: Int) {
     val wifiDirect: Boolean get() = bits and BIT_P2P != 0
     val phoneHostsHotspot: Boolean get() = bits and BIT_PHONE_HOTSPOT != 0
 
+    /**
+     * The claim in words, for a log a rider will mail in. `bits=0` is itself an answer - a code
+     * that made no claim at all - and is worth saying rather than printing an empty list.
+     */
+    fun describe(): String {
+        if (bits == 0) return "nothing (no action bitmask in the code)"
+        val claims = buildList {
+            if (bits and BIT_AP != 0) add("access point")
+            if (bits and BIT_AP_INTERNET != 0) add("access point with internet")
+            if (wifiDirect) add("Wi-Fi Direct")
+            if (phoneHostsHotspot) add("phone hosts the hotspot")
+        }
+        return if (claims.isEmpty()) "unknown (action=$bits)" else claims.joinToString() + " (action=$bits)"
+    }
+
     /** True only when the dash said something and none of it was an access point of its own. */
     val neverOffersAccessPoint: Boolean get() = bits != 0 && !accessPoint
 

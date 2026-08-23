@@ -31,6 +31,7 @@ import io.motohub.android.androidauto.AndroidAutoPreviewRuntime
 import io.motohub.android.androidauto.AndroidAutoReceiverOwnership
 import io.motohub.android.androidauto.AndroidAutoRuntime
 import io.motohub.android.androidauto.AndroidAutoRuntimeState
+import io.motohub.android.androidauto.AndroidAutoNightModeStore
 import io.motohub.android.androidauto.AndroidAutoSessionService
 import io.motohub.android.androidauto.withFullVideoTarget
 import io.motohub.android.feature.settings.AndroidAutoAspectMatchingMode
@@ -672,6 +673,11 @@ class IpcBridgeService : Service() {
             }
             runCatching { MotoHubSettings.setDisableTouchscreen(ctx, settings.disableTouchscreen) }
             runCatching { MotoHubSettings.setSeamlessResume(ctx, settings.seamlessResume) }
+            // The companion resolves Auto/Day/Night itself and sends the answer; AaReceiver
+            // reads Core's own store when the transport connects, so without this mirror a
+            // session always started with the flag left by the last LIVE toggle, not with the
+            // theme the rider actually has selected.
+            runCatching { AndroidAutoNightModeStore(ctx).save(settings.nightMode) }
             // Display mode (Garage's Stretch/Fit/Letterbox) is stored per-motorcycle, in the
             // caller's OWN app data — Core never sees it unless the caller forwards it here.
             // AndroidAutoSessionService reads it back keyed by handle.motorcycle (the same
@@ -763,9 +769,20 @@ class IpcBridgeService : Service() {
             ProjectionEventLog.record("IPC_AA", "Applied companion Android Auto settings snapshot.")
         }
 
-        // Toggles day/night on the running session via the same runtime path the UI uses.
-        override fun setNightMode(isNight: Boolean): Boolean =
-            AndroidAutoPreviewRuntime.setNightMode(isNight)
+        // Toggles day/night on the running session. The embedded (Ride Dashboard) receiver is
+        // owned by this service and never installs itself in AndroidAutoPreviewRuntime - only
+        // AndroidAutoSessionService does - so routing every call through the runtime left the
+        // companion's Map appearance picker a no-op while Android Auto ran inside the dashboard:
+        // the controller was null, the call returned false, and Waze/Maps stayed on whatever
+        // theme the session had connected with. The stored flag is what AaReceiver hands the
+        // next transport at connect, so it is kept in step here exactly as the full session does.
+        override fun setNightMode(isNight: Boolean): Boolean {
+            val applied = receiver?.let { embedded ->
+                embedded.setNightMode(isNight)
+            } ?: AndroidAutoPreviewRuntime.setNightMode(isNight)
+            if (applied) AndroidAutoNightModeStore(applicationContext).save(isNight)
+            return applied
+        }
 
         // Triggers Core's own existing AndroidAutoSessionService unchanged — this deliberately
         // does not duplicate its pipeline (watchdog/recovery/T-Box negotiation) here. Both this

@@ -220,7 +220,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
             "Behavior profile=${modelProfile.displayName}; touch enabled=$touchEnabled, " +
                 "touch max=${modelProfile.touchPolicy.maxPointers}, " +
                 "stale=${modelProfile.touchPolicy.staleContactMillis}ms; " +
-                "screen margins=${modelProfile.defaultScreenMargins}."
+                "screen margins=$screenMargins (profile default ${modelProfile.defaultScreenMargins})."
         )
         val resolutionMode = MotoHubSettings.androidAutoResolution(this)
         val aspectMatchingMode = MotoHubSettings.androidAutoAspectMatching(this)
