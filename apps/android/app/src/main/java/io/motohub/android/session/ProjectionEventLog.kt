@@ -345,7 +345,14 @@ object ProjectionEventLog {
         }.onFailure { Log.e(LOG_TAG, "Unable to persist diagnostic log", it) }
     }
 
-    fun clear() {
+    /**
+     * Empties the ring, the pending buffer and the log file.
+     *
+     * [reason] is the first line of the fresh log: a log screen that goes blank with no
+     * explanation reads as a fault, and the caller is not always the rider - the diagnostics
+     * collector clears the log once the server has confirmed it holds these lines.
+     */
+    fun clear(reason: String = "Diagnostic log cleared by the user.") {
         synchronized(lock) {
             ring.clear()
             pendingLines = StringBuilder()
@@ -356,7 +363,7 @@ object ProjectionEventLog {
         }
         // On the writer thread so it cannot interleave with a flush already in progress.
         runCatching { writer.execute { logFile?.runCatching { writeText("", Charsets.UTF_8) } } }
-        record("LOG", "Diagnostic log cleared by the user.")
+        record("LOG", reason)
     }
 
     fun debug(source: String, message: String) = record(source, message, LogLevel.DEBUG)
