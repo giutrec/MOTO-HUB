@@ -19,45 +19,52 @@ import io.motohub.android.i18n.motoHubText
 import io.motohub.android.ui.components.MotoHubDialogBody
 
 /**
- * A pre-flight warning, not a claim that the official app is currently active.
+ * A pre-flight warning, not a claim that [companionAppName] is currently active.
  * Android does not expose a reliable cross-version API for determining whether another
  * application's background service owns the EasyConn connection, so we make the rider aware
  * of the known conflict before opening Google Android Auto.
+ *
+ * [companionAppName] is whichever companion app CompanionAppRegistry found on this phone, under
+ * the label its own launcher icon carries. It used to be CFMOTO's, hard-coded, which read as
+ * nonsense to every rider of another brand.
  */
 @Composable
-fun OfficialCfmotoWarningDialog(
+fun CompanionAppWarningDialog(
+    companionAppName: String,
     doNotShowAgain: Boolean,
     onDoNotShowAgainChanged: (Boolean) -> Unit,
     onDismiss: () -> Unit,
-    onOpenOfficialAppSettings: () -> Unit,
+    onOpenCompanionAppSettings: () -> Unit,
     onContinue: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(motoHubText("CFMOTO MotoPlay detected")) },
+        title = { Text(motoHubText("%1\$s detected", companionAppName)) },
         text = {
             MotoHubDialogBody {
                 Text(
                     motoHubText(
-                        "MOTO-HUB starts Google Android Auto, not MotoPlay."
+                        "MOTO-HUB starts Google Android Auto, not %1\$s.",
+                        companionAppName
                     ),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
                     motoHubText(
-                        "The official CFMOTO MotoPlay/EasyConn app can still take over the T-Box " +
-                            "connection while it is in the background. For reliable projection, force-stop " +
-                            "it in Android settings before continuing."
+                        "%1\$s can still take over the dashboard connection while it is in the " +
+                            "background. For reliable projection, force-stop it in Android settings " +
+                            "before continuing.",
+                        companionAppName
                     ),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 // Three buttons never fit on one row of a narrow phone, and Material 3 wraps them
                 // into a ragged stack, so the settings shortcut sits with the text that asks for it.
                 OutlinedButton(
-                    onClick = onOpenOfficialAppSettings,
+                    onClick = onOpenCompanionAppSettings,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(motoHubText("Open MotoPlay settings"))
+                    Text(motoHubText("Open %1\$s settings", companionAppName))
                 }
                 Row(
                     modifier = Modifier

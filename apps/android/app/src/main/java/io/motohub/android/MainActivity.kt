@@ -74,7 +74,7 @@ import io.motohub.android.feature.home.HubHomeScreen
 import io.motohub.android.feature.home.HubViewModel
 import io.motohub.android.feature.androidauto.AndroidAutoHelpScreen
 import io.motohub.android.feature.androidauto.AndroidAutoPreviewScreen
-import io.motohub.android.feature.androidauto.OfficialCfmotoWarningDialog
+import io.motohub.android.feature.androidauto.CompanionAppWarningDialog
 import io.motohub.android.feature.controls.HandlebarTeachPrerequisiteRequest
 import io.motohub.android.feature.diagnostics.NetworkDiagnosticsScreen
 import io.motohub.android.feature.diagnostics.NetworkDiagnosticsViewModel
@@ -111,7 +111,7 @@ import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxModelProfile
 import io.motohub.android.tbox.TBoxPortScanResult
 import io.motohub.android.tbox.TBoxPortScanner
-import io.motohub.android.tbox.OfficialCfmotoClient
+import io.motohub.android.tbox.CompanionAppRegistry
 import io.motohub.android.tbox.WifiGate
 import io.motohub.android.ui.components.HubScreenKey
 import io.motohub.android.ui.components.HubScreenTransition
@@ -504,7 +504,11 @@ class MainActivity : ComponentActivity() {
                 }
                 var projectionPermissionPending by rememberSaveable { mutableStateOf(false) }
                 var androidAutoPermissionPending by rememberSaveable { mutableStateOf(false) }
-                var showOfficialCfmotoWarning by rememberSaveable { mutableStateOf(false) }
+                // The app itself, not a flag: the dialog has to name it, and re-deriving it at
+                // render time would ask the package manager again on every recomposition.
+                var conflictingCompanionApp by remember {
+                    mutableStateOf<CompanionAppRegistry.CompanionApp?>(null)
+                }
                 var externalDisplayPermissionPending by rememberSaveable { mutableStateOf(false) }
                 // Mirrors androidAutoPermissionPending for the phone-only path (see
                 // startPhoneOnlyBridge below) - a real T-Box session and a phone-only one both
@@ -657,14 +661,14 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 val startAndroidAutoWithWarning: () -> Unit = {
-                    if (OfficialCfmotoClient.isInstalled(context) &&
-                        !MotoHubSettings.motoPlayWarningSuppressed(context)
-                    ) {
+                    val companion = CompanionAppRegistry.installed(context)
+                    if (companion != null && !MotoHubSettings.motoPlayWarningSuppressed(context)) {
                         ProjectionEventLog.record(
                             "ANDROID_AUTO",
-                            "Official CFMOTO app is installed; showing MotoPlay conflict warning before launch."
+                            "${companion.displayName} (${companion.packageName}) is installed; " +
+                                "showing the companion-app conflict warning before launch."
                         )
-                        showOfficialCfmotoWarning = true
+                        conflictingCompanionApp = companion
                     } else {
                         continueAndroidAutoStart()
                     }
@@ -1259,26 +1263,29 @@ class MainActivity : ComponentActivity() {
                             showManualPairing = true
                         },
                         onConnectAndDiscover = connectToActiveMotorcycle,
-                        officialCfmotoAppInstalled = OfficialCfmotoClient.isInstalled(context),
-                        onCloseOfficialCfmotoAndRetry = {
+                        companionAppName = CompanionAppRegistry.installedName(context),
+                        onCloseCompanionAppAndRetry = {
                             // Android 14+ cannot close another app's process; this action is a
-                            // plain retry for after the user has force-stopped the official app.
+                            // plain retry for after the user has force-stopped the companion app.
                             ProjectionEventLog.record(
                                 "CONNECTION",
-                                "Retry requested from the official-app conflict help."
+                                "Retry requested from the companion-app conflict help."
                             )
                             lifecycleScope.launch {
                                 delay(OFFICIAL_APP_CLOSE_RETRY_DELAY_MS)
                                 // The rider was sent to another app's settings to force-stop it,
                                 // so this retry often lands with MOTO-HUB still in the background.
-                                connectWhenAndroidAccepts("official-app conflict retry")
+                                connectWhenAndroidAccepts("companion-app conflict retry")
                             }
                         },
-                        onOpenOfficialCfmotoSettings = {
-                            if (!OfficialCfmotoClient.openAppSettings(context)) {
+                        onOpenCompanionAppSettings = {
+                            val companion = CompanionAppRegistry.installed(context)
+                            if (companion == null ||
+                                !CompanionAppRegistry.openAppSettings(context, companion)
+                            ) {
                                 Toast.makeText(
                                     context,
-                                    motoHubText("Unable to open official CFMOTO app settings"),
+                                    motoHubText("Unable to open the companion app settings"),
                                     Toast.LENGTH_LONG
                                 ).show()
                             }
@@ -1525,22 +1532,23 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 }
-                if (showOfficialCfmotoWarning) {
+                conflictingCompanionApp?.let { companion ->
                     var doNotShowMotoPlayWarningAgain by rememberSaveable { mutableStateOf(false) }
-                    OfficialCfmotoWarningDialog(
+                    CompanionAppWarningDialog(
+                        companionAppName = companion.displayName,
                         doNotShowAgain = doNotShowMotoPlayWarningAgain,
                         onDoNotShowAgainChanged = { doNotShowMotoPlayWarningAgain = it },
                         onDismiss = {
                             if (doNotShowMotoPlayWarningAgain) {
                                 MotoHubSettings.setMotoPlayWarningSuppressed(context, true)
                             }
-                            showOfficialCfmotoWarning = false
+                            conflictingCompanionApp = null
                         },
-                        onOpenOfficialAppSettings = {
-                            if (!OfficialCfmotoClient.openAppSettings(context)) {
+                        onOpenCompanionAppSettings = {
+                            if (!CompanionAppRegistry.openAppSettings(context, companion)) {
                                 Toast.makeText(
                                     context,
-                                    motoHubText("Unable to open official CFMOTO app settings"),
+                                    motoHubText("Unable to open the companion app settings"),
                                     Toast.LENGTH_LONG
                                 ).show()
                             }
@@ -1549,10 +1557,11 @@ class MainActivity : ComponentActivity() {
                             if (doNotShowMotoPlayWarningAgain) {
                                 MotoHubSettings.setMotoPlayWarningSuppressed(context, true)
                             }
-                            showOfficialCfmotoWarning = false
+                            conflictingCompanionApp = null
                             ProjectionEventLog.record(
                                 "ANDROID_AUTO",
-                                "User continued Android Auto launch after MotoPlay conflict warning; " +
+                                "User continued Android Auto launch after the " +
+                                    "${companion.displayName} conflict warning; " +
                                     "doNotShowAgain=$doNotShowMotoPlayWarningAgain."
                             )
                             continueAndroidAutoStart()

@@ -1252,17 +1252,18 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_unable_to_open_wi_fi_settings_537aaf03">No se han podido abrir los ajustes de Wi-Fi</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_unable_to_open_official_cfmoto_app_settings_ec49e64b">No se han podido abrir los ajustes de la aplicación oficial de CFMOTO</string>
+    <string name="legacy_unable_to_open_the_companion_app_settings_c0a83e03">No se han podido abrir los ajustes de la aplicación del fabricante</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_no_open_ports_found_8533cd9d">no se ha encontrado ningún puerto abierto</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_open_1_s_e55a596b">abierto: %1$s</string>
-    <!-- Android Auto pre-flight: the official MotoPlay client is installed, but may not be active. -->
-    <string name="legacy_cfmoto_motoplay_detected_ca887791">CFMOTO MotoPlay detectado</string>
-    <string name="legacy_moto_hub_starts_google_android_auto_not_motoplay_1ab1d3e9">MOTO-HUB inicia Google Android Auto, no MotoPlay.</string>
-    <string name="legacy_the_official_cfmoto_motoplay_easyconn_app_can_st_7e0ae938">La aplicación oficial CFMOTO MotoPlay/EasyConn puede seguir tomando el control de la conexión con el T-Box mientras está en segundo plano. Para una proyección fiable, fuérzala a detenerse en los ajustes de Android antes de continuar.</string>
+    <!-- Android Auto pre-flight: an OEM companion app is installed, but may not be active. %1$s is
+         its name as shown on the phone (CFMOTO, Zontes Smart, Carbit Ride, ...). -->
+    <string name="legacy_1_s_detected_66208287">%1$s detectado</string>
+    <string name="legacy_moto_hub_starts_google_android_auto_not_1_s_3a77813f">MOTO-HUB inicia Google Android Auto, no %1$s.</string>
+    <string name="legacy_1_s_can_still_take_over_the_dashboard_connection_5bc85002">%1$s puede seguir tomando el control de la conexión con el salpicadero mientras está en segundo plano. Para una proyección fiable, fuérzala a detenerse en los ajustes de Android antes de continuar.</string>
     <string name="legacy_continue_with_android_auto_f6c7ef01">Continuar con Android Auto</string>
-    <string name="legacy_open_motoplay_settings_99bbfe9c">Abrir los ajustes de MotoPlay</string>
+    <string name="legacy_open_1_s_settings_470b74f2">Abrir los ajustes de %1$s</string>
     <string name="legacy_do_not_show_this_warning_again_d3abf59b">No volver a mostrar este aviso</string>
     <!-- Source: tbox/ProfileOverride.kt -->
     <string name="legacy_generic_dashboard_53d1376b">Cuadro de instrumentos genérico</string>
@@ -1363,11 +1364,11 @@
 
     <!-- Source: feature/home/HubHomeScreen.kt -->
     <string name="legacy_android_auto_17_4_removed_the_way_apps_ask_it_to_b5455068">Android Auto 17.4 eliminó la forma en que las aplicaciones le piden que proyecte. Todavía se puede iniciar desde el menú de desarrollador del propio Android Auto.</string>
-    <string name="legacy_one_possible_cause_the_official_cfmoto_app_is_in_b6013d8d">Una causa posible: la aplicación oficial de CFMOTO está instalada y puede mantener ocupado el enlace con el T-Box incluso en segundo plano. Si la conexión sigue fallando, fuérzala a detenerse desde su página de Información de la aplicación y vuelve a intentarlo.</string>
-    <string name="legacy_open_cfmoto_app_info_4af1a737">Abrir la información de la aplicación CFMOTO</string>
+    <string name="legacy_one_possible_cause_1_s_is_installed_and_can_keep_47cef163">Una causa posible: %1$s está instalada y puede mantener ocupado el enlace con el salpicadero incluso en segundo plano. Si la conexión sigue fallando, fuérzala a detenerse desde su página de Información de la aplicación y vuelve a intentarlo.</string>
+    <string name="legacy_open_1_s_app_info_33a7c01c">Abrir la información de la aplicación %1$s</string>
     <string name="legacy_retry_connection_54743f76">Reintentar la conexión</string>
     <string name="legacy_some_dashboards_never_broadcast_a_network_of_the_787ecd2c">Algunos cuadros de instrumentos nunca emiten una red propia: se unen a un punto de acceso creado por tu teléfono, usando el Ssid y la Contraseña que aparecen en la pantalla. Si el tuyo dice «abrir punto de acceso Android», prueba así.</string>
-    <string name="legacy_the_official_cfmoto_app_is_installed_and_may_be__461e26a6">La aplicación oficial de CFMOTO está instalada y puede estar ocupando el T-Box. Fuérzala a detenerse desde su página de Información de la aplicación y vuelve a intentarlo.</string>
+    <string name="legacy_1_s_is_installed_and_may_be_holding_the_dashboar_2c02bb10">%1$s está instalada y puede estar ocupando el salpicadero. Fuérzala a detenerse desde su página de Información de la aplicación y vuelve a intentarlo.</string>
     <string name="legacy_try_my_phone_hosts_the_hotspot_d4f6db66">Prueba: el punto de acceso lo crea mi teléfono</string>
 
     <!-- Source: feature/home/HubViewModel.kt -->
@@ -1696,4 +1697,12 @@
     <string name="legacy_that_was_a_single_press_press_twice_quickly_for__e774e0f2">Eso ha sido una pulsación simple: pulsa dos veces rápido para la doble.</string>
     <string name="legacy_that_was_a_quick_tap_press_and_hold_a_moment_lon_5b9c9d4d">Eso ha sido un toque rápido: mantén pulsado un poco más.</string>
     <string name="legacy_open_hotspot_settings_7d1f3d4a">Abrir los ajustes del punto de acceso</string>
+    <!-- The "MOTO-HUB is still looking" notification shown while a connection attempt runs,
+         and the hosted-network wording that tells the rider not to close the app. %1$s is
+         the motorcycle network name. -->
+    <string name="legacy_moto_hub_connection_progress_c260af34">Progreso de la conexión de MOTO-HUB</string>
+    <string name="legacy_looking_for_1_s_9983a22f">Buscando %1$s</string>
+    <string name="legacy_connecting_to_1_s_2f10e3b8">Conectando a %1$s</string>
+    <string name="legacy_keep_moto_hub_open_closing_it_stops_the_search_54ec507">Mantén MOTO-HUB abierto: cerrarlo detiene la búsqueda.</string>
+    <string name="legacy_hotspot_is_up_searching_it_for_the_dashboard_thi_caab4cd3">El punto de acceso está activo. Buscando el salpicadero: puede tardar hasta 90 segundos, así que mantén MOTO-HUB abierto.</string>
 </resources>

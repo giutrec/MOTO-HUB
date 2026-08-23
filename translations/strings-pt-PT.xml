@@ -678,15 +678,16 @@
     <string name="legacy_port_1_d_b6522e8b">Porta %1$d</string>
     <string name="legacy_unable_to_open_github_8bdb9881">Não foi possível abrir o GitHub</string>
     <string name="legacy_unable_to_open_wi_fi_settings_537aaf03">Não foi possível abrir as definições de Wi-Fi</string>
-    <string name="legacy_unable_to_open_official_cfmoto_app_settings_ec49e64b">Não foi possível abrir as definições da aplicação oficial CFMOTO</string>
+    <string name="legacy_unable_to_open_the_companion_app_settings_c0a83e03">Não foi possível abrir as definições da aplicação do fabricante</string>
     <string name="legacy_no_open_ports_found_8533cd9d">não foram encontradas portas abertas</string>
     <string name="legacy_open_1_s_e55a596b">abertas: %1$s</string>
-    <!-- Android Auto pre-flight: the official MotoPlay client is installed, but may not be active. -->
-    <string name="legacy_cfmoto_motoplay_detected_ca887791">CFMOTO MotoPlay detetado</string>
-    <string name="legacy_moto_hub_starts_google_android_auto_not_motoplay_1ab1d3e9">O MOTO-HUB inicia o Google Android Auto, não o MotoPlay.</string>
-    <string name="legacy_the_official_cfmoto_motoplay_easyconn_app_can_st_7e0ae938">A aplicação oficial CFMOTO MotoPlay/EasyConn pode ainda assumir a ligação à T-Box enquanto está em segundo plano. Para uma projeção fiável, force a paragem nas definições Android antes de continuar.</string>
+    <!-- Android Auto pre-flight: an OEM companion app is installed, but may not be active. %1$s is
+         its name as shown on the phone (CFMOTO, Zontes Smart, Carbit Ride, ...). -->
+    <string name="legacy_1_s_detected_66208287">%1$s detetado</string>
+    <string name="legacy_moto_hub_starts_google_android_auto_not_1_s_3a77813f">O MOTO-HUB inicia o Google Android Auto, não o %1$s.</string>
+    <string name="legacy_1_s_can_still_take_over_the_dashboard_connection_5bc85002">O %1$s pode ainda assumir a ligação ao painel enquanto está em segundo plano. Para uma projeção fiável, force a paragem nas definições Android antes de continuar.</string>
     <string name="legacy_continue_with_android_auto_f6c7ef01">Continuar com Android Auto</string>
-    <string name="legacy_open_motoplay_settings_99bbfe9c">Abrir definições do MotoPlay</string>
+    <string name="legacy_open_1_s_settings_470b74f2">Abrir definições do %1$s</string>
     <string name="legacy_do_not_show_this_warning_again_d3abf59b">Não mostrar novamente este aviso</string>
     <!-- Source: tbox/ProfileOverride.kt -->
     <string name="legacy_generic_dashboard_53d1376b">Painel genérico</string>
@@ -786,11 +787,11 @@
 
     <!-- Source: feature/home/HubHomeScreen.kt -->
     <string name="legacy_android_auto_17_4_removed_the_way_apps_ask_it_to_b5455068">O Android Auto 17.4 removeu a forma de as aplicações pedirem para projetar. Ainda pode ser iniciado a partir do menu de programador do Android Auto.</string>
-    <string name="legacy_one_possible_cause_the_official_cfmoto_app_is_in_b6013d8d">Uma causa possível: a aplicação oficial CFMOTO está instalada e pode manter a ligação ao T-Box ocupada mesmo em segundo plano. Se a ligação continuar a falhar, force a paragem na página Informações da aplicação e tente de novo.</string>
-    <string name="legacy_open_cfmoto_app_info_4af1a737">Abrir informações da aplicação CFMOTO</string>
+    <string name="legacy_one_possible_cause_1_s_is_installed_and_can_keep_47cef163">Uma causa possível: o %1$s está instalado e pode manter a ligação ao painel ocupada mesmo em segundo plano. Se a ligação continuar a falhar, force a paragem na página Informações da aplicação e tente de novo.</string>
+    <string name="legacy_open_1_s_app_info_33a7c01c">Abrir informações da aplicação %1$s</string>
     <string name="legacy_retry_connection_54743f76">Tentar ligar de novo</string>
     <string name="legacy_some_dashboards_never_broadcast_a_network_of_the_787ecd2c">Alguns painéis nunca emitem uma rede própria: entram num hotspot criado pelo telemóvel, usando o Ssid e a Palavra-passe mostrados no painel. Se o seu disser \"abrir hotspot Android\", experimente assim.</string>
-    <string name="legacy_the_official_cfmoto_app_is_installed_and_may_be__461e26a6">A aplicação oficial CFMOTO está instalada e pode estar a ocupar o T-Box. Force a paragem na página Informações da aplicação e tente de novo.</string>
+    <string name="legacy_1_s_is_installed_and_may_be_holding_the_dashboar_2c02bb10">O %1$s está instalado e pode estar a ocupar o painel. Force a paragem na página Informações da aplicação e tente de novo.</string>
     <string name="legacy_try_my_phone_hosts_the_hotspot_d4f6db66">Experimente: o hotspot é do meu telemóvel</string>
 
     <!-- Source: feature/home/HubViewModel.kt -->
@@ -1120,4 +1121,12 @@
     <string name="legacy_that_was_a_single_press_press_twice_quickly_for__e774e0f2">Isso foi uma pressão simples: carregue duas vezes rapidamente para a dupla.</string>
     <string name="legacy_that_was_a_quick_tap_press_and_hold_a_moment_lon_5b9c9d4d">Isso foi um toque rápido: mantenha carregado mais um instante.</string>
     <string name="legacy_open_hotspot_settings_7d1f3d4a">Abrir as definições do hotspot</string>
+    <!-- The "MOTO-HUB is still looking" notification shown while a connection attempt runs,
+         and the hosted-network wording that tells the rider not to close the app. %1$s is
+         the motorcycle network name. -->
+    <string name="legacy_moto_hub_connection_progress_c260af34">Progresso da ligação MOTO-HUB</string>
+    <string name="legacy_looking_for_1_s_9983a22f">À procura de %1$s</string>
+    <string name="legacy_connecting_to_1_s_2f10e3b8">A ligar a %1$s</string>
+    <string name="legacy_keep_moto_hub_open_closing_it_stops_the_search_54ec507">Mantenha o MOTO-HUB aberto: fechá-lo interrompe a procura.</string>
+    <string name="legacy_hotspot_is_up_searching_it_for_the_dashboard_thi_caab4cd3">O ponto de acesso está ativo. A procurar o painel: pode demorar até 90 segundos, por isso mantenha o MOTO-HUB aberto.</string>
 </resources>

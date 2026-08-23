@@ -219,6 +219,11 @@ object TBoxLinkResolver {
                     "."
                 }
         )
+        // Who is actually on that subnet is the other half of the answer, and the half no rider
+        // log has ever carried: a sweep that finds nothing looks identical whether the dash never
+        // joined the hotspot or joined it and stayed quiet. Best-effort, and it says so when the
+        // platform refuses - see TBoxHotspotScan.neighbours.
+        ProjectionEventLog.record("NETWORK", TBoxHotspotScan.describeNeighbours(subnet.interfaceName))
         return Result.success(TBoxLink.PhoneHotspot(subnet))
     }
 
@@ -245,7 +250,27 @@ object TBoxLinkResolver {
         profile: MotorcycleProfile,
         hostedFailure: Throwable
     ): Result<TBoxLink> {
-        if (networkConnector.isDashBroadcasting(profile) != true) return Result.failure(hostedFailure)
+        val broadcasting = networkConnector.isDashBroadcasting(profile)
+        if (broadcasting != true) {
+            // The silence here was a hole. Five identical "no hotspot is running" errors in a
+            // rider log (samsung SM-S948B, qj-5G-d8cf, 2026-08-23) said nothing about whether
+            // this road had even been considered, let alone which of its two answers had closed
+            // it - and those two answers point at opposite problems. The snapshot is the same one
+            // the access-point join records before it starts, so a hotspot-mode log finally
+            // carries the scan a Wi-Fi-client dash would be found in.
+            networkConnector.logVisibleApSnapshot(profile)
+            ProjectionEventLog.record(
+                "NETWORK",
+                "Staying on the phone-hosted transport: the access-point fallback only runs on a " +
+                    "positive sighting, and " +
+                    if (broadcasting == false) {
+                        "${profile.ssid} was not in the phone's latest scan."
+                    } else {
+                        "this phone handed back no usable scan at all."
+                    }
+            )
+            return Result.failure(hostedFailure)
+        }
         ProjectionEventLog.record(
             "NETWORK",
             "No hosted network, but ${profile.ssid} is broadcasting - joining its access point " +

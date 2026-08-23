@@ -8,6 +8,7 @@ import io.motohub.android.i18n.motoHubText
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.motohub.android.data.MotorcycleProfileStore
+import io.motohub.android.session.ConnectionProgressNotification
 import io.motohub.android.session.HubSessionState
 import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.session.SessionPhase
@@ -32,7 +33,7 @@ import io.motohub.android.tbox.TBoxSessionRegistry
 import io.motohub.android.tbox.TBoxVpnDiagnostics
 import io.motohub.android.tbox.TBoxConflictDiagnostics
 import io.motohub.android.tbox.WifiGate
-import io.motohub.android.tbox.OfficialCfmotoClient
+import io.motohub.android.tbox.CompanionAppRegistry
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
@@ -400,19 +401,22 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                 message = motoHubText("Android is requesting a connection to %1\$s.", profile.ssid)
             )
         )
+        // The only sign outside this screen that anything is happening. It matters because the
+        // work does not survive the screen: see ConnectionProgressNotification.
+        ConnectionProgressNotification.show(getApplication(), profile.ssid, searching = false)
         connectJob = viewModelScope.launch {
             var establishedLink: io.motohub.android.tbox.TBoxLink? = null
             var sessionInstalled = false
             try {
-                // The official CFMOTO app can keep its EasyConn/PXC service alive after logout
-                // and while it is only in the recent-apps list. Android 14+ offers no way to
-                // close another app's process, so this is recorded as a risk factor only; the
-                // error banner guides the user to force-stop it when the conflict actually bites.
-                if (OfficialCfmotoClient.isInstalled(getApplication())) {
+                // An OEM companion app can keep its EasyConn/PXC service alive after logout and
+                // while it is only in the recent-apps list. Android 14+ offers no way to close
+                // another app's process, so this is recorded as a risk factor only; the error
+                // banner guides the user to force-stop it when the conflict actually bites.
+                CompanionAppRegistry.installed(getApplication())?.let { companion ->
                     ProjectionEventLog.debug(
                         "CONNECTION",
-                        "The official CFMOTO app is installed; it may hold the T-Box session " +
-                            "if it was recently used."
+                        "${companion.displayName} (${companion.packageName}) is installed; it may " +
+                            "hold the T-Box session if it was recently used."
                     )
                 }
                 val connected = TBoxLinkResolver.connect(getApplication(), networkConnector, profile)
@@ -439,13 +443,23 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                 establishedLink = connected.getOrThrow()
                 ProjectionEventLog.record("NETWORK", "T-Box link established (${establishedLink.label}).")
 
+                ConnectionProgressNotification.show(getApplication(), profile.ssid, searching = true)
                 mutableUiState.value = mutableUiState.value.copy(
                     session = mutableUiState.value.session.copy(
                         phase = SessionPhase.DISCOVERING_TBOX,
-                        message = if (profile.connectionMode == TBoxConnectionMode.THINKERRIDE) {
-                            motoHubText("Network connected. Pairing over Bluetooth and waiting for the dashboard.")
-                        } else {
-                            motoHubText("Network connected. Searching for the EasyConn service.")
+                        message = when (profile.connectionMode) {
+                            TBoxConnectionMode.THINKERRIDE ->
+                                motoHubText("Network connected. Pairing over Bluetooth and waiting for the dashboard.")
+                            // Naming the cost is the point. On a hosted network discovery ends in
+                            // a 253-address sweep that can run for a minute, and a rider with no
+                            // idea of that reads the spinner as a hang and closes the app - which
+                            // is exactly what ends the search.
+                            TBoxConnectionMode.PHONE_HOTSPOT ->
+                                motoHubText(
+                                    "Hotspot is up. Searching it for the dashboard - this can take " +
+                                        "up to 90 seconds, so keep MOTO-HUB open."
+                                )
+                            else -> motoHubText("Network connected. Searching for the EasyConn service.")
                         }
                     )
                 )
@@ -525,6 +539,23 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                 // the group alive because it has no ConnectivityManager callback to release it.
                 if (!sessionInstalled) establishedLink?.disconnect()
                 connectJob = null
+                ConnectionProgressNotification.clear(getApplication())
+                // A cancelled attempt used to end on the same "coroutine completed" debug line as
+                // a finished one, and that cost a diagnosis: the 2026-08-23 QJ log ends four
+                // seconds into a hosted-network sweep with no hint that the sweep was killed
+                // rather than answered, so the one fact the whole log was collected for - whether
+                // anything is on that hotspot - was simply absent and read as absence.
+                val cancelled =
+                    kotlinx.coroutines.currentCoroutineContext()[Job]?.isCancelled == true
+                if (cancelled && !sessionInstalled) {
+                    ProjectionEventLog.warning(
+                        "CONNECTION",
+                        "Connection attempt was cancelled during " +
+                            "${mutableUiState.value.session.phase}, either by the rider or by " +
+                            "MOTO-HUB being closed. The search does not outlive the app, so " +
+                            "whatever this step was about to report is missing from this log."
+                    )
+                }
                 ProjectionEventLog.debug("CONNECTION", "Connection coroutine completed.")
             }
         }
@@ -652,7 +683,12 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         offerPhoneHotspotRetry: Boolean = false,
         offerOfficialAppHelp: Boolean = false
     ) {
-        val userFacingMessage = TBoxConflictDiagnostics.userFacingMessage(message)
+        val userFacingMessage = TBoxConflictDiagnostics.userFacingMessage(
+            message,
+            // Named only when it is really on this phone, so the banner never sends a rider
+            // after an app they do not have - the failure this whole path exists to avoid.
+            companionAppName = CompanionAppRegistry.installedName(getApplication())
+        )
         // Recorded as a warning, not an error: this only puts a banner on screen. Whatever
         // actually failed was already reported at ERROR by the layer that detected it, and
         // logging it again here sent every failure to telemetry twice - while turning purely

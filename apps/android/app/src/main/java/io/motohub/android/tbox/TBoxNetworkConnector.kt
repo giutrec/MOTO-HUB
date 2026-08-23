@@ -588,8 +588,13 @@ class TBoxNetworkConnector(context: Context) {
         return results.any { it.ssidText().equals(target, ignoreCase = true) }
     }
 
+    /**
+     * Internal rather than private because the phone-hosted road needs it too: when that mode
+     * declines the access-point fallback, this snapshot is the only record of why - see
+     * [TBoxLinkResolver.accessPointFallback].
+     */
     @SuppressLint("MissingPermission")
-    private fun logVisibleApSnapshot(profile: MotorcycleProfile) {
+    internal fun logVisibleApSnapshot(profile: MotorcycleProfile) {
         val target = profile.ssid.trim().removeSurrounding("\"")
         val results = runCatching { wifiManager.scanResults }.getOrNull()
         if (results == null) {

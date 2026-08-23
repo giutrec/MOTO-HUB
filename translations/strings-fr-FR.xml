@@ -1252,17 +1252,18 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_unable_to_open_wi_fi_settings_537aaf03">Impossible d\'ouvrir les réglages Wi-Fi</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_unable_to_open_official_cfmoto_app_settings_ec49e64b">Impossible d\'ouvrir les réglages de l\'application officielle CFMOTO</string>
+    <string name="legacy_unable_to_open_the_companion_app_settings_c0a83e03">Impossible d\'ouvrir les réglages de l\'application du constructeur</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_no_open_ports_found_8533cd9d">aucun port ouvert trouvé</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_open_1_s_e55a596b">ouverts : %1$s</string>
-    <!-- Android Auto pre-flight: the official MotoPlay client is installed, but may not be active. -->
-    <string name="legacy_cfmoto_motoplay_detected_ca887791">CFMOTO MotoPlay détecté</string>
-    <string name="legacy_moto_hub_starts_google_android_auto_not_motoplay_1ab1d3e9">MOTO-HUB lance Google Android Auto, pas MotoPlay.</string>
-    <string name="legacy_the_official_cfmoto_motoplay_easyconn_app_can_st_7e0ae938">L\'application officielle CFMOTO MotoPlay/EasyConn peut encore prendre le contrôle de la connexion T-Box tant qu\'elle est en arrière-plan. Pour une projection fiable, forcez son arrêt dans les réglages Android avant de continuer.</string>
+    <!-- Android Auto pre-flight: an OEM companion app is installed, but may not be active. %1$s is
+         its name as shown on the phone (CFMOTO, Zontes Smart, Carbit Ride, ...). -->
+    <string name="legacy_1_s_detected_66208287">%1$s détecté</string>
+    <string name="legacy_moto_hub_starts_google_android_auto_not_1_s_3a77813f">MOTO-HUB lance Google Android Auto, pas %1$s.</string>
+    <string name="legacy_1_s_can_still_take_over_the_dashboard_connection_5bc85002">%1$s peut encore prendre le contrôle de la connexion au tableau de bord tant qu\'elle est en arrière-plan. Pour une projection fiable, forcez son arrêt dans les réglages Android avant de continuer.</string>
     <string name="legacy_continue_with_android_auto_f6c7ef01">Continuer avec Android Auto</string>
-    <string name="legacy_open_motoplay_settings_99bbfe9c">Ouvrir les réglages MotoPlay</string>
+    <string name="legacy_open_1_s_settings_470b74f2">Ouvrir les réglages %1$s</string>
     <string name="legacy_do_not_show_this_warning_again_d3abf59b">Ne plus afficher cet avertissement</string>
     <!-- Source: tbox/ProfileOverride.kt -->
     <string name="legacy_generic_dashboard_53d1376b">Tableau de bord générique</string>
@@ -1363,11 +1364,11 @@
 
     <!-- Source: feature/home/HubHomeScreen.kt -->
     <string name="legacy_android_auto_17_4_removed_the_way_apps_ask_it_to_b5455068">Android Auto 17.4 a supprimé la façon dont les applications demandent à projeter. Il peut encore être lancé depuis le menu développeur d\'Android Auto.</string>
-    <string name="legacy_one_possible_cause_the_official_cfmoto_app_is_in_b6013d8d">Une cause possible : l\'application officielle CFMOTO est installée et peut occuper la liaison T-Box même en arrière-plan. Si la connexion échoue encore, forcez son arrêt depuis sa page Infos sur l\'appli, puis réessayez.</string>
-    <string name="legacy_open_cfmoto_app_info_4af1a737">Ouvrir les infos de l\'appli CFMOTO</string>
+    <string name="legacy_one_possible_cause_1_s_is_installed_and_can_keep_47cef163">Une cause possible : %1$s est installée et peut occuper la liaison au tableau de bord même en arrière-plan. Si la connexion échoue encore, forcez son arrêt depuis sa page Infos sur l\'appli, puis réessayez.</string>
+    <string name="legacy_open_1_s_app_info_33a7c01c">Ouvrir les infos de l\'appli %1$s</string>
     <string name="legacy_retry_connection_54743f76">Réessayer la connexion</string>
     <string name="legacy_some_dashboards_never_broadcast_a_network_of_the_787ecd2c">Certains tableaux de bord ne diffusent jamais de réseau : ils rejoignent un point d\'accès créé par votre téléphone, avec le Ssid et le mot de passe affichés à l\'écran. Si le vôtre indique « ouvrez le point d\'accès Android », essayez ainsi.</string>
-    <string name="legacy_the_official_cfmoto_app_is_installed_and_may_be__461e26a6">L\'application officielle CFMOTO est installée et occupe peut-être le T-Box. Forcez son arrêt depuis sa page Infos sur l\'appli, puis réessayez.</string>
+    <string name="legacy_1_s_is_installed_and_may_be_holding_the_dashboar_2c02bb10">%1$s est installée et occupe peut-être le tableau de bord. Forcez son arrêt depuis sa page Infos sur l\'appli, puis réessayez.</string>
     <string name="legacy_try_my_phone_hosts_the_hotspot_d4f6db66">Essayer : c\'est mon téléphone qui héberge</string>
 
     <!-- Source: feature/home/HubViewModel.kt -->
@@ -1696,4 +1697,12 @@
     <string name="legacy_that_was_a_single_press_press_twice_quickly_for__e774e0f2">C\'était un appui simple : appuyez deux fois rapidement pour le double.</string>
     <string name="legacy_that_was_a_quick_tap_press_and_hold_a_moment_lon_5b9c9d4d">C\'était une pression brève : maintenez appuyé un instant de plus.</string>
     <string name="legacy_open_hotspot_settings_7d1f3d4a">Ouvrir les paramètres du point d\'accès</string>
+    <!-- The "MOTO-HUB is still looking" notification shown while a connection attempt runs,
+         and the hosted-network wording that tells the rider not to close the app. %1$s is
+         the motorcycle network name. -->
+    <string name="legacy_moto_hub_connection_progress_c260af34">Progression de la connexion MOTO-HUB</string>
+    <string name="legacy_looking_for_1_s_9983a22f">Recherche de %1$s</string>
+    <string name="legacy_connecting_to_1_s_2f10e3b8">Connexion à %1$s</string>
+    <string name="legacy_keep_moto_hub_open_closing_it_stops_the_search_54ec507">Gardez MOTO-HUB ouvert : le fermer arrête la recherche.</string>
+    <string name="legacy_hotspot_is_up_searching_it_for_the_dashboard_thi_caab4cd3">Le point d\'accès est actif. Recherche du tableau de bord : cela peut prendre jusqu\'à 90 secondes, gardez donc MOTO-HUB ouvert.</string>
 </resources>

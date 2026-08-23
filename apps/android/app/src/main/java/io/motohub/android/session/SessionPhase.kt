@@ -95,10 +95,10 @@ data class HubSessionState(
     /**
      * The last failure is one another EasyConn app could plausibly have caused - i.e. the link to
      * the dash was up and the session handshake is what failed. Only then is it fair to point the
-     * rider at the official CFMOTO app, which cannot be force-stopped by this app and so costs
-     * them a trip through Settings to find out.
+     * rider at their motorcycle's own companion app, which cannot be force-stopped by this
+     * app and so costs them a trip through Settings to find out.
      *
-     * The banner used to offer that help for *every* failure on a phone with the CFMOTO app
+     * The banner used to offer that help for *every* failure on a phone with a companion app
      * installed, including failures that never got as far as a network. One rider spent a morning
      * on it - force-stopping it, then uninstalling it - for a connection Android was refusing to
      * route at all (2026-08-15). Advice that cannot possibly apply is not neutral; it is the

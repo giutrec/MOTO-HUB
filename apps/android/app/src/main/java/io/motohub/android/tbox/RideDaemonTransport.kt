@@ -263,7 +263,7 @@ class RideDaemonTransport(
      * Waits for the phone-side EasyConn listeners before handing them to the native session.
      *
      * Failing on the first probe made a routine hand-off look like a hard conflict: a rider log
-     * showed the ports still held 10s after MOTO-HUB asked the official CFMOTO app to stop, the
+     * showed the ports still held 10s after MOTO-HUB asked the OEM companion app to stop, the
      * Android Auto hand-off aborted with EADDRINUSE, and the very next manual attempt ~20s later
      * connected normally. killBackgroundProcesses() cannot touch a foreground service and the
      * kernel releases the sockets asynchronously either way, so the only correct behaviour is to
@@ -288,7 +288,8 @@ class RideDaemonTransport(
             throw IllegalStateException(
                 "Another EasyConn session still holds local reverse ports " +
                     "${busy.joinToString()} after ${REVERSE_PORT_WAIT_MS}ms " +
-                    "(address already in use). Force-stop the official CFMOTO app and retry."
+                    "(address already in use). Force-stop your motorcycle's own companion app " +
+                    "and retry."
             )
         }
         ProjectionEventLog.record("TBOX", "Local reverse ports 10920-10922 were released; continuing.")
@@ -575,9 +576,9 @@ class RideDaemonTransport(
         }
         throw IllegalStateException(
             "The EasyConn service was not advertised in $DISCOVERY_MAX_ATTEMPTS discovery windows of " +
-                "${DISCOVERY_TIMEOUT_MS / 1000}s each. This can happen when the official CFMOTO app is " +
-                "already connected to the motorcycle, or when the T-Box is still starting up after " +
-                "Wi-Fi association."
+                "${DISCOVERY_TIMEOUT_MS / 1000}s each. This can happen when your motorcycle's own " +
+                "companion app is already connected to it, or when the T-Box is still starting up " +
+                "after Wi-Fi association."
         )
     }
 
@@ -675,8 +676,32 @@ class RideDaemonTransport(
             val candidates = listOfNotNull(announced) +
                 TBoxHotspotScan.candidateHosts(link.subnet).filterNot { it == announced }
             val reachable = mutableListOf<Inet4Address>()
-            for (candidate in candidates) {
+            // A sweep that announces its own length is a sweep a truncated log can still be read
+            // against. The 2026-08-23 QJ log stopped 44 seconds into this loop - the rider closed
+            // the app - and carried no line between "sweeping" and nothing at all, so it could not
+            // even be said how far it had got or whether it had been given time to finish.
+            val sweepStartedAtMs = SystemClock.elapsedRealtime()
+            ProjectionEventLog.record(
+                "DISCOVERY",
+                "Hosted-network sweep: ${candidates.size} addresses to try on port " +
+                    "$WAKE_PROBE_PORT, up to " +
+                    "${candidates.size * HOSTED_SWEEP_CONNECT_TIMEOUT_MS / 1000}s if every one of " +
+                    "them stays silent. Leaving MOTO-HUB now ends it."
+            )
+            for ((index, candidate) in candidates.withIndex()) {
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                if (index > 0 && index % HOSTED_SWEEP_PROGRESS_STRIDE == 0) {
+                    ProjectionEventLog.record(
+                        "DISCOVERY",
+                        "Hosted-network sweep: $index of ${candidates.size} addresses tried in " +
+                            "${SystemClock.elapsedRealtime() - sweepStartedAtMs}ms, " +
+                            if (reachable.isEmpty()) {
+                                "none answering so far."
+                            } else {
+                                "${reachable.size} answering so far."
+                            }
+                    )
+                }
                 val open = runCatching {
                     link.createSocket().use { socket ->
                         socket.connect(
@@ -717,12 +742,22 @@ class RideDaemonTransport(
                 "DISCOVERY",
                 if (reachable.isEmpty()) {
                     "Hosted-network sweep: nothing answered $WAKE_PROBE_PORT on " +
-                        "${candidates.size} addresses. Either the dash has not joined the hotspot " +
-                        "yet, or it speaks on a port MOTO-HUB does not know."
+                        "${candidates.size} addresses in " +
+                        "${SystemClock.elapsedRealtime() - sweepStartedAtMs}ms. Either the dash " +
+                        "has not joined the hotspot yet, or it speaks on a port MOTO-HUB does " +
+                        "not know."
                 } else {
                     "Hosted-network sweep: ${reachable.joinToString { it.hostAddress.orEmpty() }} " +
                         "accepted $WAKE_PROBE_PORT but none completed the EasyConn handshake."
                 }
+            )
+            // Which of those two it was is decided by whether anything is on the subnet at all,
+            // so the neighbour table is read again here rather than only at link time: a dash
+            // that joins slowly is not on it when the hotspot comes up and is by the time the
+            // sweep gives up.
+            ProjectionEventLog.record(
+                "DISCOVERY",
+                TBoxHotspotScan.describeNeighbours(link.subnet.interfaceName)
             )
             null
         }
@@ -1598,6 +1633,9 @@ class RideDaemonTransport(
         // short. Everything on it is one Wi-Fi hop away with no router in between, so a dash that
         // is going to answer answers well inside this; the budget is for the silent addresses.
         const val HOSTED_SWEEP_CONNECT_TIMEOUT_MS = 250
+        // Roughly every six seconds of a silent sweep, so a log that ends mid-sweep still says
+        // how far it got, and one that ran to the end shows it moving rather than hung.
+        const val HOSTED_SWEEP_PROGRESS_STRIDE = 24
         const val WAKE_PROBE_HEADER_SIZE = 16
         const val CMD_MDNS_RESPOND = 0x70000010
         const val CMD_MDNS_RESPOND_ACK = 0x70000011

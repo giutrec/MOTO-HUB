@@ -94,9 +94,9 @@ fun HubHomeScreen(
     onManualPairing: () -> Unit,
     onTryPhoneHotspot: () -> Unit,
     onConnectAndDiscover: () -> Unit,
-    officialCfmotoAppInstalled: Boolean,
-    onCloseOfficialCfmotoAndRetry: () -> Unit,
-    onOpenOfficialCfmotoSettings: () -> Unit,
+    companionAppName: String?,
+    onCloseCompanionAppAndRetry: () -> Unit,
+    onOpenCompanionAppSettings: () -> Unit,
     onOpenWifiSettings: () -> Unit,
     onOpenAndroidAutoSettings: () -> Unit,
     onCancelConnection: () -> Unit,
@@ -153,9 +153,9 @@ fun HubHomeScreen(
                             onImportQrPhoto = onImportQrPhoto,
                             onManualPairing = onManualPairing,
                             onConnectAndDiscover = onConnectAndDiscover,
-                            officialCfmotoAppInstalled = officialCfmotoAppInstalled,
-                            onCloseOfficialCfmotoAndRetry = onCloseOfficialCfmotoAndRetry,
-                            onOpenOfficialCfmotoSettings = onOpenOfficialCfmotoSettings,
+                            companionAppName = companionAppName,
+                            onCloseCompanionAppAndRetry = onCloseCompanionAppAndRetry,
+                            onOpenCompanionAppSettings = onOpenCompanionAppSettings,
                             onOpenWifiSettings = onOpenWifiSettings,
                             onOpenAndroidAutoSettings = onOpenAndroidAutoSettings,
                             onCancelConnection = onCancelConnection,
@@ -201,9 +201,9 @@ private fun HomeTabContent(
     onManualPairing: () -> Unit,
     onTryPhoneHotspot: () -> Unit,
     onConnectAndDiscover: () -> Unit,
-    officialCfmotoAppInstalled: Boolean,
-    onCloseOfficialCfmotoAndRetry: () -> Unit,
-    onOpenOfficialCfmotoSettings: () -> Unit,
+    companionAppName: String?,
+    onCloseCompanionAppAndRetry: () -> Unit,
+    onOpenCompanionAppSettings: () -> Unit,
     onOpenWifiSettings: () -> Unit,
     onOpenAndroidAutoSettings: () -> Unit,
     onCancelConnection: () -> Unit,
@@ -297,10 +297,10 @@ private fun HomeTabContent(
                     session.offerPhoneHotspotRetry,
                 onTryPhoneHotspot = onTryPhoneHotspot,
                 onConnect = onConnectAndDiscover,
-                officialCfmotoAppInstalled = officialCfmotoAppInstalled,
-                officialAppHelpApplies = session.offerOfficialAppHelp,
-                onCloseOfficialCfmotoAndRetry = onCloseOfficialCfmotoAndRetry,
-                onOpenOfficialCfmotoSettings = onOpenOfficialCfmotoSettings,
+                companionAppName = companionAppName,
+                companionAppHelpApplies = session.offerOfficialAppHelp,
+                onCloseCompanionAppAndRetry = onCloseCompanionAppAndRetry,
+                onOpenCompanionAppSettings = onOpenCompanionAppSettings,
                 onOpenWifiSettings = onOpenWifiSettings,
                 onOpenAndroidAutoSettings = onOpenAndroidAutoSettings,
                 onScanQr = onScanQr,
@@ -435,10 +435,10 @@ private fun ConnectionContent(
     showPhoneHotspotRetry: Boolean,
     onTryPhoneHotspot: () -> Unit,
     onConnect: () -> Unit,
-    officialCfmotoAppInstalled: Boolean,
-    officialAppHelpApplies: Boolean,
-    onCloseOfficialCfmotoAndRetry: () -> Unit,
-    onOpenOfficialCfmotoSettings: () -> Unit,
+    companionAppName: String?,
+    companionAppHelpApplies: Boolean,
+    onCloseCompanionAppAndRetry: () -> Unit,
+    onOpenCompanionAppSettings: () -> Unit,
     onOpenWifiSettings: () -> Unit,
     onOpenAndroidAutoSettings: () -> Unit,
     onScanQr: () -> Unit,
@@ -451,10 +451,10 @@ private fun ConnectionContent(
             ErrorBanner(
                 message = message,
                 showPortConflictHelp = TBoxConflictDiagnostics.isPortConflict(message),
-                officialCfmotoAppInstalled = officialCfmotoAppInstalled,
-                officialAppHelpApplies = officialAppHelpApplies,
-                onCloseOfficialCfmotoAndRetry = onCloseOfficialCfmotoAndRetry,
-                onOpenOfficialCfmotoSettings = onOpenOfficialCfmotoSettings,
+                companionAppName = companionAppName,
+                companionAppHelpApplies = companionAppHelpApplies,
+                onCloseCompanionAppAndRetry = onCloseCompanionAppAndRetry,
+                onOpenCompanionAppSettings = onOpenCompanionAppSettings,
                 showWifiSettingsAction = message == WifiGate.WIFI_OFF_MESSAGE,
                 onOpenWifiSettings = onOpenWifiSettings,
                 showAndroidAutoSetupHelp = AndroidAutoSelfModeHelp.isMessageAboutSelfMode(message),
@@ -492,10 +492,10 @@ private fun ConnectionContent(
 private fun ErrorBanner(
     message: String,
     showPortConflictHelp: Boolean,
-    officialCfmotoAppInstalled: Boolean,
-    officialAppHelpApplies: Boolean,
-    onCloseOfficialCfmotoAndRetry: () -> Unit,
-    onOpenOfficialCfmotoSettings: () -> Unit,
+    companionAppName: String?,
+    companionAppHelpApplies: Boolean,
+    onCloseCompanionAppAndRetry: () -> Unit,
+    onOpenCompanionAppSettings: () -> Unit,
     showWifiSettingsAction: Boolean,
     onOpenWifiSettings: () -> Unit,
     showAndroidAutoSetupHelp: Boolean = false,
@@ -511,17 +511,17 @@ private fun ErrorBanner(
     // ...and it is dropped for any failure that never reached a session another app could be
     // holding - see HubSessionState.offerOfficialAppHelp. A port conflict is its own evidence and
     // stands on that alone, whatever stage reported it.
-    val officialAppMayHoldTBox = officialCfmotoAppInstalled &&
-        (officialAppHelpApplies || showPortConflictHelp) &&
+    val companionAppMayHoldTBox = companionAppName != null &&
+        (companionAppHelpApplies || showPortConflictHelp) &&
         !showWifiSettingsAction && !showAndroidAutoSetupHelp
-    val showOfficialAppHintProminently = officialAppMayHoldTBox && showPortConflictHelp
+    val showCompanionAppHintProminently = companionAppMayHoldTBox && showPortConflictHelp
     // Not threaded up as a callback like the others: a plain navigation intent with no session
     // state behind it, and the screen it opens is fixed by the message that produced it.
     val context = LocalContext.current
     val showHotspotSettingsAction = message == WifiGate.HOTSPOT_OFF_MESSAGE
     val hasExtra = showPortConflictHelp || showWifiSettingsAction || showAndroidAutoSetupHelp ||
         showHotspotSettingsAction ||
-        (officialAppMayHoldTBox && !showOfficialAppHintProminently)
+        (companionAppMayHoldTBox && !showCompanionAppHintProminently)
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -578,18 +578,18 @@ private fun ErrorBanner(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-            if (showOfficialAppHintProminently) {
+            if (showCompanionAppHintProminently) {
                 // A port conflict is the one failure the official app is known to cause, and
                 // Android gives no way to ask whether another app is currently running -
                 // "installed" is as close as detection gets. The only fix is the rider
                 // force-stopping it from App info, so offer that directly.
                 Text(
-                    motoHubText("The official CFMOTO app is installed and may be holding the T-Box. Force-stop it from its App info page, then retry."),
+                    motoHubText("%1\$s is installed and may be holding the dashboard. Force-stop it from its App info page, then retry.", companionAppName.orEmpty()),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                SecondaryAction(motoHubText("Open CFMOTO app info"), onOpenOfficialCfmotoSettings)
-                SecondaryAction(motoHubText("Retry connection"), onCloseOfficialCfmotoAndRetry)
+                SecondaryAction(motoHubText("Open %1\$s app info", companionAppName.orEmpty()), onOpenCompanionAppSettings)
+                SecondaryAction(motoHubText("Retry connection"), onCloseCompanionAppAndRetry)
             }
             if (expanded) {
                 if (showPortConflictHelp) {
@@ -599,14 +599,14 @@ private fun ErrorBanner(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                if (officialAppMayHoldTBox && !showOfficialAppHintProminently) {
+                if (companionAppMayHoldTBox && !showCompanionAppHintProminently) {
                     Text(
-                        motoHubText("One possible cause: the official CFMOTO app is installed and can keep the T-Box link busy even in the background. If the connection keeps failing, force-stop it from its App info page, then retry."),
+                        motoHubText("One possible cause: %1\$s is installed and can keep the dashboard link busy even in the background. If the connection keeps failing, force-stop it from its App info page, then retry.", companionAppName.orEmpty()),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    SecondaryAction(motoHubText("Open CFMOTO app info"), onOpenOfficialCfmotoSettings)
-                    SecondaryAction(motoHubText("Retry connection"), onCloseOfficialCfmotoAndRetry)
+                    SecondaryAction(motoHubText("Open %1\$s app info", companionAppName.orEmpty()), onOpenCompanionAppSettings)
+                    SecondaryAction(motoHubText("Retry connection"), onCloseCompanionAppAndRetry)
                 }
                 if (showWifiSettingsAction) {
                     SecondaryAction("Open Wi-Fi settings", onOpenWifiSettings)
