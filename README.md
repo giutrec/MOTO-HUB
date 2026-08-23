@@ -19,7 +19,7 @@ Your motorcycle already has the screen. MOTO-HUB gives it the software.<br>
 Project **Android Auto**, mirror **any app**, or run a full **GPS ride dashboard** on the TFT —
 and control it all from the **handlebar buttons** you already have.
 
-**CFMOTO · Voge · Zontes · Moto Morini · Benelli · QJ Motor · Morbidelli · KOVE** — one app for the EasyConn / Carbit dashboards many brands ship.
+**CFMOTO · Benelli · Voge · Zontes · QJ Motor · Moto Morini · Longjia · Morbidelli · KOVE** — one app for the EasyConn / Carbit dashboards many brands ship.
 
 <br>
 
@@ -210,18 +210,30 @@ The open-source core is a complete product on its own:
 
 ## Supported motorcycles
 
-MOTO-HUB is **not a CFMOTO-only app**. It speaks to the EasyConn / Carbit dashboard stack that many manufacturers license:
+MOTO-HUB is **not a CFMOTO-only app**. It speaks to the EasyConn / Carbit dashboard stack that many manufacturers license. The table below is built from what riders actually report back — not from a spec sheet.
 
-| Brand | Notes |
-| --- | --- |
-| **CFMOTO** | The reference hardware this project is developed against (700MT-ADV) |
-| **Voge** | |
-| **Zontes** | |
-| **Moto Morini** | Dashboards paired through the **MotoFun** companion app, whose QR code uses its own dialect |
-| **Benelli** | TRK 702 / 702X |
-| **QJ Motor** | Fort 4.0 |
-| **Morbidelli / MBP** | T1002V |
-| **KOVE** | 800X — ThinkerRide (BLE-provisioned) dashboards |
+| Motorcycle | Status | Notes |
+| --- | :---: | --- |
+| **CFMOTO 700MT-ADV** | ✅ Works | The reference bike this project is developed against |
+| **CFMOTO 800MT** | ✅ Works | Confirmed on a rider's bike |
+| **CFMOTO 675SRR** | ✅ Works on iOS | Pairs over Wi-Fi Direct |
+| **CFMOTO 650NK** | ⚪ Untested | No rider reports yet |
+| **Benelli TRK 702X** | ✅ Works | Android Auto stable; iOS through a SideStore sideload |
+| **Benelli TRK 502 / 702** | ✅ Works | Confirmed by several riders |
+| **Voge DS800X / 800 Rally** | ✅ Works | The dashboard has a clock quirk of its own, which the app works around |
+| **Voge 900DSX** | 🟡 Mixed | Needs deeper testing |
+| **Zontes 368E** | ✅ Works | The reference model for this brand |
+| **Zontes 368G / 703RR** | 🟡 Partial | The 368G uses its own QR dialect; on the 703RR the handlebar buttons send nothing the phone can read |
+| **Zontes 300 / 350** | ⚪ Untested | Older dashboards, unconfirmed |
+| **QJ Motor SRT 550** | ✅ Works | QR pairing and mirroring confirmed on iOS |
+| **Moto Morini X-Cape 650 / 700** | 🟡 Limited | Works on iOS; still incomplete on Android. Paired through the **MotoFun** companion app, whose QR code uses its own dialect |
+| **Longjia N300 / M502N** | ⚪ Untested | Very little data so far |
+| **Morbidelli T502X / T352X** | ⚪ Untested | No reports yet |
+| **KOVE 800X** | ⚪ Untested | ThinkerRide (BLE-provisioned) dashboard; pairing not confirmed working yet |
+
+<sub>✅ riders confirmed it working &middot; 🟡 works in part, or not on every path &middot; ⚪ nobody has reported back yet</sub>
+
+**Your motorcycle is not on the list?** That does not mean it will not work — it means nobody has told us yet. Try it, then [tell us on Discord](https://discord.gg/jYv7Z2chtP): the app can export a diagnostic log that explains exactly what happened, and that is how every row above got filled in.
 
 Nothing in the app filters on brand: the network name always comes from the rider, through the QR code or manual pairing. A dashboard MOTO-HUB has never seen is not rejected — an unknown QR dialect can be accepted after a warning, an unknown dashboard falls back to a generic profile, and the diagnostics are built so a rider on an unfamiliar motorcycle can send a log that explains what happened. Each motorcycle model and T-Box firmware still needs its own validation before it can be called *supported* — including CFMOTO ones.
 
