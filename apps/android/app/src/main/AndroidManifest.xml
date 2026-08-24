@@ -65,9 +65,14 @@
         <meta-data
             android:name="io.sentry.auto-init"
             android:value="false" />
+        <!-- configChanges: mirroring turns the phone to the dashboard's shape
+             (MirrorOrientationLock). Without it the rotation would tear this activity down and
+             take the screen-capture consent flow with it; Compose recomposes on the configuration
+             change either way. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
             android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
