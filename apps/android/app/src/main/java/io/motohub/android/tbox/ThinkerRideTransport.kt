@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -199,15 +200,32 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
                     )
                     active.ble.sendMirrorStatus(true)
                 }
+                // A dash that is going to answer by itself has always done so within 25.3s.
+                // Past that the wait is on the rider, and a log that only ever says "waiting"
+                // cannot tell the two apart - which is how a rider spent three days retrying a
+                // dash that was working exactly as designed (case 32e132d0, 2026-08-24).
+                val notice = launch {
+                    delay(VIDEO_WAIT_NOTICE_MS)
+                    if (active.videoConnected.isCompleted) return@launch
+                    val message = "The dashboard has not opened the video connection " +
+                        "${VIDEO_WAIT_NOTICE_MS / 1000}s after mirror-start. On these dashboards " +
+                        "the rider starts projection FROM THE DASH by long-pressing UP; still " +
+                        "listening on port ${ThinkerRideProtocol.VIDEO_PORT} until the timeout."
+                    ProjectionEventLog.record("THINKERRIDE", message)
+                    mutableEvents.tryEmit(TBoxEvent.Warning(message))
+                }
                 val connected =
                     withTimeoutOrNull(VIDEO_CONNECT_TIMEOUT_MS) { active.videoConnected.await() }
-                // Cancel before leaving: coroutineScope waits for its children, and this one
-                // would otherwise hold the session open for the rest of its own window.
+                // Cancel before leaving: coroutineScope waits for its children, and these would
+                // otherwise hold the session open for the rest of their own windows.
                 lateRetry?.cancel()
+                notice.cancel()
                 connected
             } ?: error(
-                "The dashboard acknowledged the session but never opened the video " +
-                    "connection. Power-cycle the dash screen and connect again."
+                "The dashboard acknowledged the session but never opened the video connection. " +
+                    "On these dashboards projection is started FROM THE DASH: press and hold the " +
+                    "UP button on it while MOTO-HUB is connecting. If that does nothing, " +
+                    "power-cycle the dash screen and connect again."
             )
             // The dash may have dropped and reopened the channel since the first accept; the
             // newest socket is the live one, the deferred only remembers the first.
@@ -282,7 +300,8 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
         val ble = ThinkerRideBleLink(
             appContext,
             log = { message -> ProjectionEventLog.record("THINKERRIDE", message) },
-            onLinkLost = { reason -> reportFatal(reason) }
+            onLinkLost = { reason -> reportFatal(reason) },
+            useByteCatFraming = { protocolProfile?.bleUsesByteCatFraming == true }
         )
 
         private var controlServer: ServerSocket? = null
@@ -579,8 +598,24 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
         /**
          * A real KOVE 800X was logged opening the video connection 12.0s and 25.3s after
          * mirror-start (2026-08-13 tester diagnostics), so 15s lost the race half the time.
+         *
+         * Raised from 40s once it became clear what this wait is actually waiting for. On the
+         * SiQi firmware (`SV=3.0.x`, KOVE 450 Rally) the dash dials the video port when the
+         * RIDER long-presses UP on it — a human gesture, not a protocol step, documented in the
+         * owner's manual and in ttarlov/kove-dash but in none of the companion apps. The OEM's
+         * own listener waits indefinitely for it; 40s was sized for a wire handshake and gives a
+         * rider who has just been told what to do barely enough time to reach the bars. The
+         * app's own connection notification already tells riders this can take a minute and a
+         * half (see ConnectionProgressNotification).
          */
-        const val VIDEO_CONNECT_TIMEOUT_MS = 40_000L
+        const val VIDEO_CONNECT_TIMEOUT_MS = 75_000L
+
+        /**
+         * When the wait stops being "the dash is answering" and starts being "the dash is
+         * waiting for the rider", so the log says which one it is. Comfortably past the 25.3s
+         * worst case a dash that answers on its own has ever taken.
+         */
+        const val VIDEO_WAIT_NOTICE_MS = 30_000L
 
         /** How long [start] waits for `send_pairresult` before going ahead regardless. */
         const val PAIR_CONFIRM_TIMEOUT_MS = 6_000L

@@ -7,6 +7,14 @@ import io.motohub.android.androidauto.AndroidAutoDisplayMode
 import io.motohub.android.androidauto.AndroidAutoVideoPreset
 import io.motohub.android.androidauto.TBoxScreenMargins
 
+/**
+ * The KOVE 450 Rally's landscape TFT, in the one place [TBoxModelProfile.KOVE_450_RALLY] needs it
+ * twice — the declared stream area and the bitrate derived from it must never drift apart. Not in
+ * ThinkerRideProtocol: that object holds the wire, and this wire never carries a panel size.
+ */
+private const val KOVE_450_RALLY_VIDEO_WIDTH = 1280
+private const val KOVE_450_RALLY_VIDEO_HEIGHT = 640
+
 /** Tunings that can be applied after the transport has decoded a touch frame. */
 data class TBoxTouchPolicy(
     val ghostMergePx: Int = 48,
@@ -106,6 +114,15 @@ enum class TBoxModelProfile(
      */
     val yunmoJpegVideo: Boolean = false,
     /** Which wire protocol the dash speaks; routes the session to the matching transport. */
+    /**
+     * Wrap every BLE command to a ThinkerRide dash in the OEM's 104-byte `byteCat` frame
+     * instead of writing bare JSON (see [ThinkerRideProtocol.byteCatFrames]).
+     *
+     * Per profile and off by default on purpose: bare JSON is field-proven on a KOVE 800X and
+     * framing it everywhere would break the one rider known to stream, while the SiQi firmware
+     * on the 450 Rally reads nothing we send unframed.
+     */
+    val bleUsesByteCatFraming: Boolean = false,
     val transportFamily: TBoxTransportFamily = TBoxTransportFamily.EASYCONN,
     /**
      * Yunmo only: use the OEM map-navigation display path (A0 cmd=6, with each keyframe split into
@@ -367,6 +384,47 @@ enum class TBoxModelProfile(
             ThinkerRideProtocol.DEFAULT_VIDEO_HEIGHT * 3,
         encoderPlainGopWithoutIntraRefresh = true,
         encoderUsesExactVideoArea = true,
+        transportFamily = TBoxTransportFamily.THINKERRIDE
+    ),
+    /**
+     * KOVE 450 Rally (2022 dash, SiQi firmware `SV=3.0.x`): the same ThinkerRide wire as
+     * [KOVE_800X] driving a **1280x640 landscape** panel instead of a 600x1024 portrait one.
+     * The protocol never reports a panel size — the phone declares it — so a rider on this bike
+     * pinned to [KOVE_800X] streams a portrait image into a landscape TFT.
+     *
+     * Geometry, bitrate and GOP come from the ttarlov/kove-dash reverse-engineering of the OEM
+     * `oversea.whbluestar.thinkerride` app plus its own working projection on this exact bike
+     * (`refs/kove-dash/proto-poc/PROTOCOL.md`): 1280x640 confirmed rendering, 30fps, 1s GOP,
+     * `3 * width * height` — the same `r=3` bitrate tier [KOVE_800X] uses, which is why both
+     * profiles compute it the same way rather than sharing a constant.
+     *
+     * **[modelIds] is deliberately empty even though this dash answers the same QR.** The
+     * ThinkerRide QR carries only an SSID and a password, so both KOVE profiles would claim
+     * [ThinkerRideProtocol.PROVISIONING_MODEL_ID] — and [fromModelId] resolves an ambiguous
+     * modelId to [GENERIC], which for this family is not a milder answer but a broken one:
+     * GENERIC is an EasyConn profile, so every existing KOVE rider would silently lose the
+     * ThinkerRide transport entirely. A second profile on this wire can therefore only ever be
+     * a manual pin, until something on the wire tells the two panels apart.
+     */
+    KOVE_450_RALLY(
+        key = "kove_450_rally",
+        displayName = "KOVE 450 Rally (ThinkerRide)",
+        modelIds = emptySet(),
+        mapTilesRequireCellular = true,
+        defaultAndroidAutoDisplayMode = AndroidAutoDisplayMode.FILL,
+        supportsScreenTouch = false,
+        defaultAndroidAutoPreset = AndroidAutoVideoPreset.LANDSCAPE_1280X720,
+        fallbackTBoxVideoArea = TBoxEvent.VideoArea(
+            KOVE_450_RALLY_VIDEO_WIDTH,
+            KOVE_450_RALLY_VIDEO_HEIGHT
+        ),
+        requiresSockAuth = false,
+        advertisedSupportFunction = 0,
+        encoderKeyframeIntervalSeconds = 1,
+        encoderBitRate = KOVE_450_RALLY_VIDEO_WIDTH * KOVE_450_RALLY_VIDEO_HEIGHT * 3,
+        encoderPlainGopWithoutIntraRefresh = true,
+        encoderUsesExactVideoArea = true,
+        bleUsesByteCatFraming = true,
         transportFamily = TBoxTransportFamily.THINKERRIDE
     ),
     /**
@@ -691,6 +749,9 @@ enum class TBoxModelProfile(
                 // ThinkerRide dashes never produce CLIENT_INFO (an EasyConn concept), so scoring
                 // has nothing to say; they resolve by the QR's pseudo modelId or a manual pin.
                 KOVE_800X -> 0
+                // Same wire, different panel, and nothing on that wire tells them apart: a
+                // manual pin is the only way here (see the profile's own note).
+                KOVE_450_RALLY -> 0
                 // Yunmo dashes never produce CLIENT_INFO either, and the X-Cape 1200 shares its
                 // QR ProductID with EasyConn Morinis, so detection must never claim it: it is a
                 // manual pin only.
