@@ -500,6 +500,22 @@ enum class TBoxModelProfile(
     );
 
     companion object {
+        /**
+         * The profile whose [key] is [key], or null for an unknown one.
+         *
+         * Exists so a profile can be named across a process boundary. CORE resolves the real
+         * profile of a session - which for a dash that answered Yunmo after EasyConn found
+         * nothing is NOT what the saved motorcycle's modelId resolves to - and the companion app
+         * has to arrive at the same enum entry from the name alone. An unknown key answers null
+         * rather than [GENERIC] so a caller can tell "this build has no such profile" from "this
+         * dash really is generic".
+         */
+        fun byKey(key: String?): TBoxModelProfile? {
+            val normalized = key?.trim().orEmpty()
+            if (normalized.isEmpty()) return null
+            return entries.firstOrNull { it.key == normalized }
+        }
+
         private fun candidatesForModelId(modelId: String?): List<TBoxModelProfile> {
             val normalized = modelId?.trim().orEmpty()
             if (normalized.isEmpty()) return emptyList()

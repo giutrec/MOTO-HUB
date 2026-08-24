@@ -12,6 +12,44 @@ import io.motohub.android.androidauto.TBoxScreenMargins
 
 class TBoxModelProfileTest {
     @Test
+    fun `finds a profile by the key CORE names it with over the bridge`() {
+        // The companion app has nothing but this key to go on: CORE resolved the profile in its
+        // own process and can only name it. Anything less than an exact round trip here sends the
+        // dashboard back to the generic profile, which is the whole bug (rider 315e0af3).
+        TBoxModelProfile.entries.forEach { profile ->
+            assertEquals(profile, TBoxModelProfile.byKey(profile.key))
+        }
+        assertEquals(TBoxModelProfile.MORINI_XCAPE_1200, TBoxModelProfile.byKey(" morini_xcape_1200 "))
+    }
+
+    @Test
+    fun `an unknown key is null rather than the generic profile`() {
+        // A mismatched pair has to be distinguishable from a dash that really is generic: one
+        // needs an update, the other is working as designed.
+        assertNull(TBoxModelProfile.byKey("a_profile_from_a_newer_core"))
+        assertNull(TBoxModelProfile.byKey(null))
+        assertNull(TBoxModelProfile.byKey(""))
+        assertNull(TBoxModelProfile.byKey("   "))
+    }
+
+    @Test
+    fun `every profile key is unique`() {
+        // byKey() picks the first match, so two profiles sharing a key would make the answer
+        // depend on declaration order.
+        val keys = TBoxModelProfile.entries.map { it.key }
+        assertEquals(keys.size, keys.toSet().size)
+    }
+
+    @Test
+    fun `the X-Cape profile still asks for the slow capture the send window needs`() {
+        // The fix is only worth carrying across the bridge because of these two numbers: three
+        // frames fit in YunmoProtocol.SEND_WINDOW, and the generic profile's 30fps does not.
+        assertEquals(10, TBoxModelProfile.MORINI_XCAPE_1200.encoderFrameRate)
+        assertEquals(TBoxTransportFamily.YUNMO, TBoxModelProfile.MORINI_XCAPE_1200.transportFamily)
+        assertNull(TBoxModelProfile.GENERIC.encoderFrameRate)
+    }
+
+    @Test
     fun `recognizes the MOTO-HUB simulator model id`() {
         assertEquals(
             TBoxModelProfile.MOTO_HUB_SIMULATOR,

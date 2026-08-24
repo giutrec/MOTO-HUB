@@ -142,4 +142,30 @@ interface ITBoxTransportService {
      * this call, which is also what an empty reply parcel reads as.
      */
     int getLastConnectFailureStage();
+
+    /**
+     * The key of the TBoxModelProfile Core's transport settled on for the ACTIVE session, when
+     * DISCOVERY changed it - null otherwise, including when no session is active.
+     *
+     * A caller resolves the profile from its own saved motorcycle, and that is usually right.
+     * It cannot be right for a dash that answered Yunmo on :8200 after EasyConn discovery found
+     * nothing: by modelId that dash is the generic profile, while Core's transport has already
+     * switched to the real one. Everything the encoder needs hangs off the difference - frame
+     * rate, bitrate, keyframe policy, touch policy, screen margins - so a caller encoding for the
+     * generic profile sends such a dash three times the frames its send window holds.
+     *
+     * Null is therefore an answer, not a failure: it means "nothing to correct, keep what you
+     * resolved". Core deliberately does not offer its own fallback resolution here - it has no
+     * capability store, so it cannot see the CLIENT_INFO scoring that identifies a dash with no
+     * matching model id, and a weaker answer would overwrite a better one.
+     *
+     * Answered by name rather than as a parcel of settings: both apps compile the same profile
+     * table, so a key reaches the same enum entry, and a profile gaining a field needs no
+     * contract change. A caller that does not recognise the key (an older companion against a
+     * newer Core) resolves the profile itself, exactly as before.
+     *
+     * Also null on a Core older than IpcBridgeContract.CONTRACT_VERSION_ACTIVE_PROFILE, which is
+     * what its dead transaction reads as. Same tail-position rule as the calls above.
+     */
+    String getActiveProfileKey();
 }

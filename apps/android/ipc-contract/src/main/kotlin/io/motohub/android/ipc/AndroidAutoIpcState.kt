@@ -33,8 +33,9 @@ object IpcBridgeContract {
      * 2: connectOverFormedGroup().
      * 3: getLastConnectFailure() + getLastConnectFailureStage().
      * 4: videoWantsStills(), and the extended video-pipe frame in [VideoPipeFraming].
+     * 5: getActiveProfileKey().
      */
-    const val CONTRACT_VERSION = 4
+    const val CONTRACT_VERSION = 5
 
     /** First [CONTRACT_VERSION] whose Core implements connectOverFormedGroup(). */
     const val CONTRACT_VERSION_FORMED_GROUP = 2
@@ -48,6 +49,20 @@ object IpcBridgeContract {
      * extended frame's negative length as a corrupt access unit and closes the pipe.
      */
     const val CONTRACT_VERSION_VIDEO_STILLS = 4
+
+    /**
+     * First [CONTRACT_VERSION] whose Core names the profile its transport actually settled on,
+     * through getActiveProfileKey().
+     *
+     * Until this, a companion app driving a Core-owned session could only resolve the profile
+     * from its own saved motorcycle, and a dash that answered Yunmo after EasyConn discovery
+     * found nothing resolves there to the generic one. So the companion's Ride Dashboard encoded
+     * a Moto Morini X-Cape 1200 at the generic 30fps while Core's own Android Auto path, holding
+     * the real profile, encoded the same dash at the 10fps that profile asks for - three times
+     * the frames into a three-frame send window (rider 315e0af3, 2026-08-24, both editions
+     * 1.1.91: the dashboard reappeared and died every ten seconds while Android Auto worked).
+     */
+    const val CONTRACT_VERSION_ACTIVE_PROFILE = 5
 
     /**
      * Which half of Core's connect produced the last failure, answered by

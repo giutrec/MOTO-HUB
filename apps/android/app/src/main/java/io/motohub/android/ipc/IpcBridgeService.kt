@@ -34,6 +34,7 @@ import io.motohub.android.androidauto.AndroidAutoRuntimeState
 import io.motohub.android.androidauto.AndroidAutoNightModeStore
 import io.motohub.android.androidauto.AndroidAutoSessionService
 import io.motohub.android.androidauto.withFullVideoTarget
+import io.motohub.android.encoding.VideoBackpressureGuard
 import io.motohub.android.feature.settings.AndroidAutoAspectMatchingMode
 import io.motohub.android.feature.settings.AndroidAutoResolutionMode
 import io.motohub.android.feature.settings.MotoHubSettings
@@ -176,22 +177,47 @@ class IpcBridgeService : Service() {
 
         /**
          * Whether the active session's dash wants JPEG stills instead of an H.264 stream.
-         *
-         * The transport's own profile wins when discovery changed it - a dash that answered Yunmo
-         * after EasyConn found nothing is not the profile the saved motorcycle resolves to - which
-         * is the same precedence the in-process session services use. Capabilities are not
-         * consulted here because this service does not own the capability store; a profile that
-         * asks for stills is always reached by model id or by a rider's explicit override, never
-         * by capability scoring.
+         * Answered from [activeSessionProfile], so a dash discovered as Yunmo is judged by the
+         * profile the transport settled on rather than the one its model id resolves to.
          */
-        override fun videoWantsStills(): Boolean {
-            val handle = TBoxSessionRegistry.current() ?: return false
-            val profile = handle.transport.activeProtocolProfile ?: TBoxModelProfile.resolve(
+        override fun videoWantsStills(): Boolean = activeSessionProfile()?.yunmoJpegVideo ?: false
+
+        /**
+         * Names the profile only when DISCOVERY changed it - never the one the motorcycle would
+         * resolve to anyway.
+         *
+         * That difference is the whole call. A dash that answered Yunmo on :8200 after EasyConn
+         * found nothing runs a profile nothing on the caller's side can arrive at, and the caller
+         * reads frame rate, bitrate, keyframe policy, touch policy and margins off whatever it
+         * resolved: for rider 315e0af3 (2026-08-24) that was the generic profile's 30fps and 1s
+         * GOP into a transport whose send window holds three frames, and the Ride Dashboard died
+         * every ten seconds while Core's own Android Auto - which reads this same property
+         * in-process - was fine.
+         *
+         * Answering null in every other case is deliberate, not laziness. This service has no
+         * capability store, so its own resolve() is blind to the CLIENT_INFO scoring that
+         * identifies a dash with no matching model id. Handing that weaker answer over would
+         * overwrite a caller's better one - trading one wrong profile for another. Null means
+         * "nothing to correct", exactly as it does on the property this exposes.
+         */
+        override fun getActiveProfileKey(): String? =
+            TBoxSessionRegistry.current()?.transport?.activeProtocolProfile?.key
+
+        /**
+         * The profile of the ACTIVE session, with the same precedence the in-process session
+         * services use: the transport's own profile wins when discovery changed it - a dash that
+         * answered Yunmo after EasyConn found nothing is not the profile the saved motorcycle
+         * resolves to. Capabilities are not consulted because this service does not own the
+         * capability store; a profile reachable only by capability scoring is also reachable by
+         * model id or by the rider's explicit override.
+         */
+        private fun activeSessionProfile(): TBoxModelProfile? {
+            val handle = TBoxSessionRegistry.current() ?: return null
+            return handle.transport.activeProtocolProfile ?: TBoxModelProfile.resolve(
                 handle.motorcycle.modelId,
                 null,
                 ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
             )
-            return profile.yunmoJpegVideo
         }
 
         // Runs Core's own GPL connect flow (hudlib) on behalf of a companion app that can't
@@ -409,7 +435,10 @@ class IpcBridgeService : Service() {
         try {
             ParcelFileDescriptor.AutoCloseInputStream(input).use { raw ->
                 DataInputStream(BufferedInputStream(raw, VIDEO_PIPE_BUFFER_BYTES)).use { stream ->
-                    var consecutiveRejectedFrames = 0
+                    // Same guard, same thresholds as the in-process Android Auto path: a
+                    // rejection is a busy transport, not a dead one, and only a streak that is
+                    // both long and sustained ends the session. See the block below.
+                    val backpressure = VideoBackpressureGuard()
                     while (currentCoroutineContext().isActive) {
                         val frame = try {
                             VideoPipeFraming.read(stream)
@@ -428,33 +457,39 @@ class IpcBridgeService : Service() {
                             transport.offerAccessUnit(frame.payload)
                         }
                         if (!accepted) {
-                            // A refused STILL is flow control, not death. The Yunmo transport
-                            // refuses by design whenever the dash has not acknowledged the
-                            // stills already on the wire (STILL_SEND_WINDOW) - the X-Cape acks
-                            // two-ish a second against ten offered, so three consecutive
-                            // refusals arrive within ~300ms on a perfectly healthy link.
-                            // Counting them here killed the pipe moments after the dash had
-                            // acknowledged the first frame, over and over, which the rider saw
-                            // as "the dashboard shows for a few moments, then disappears"
-                            // (X-Cape 1200 field report, 2026-08-24) - while Mirroring, whose
-                            // stills go to the same transport in-process without this counter,
-                            // worked. Dropping the frame is the whole contract: PRO keeps the
-                            // freshest picture coming, and a genuinely dead session still
-                            // closes the pipe through watchTransportForCompanion (the
-                            // transport's own FatalError/Stopped events).
-                            if (!frame.isStill) {
-                                consecutiveRejectedFrames++
-                                if (consecutiveRejectedFrames >= MAX_CONSECUTIVE_REJECTED_FRAMES) {
-                                    ProjectionEventLog.warning(
-                                        "IPC_TBOX",
-                                        "PRO video pipe stopped because CORE rejected " +
-                                            "$consecutiveRejectedFrames consecutive AVC frames."
-                                    )
-                                    break
-                                }
+                            // A refusal on this pipe is flow control, not death - for stills and
+                            // for access units alike.
+                            //
+                            // A refused STILL was already exempt: the Yunmo transport refuses by
+                            // design whenever the dash has not acknowledged the stills on the
+                            // wire (STILL_SEND_WINDOW), and the X-Cape acks two-ish a second
+                            // against ten offered, so three consecutive refusals arrive within
+                            // ~300ms on a perfectly healthy link (X-Cape 1200 field report,
+                            // 2026-08-24). What that fix assumed, and what was wrong, is that a
+                            // refused ACCESS UNIT could only mean a dead session. The same
+                            // transport refuses one whenever its single-slot frame executor is
+                            // busy - which on a dash acking ~10fps against a dashboard offering
+                            // 30 is every other frame. Rider 315e0af3 (2026-08-24, both editions
+                            // 1.1.91) lost the dashboard every ten seconds to exactly that, while
+                            // Core's own Android Auto, holding the identical stream open through
+                            // 121 rejections a minute, showed what the right answer looks like.
+                            //
+                            // So: the same VideoBackpressureGuard that path uses. A genuinely
+                            // dead session is still caught - by the guard's own long streak, and
+                            // before that by watchTransportForCompanion (the transport's
+                            // FatalError/Stopped events), which is what actually closes the pipe
+                            // when the link is gone.
+                            if (!frame.isStill && backpressure.onRejected()) {
+                                ProjectionEventLog.warning(
+                                    "IPC_TBOX",
+                                    "PRO video pipe stopped: CORE rejected " +
+                                        "${backpressure.rejectionStreak()} consecutive AVC frames " +
+                                        "over ${backpressure.streakMillis()}ms."
+                                )
+                                break
                             }
                         } else {
-                            consecutiveRejectedFrames = 0
+                            backpressure.onAccepted()
                         }
                     }
                 }
@@ -1023,7 +1058,6 @@ class IpcBridgeService : Service() {
         const val SESSION_CONSUMER = "companion-app"
         const val VIDEO_PIPE_BUFFER_BYTES = 64 * 1024
         const val MAX_VIDEO_ACCESS_UNIT_BYTES = 2 * 1024 * 1024
-        const val MAX_CONSECUTIVE_REJECTED_FRAMES = 3
         const val SESSION_POLL_INTERVAL_MS = 1_000L
         const val VIDEO_CONFIGURATION_TIMEOUT_MS = 10_000L
         const val SELF_MODE_READY_TIMEOUT_MS = 10_000L

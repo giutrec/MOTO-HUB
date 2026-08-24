@@ -145,6 +145,17 @@ class TBoxTransportClient(
         runCatching { service?.getLastConnectFailureStage() }.getOrNull()
             ?: IpcBridgeContract.CONNECT_STAGE_UNKNOWN
 
+    /**
+     * The key of the profile Core's transport switched to during discovery, or null when it
+     * switched to none, no session is active, Core is not bound, or Core predates
+     * [IpcBridgeContract.CONTRACT_VERSION_ACTIVE_PROFILE].
+     *
+     * Every one of those answers null on purpose: they all mean "this app resolves the profile
+     * itself", which is exactly the behaviour that existed before this call.
+     */
+    fun activeProfileKey(): String? =
+        runCatching { service?.getActiveProfileKey() }.getOrNull()?.takeIf { it.isNotBlank() }
+
     /** Aborts an in-flight connect() on Core's side; see ITBoxTransportService.aidl. */
     fun cancelConnect() {
         service?.cancelConnect()
