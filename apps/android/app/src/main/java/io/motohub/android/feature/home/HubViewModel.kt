@@ -26,7 +26,7 @@ import io.motohub.android.tbox.TBoxModelProfile
 import io.motohub.android.tbox.TBoxProtocolMemory
 import io.motohub.android.tbox.ThinkerRideGate
 import io.motohub.android.tbox.ProfileOverride
-import io.motohub.android.tbox.TBoxNetworkConnector
+import io.motohub.android.tbox.TBoxNetworkConnectors
 import io.motohub.android.tbox.TBoxNetworkEvent
 import io.motohub.android.tbox.TBoxSessionHandle
 import io.motohub.android.tbox.TBoxSessionRegistry
@@ -74,7 +74,10 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         )
     )
     val uiState: StateFlow<HubUiState> = mutableUiState.asStateFlow()
-    private val networkConnector = TBoxNetworkConnector(application)
+    // The process's one shared connector: constructing a private instance here is what put two
+    // exclusive Wi-Fi requests on the air whenever the companion app connected beside this UI.
+    // Teardown goes through TBoxNetworkConnectors.release, never connector.disconnect().
+    private val networkConnector = TBoxNetworkConnectors.shared(application)
     private val transport = SelectingTBoxTransport(application)
     private val capabilityStore = TBoxCapabilityStore(application)
     private var connectJob: Job? = null
@@ -95,8 +98,8 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                     val projectionActive = isNativeStreamActive()
                     if (!projectionActive) {
                         transport.stop()
-                        networkConnector.disconnect()
                         TBoxSessionRegistry.clear()
+                        TBoxNetworkConnectors.release(HUB_UI_NETWORK_OWNER)
                         mutableUiState.value = mutableUiState.value.copy(
                             session = mutableUiState.value.session.copy(
                                 phase = SessionPhase.NETWORK_SETUP_REQUIRED,
@@ -283,8 +286,8 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             transport.stop()
-            networkConnector.disconnect()
             TBoxSessionRegistry.clear()
+            TBoxNetworkConnectors.release(HUB_UI_NETWORK_OWNER)
         }
         mutableUiState.value = current.copy(
             session = HubSessionState().withMotorcycle(profile),
@@ -432,6 +435,11 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                             "hold the T-Box session if it was recently used."
                     )
                 }
+                // Interest registered per attempt and idempotent, so auto-connect firing on
+                // every resume holds one lease, not a pile. A failed attempt keeps it: the
+                // specifier request deliberately outlives its 30s timeout (v1.1.17) and the
+                // retry must join that hunt, not restart it.
+                TBoxNetworkConnectors.acquire(getApplication(), HUB_UI_NETWORK_OWNER)
                 val connected = TBoxLinkResolver.connect(getApplication(), networkConnector, profile)
                 val networkFailure = connected.exceptionOrNull()
                 if (networkFailure != null) {
@@ -513,8 +521,8 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                     val routingDiagnosis = networkConnector.vpnRoutingDiagnosis()
                     transport.stop()
                     establishedLink.disconnect()
-                    networkConnector.disconnect()
                     TBoxSessionRegistry.clear()
+                    TBoxNetworkConnectors.release(HUB_UI_NETWORK_OWNER)
                     if (routingDiagnosis != null) {
                         // Nothing this app sent ever left the phone: report the route, not the dash.
                         showError(routingDiagnosis)
@@ -584,8 +592,8 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             activeJob.cancelAndJoin()
             transport.stop()
-            networkConnector.disconnect()
             TBoxSessionRegistry.clear()
+            TBoxNetworkConnectors.release(HUB_UI_NETWORK_OWNER)
             mutableUiState.value = mutableUiState.value.copy(
                 session = mutableUiState.value.session.copy(
                     phase = SessionPhase.NETWORK_SETUP_REQUIRED,
@@ -606,8 +614,8 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         ProjectionEventLog.record("CONNECTION", "User disconnected from the T-Box.")
         viewModelScope.launch {
             transport.stop()
-            networkConnector.disconnect()
             TBoxSessionRegistry.clear()
+            TBoxNetworkConnectors.release(HUB_UI_NETWORK_OWNER)
             mutableUiState.value = mutableUiState.value.copy(
                 session = mutableUiState.value.session.copy(
                     phase = SessionPhase.NETWORK_SETUP_REQUIRED,
@@ -657,12 +665,22 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
         showError(message)
     }
 
+    private companion object {
+        /** This ViewModel's name in [TBoxNetworkConnectors]' interest ledger. */
+        const val HUB_UI_NETWORK_OWNER = "hub-ui"
+    }
+
     override fun onCleared() {
         ProjectionEventLog.debug("STATE", "HubViewModel cleared.")
         if (!isNativeStreamActive()) {
-            networkConnector.disconnect()
             TBoxSessionRegistry.clear()
         }
+        // Unconditional, unlike the clear above: this owner is going away either way. During a
+        // native stream the session's own lease (and the bridge's, when the companion drives it)
+        // keeps the network - the request no longer survives on a skipped disconnect. On
+        // 2026-08-04 this exact teardown released the UI's private request and dropped the AP
+        // under the companion session that was streaming over it.
+        TBoxNetworkConnectors.release(HUB_UI_NETWORK_OWNER)
         super.onCleared()
     }
 

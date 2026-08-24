@@ -63,6 +63,13 @@ object TBoxSessionRegistry {
         activeHandle = handle
         consumers.clear()
         consumersSeen.clear()
+        // The installed session holds its own interest in the shared network connector, released
+        // in [clear]. This - not a skipped disconnect in whoever created the connector - is what
+        // keeps the Wi-Fi request alive when the connecting ViewModel dies under a running
+        // stream, and what lets the request actually drop when the last session ends.
+        // Idempotent across a replacing install; a no-op for a handle built around an unmanaged
+        // connector (tests).
+        TBoxNetworkConnectors.adoptForSession(handle.networkConnector)
         // Honour the rider's manual pin. Reporting the modelId's own answer here made the log
         // contradict itself for anyone who had overridden the profile - the session line said
         // "Generic EasyConn dashboard" while the mode that started moments later reported the
@@ -146,6 +153,12 @@ object TBoxSessionRegistry {
             consumers.clear()
             if (previous != null) {
                 previous.link.disconnect()
+                // Registry monitor -> connector-owner lock, never the reverse; see the ordering
+                // note on TBoxNetworkConnectors. The session's interest goes with the session:
+                // when it was the last one, this is the release that actually drops the Wi-Fi
+                // request - previously nothing here touched the connector, and a cleared
+                // session's request could keep hunting for three more minutes.
+                TBoxNetworkConnectors.releaseSession()
                 ProjectionEventLog.record("SESSION", "T-Box registry cleared.")
             }
         }

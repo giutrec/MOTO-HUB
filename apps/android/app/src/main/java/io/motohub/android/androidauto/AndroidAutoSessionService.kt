@@ -32,6 +32,7 @@ import io.motohub.android.feature.controls.MediaButtonBridge
 import io.motohub.android.feature.controls.SimulatorHandlebarBridge
 import io.motohub.android.feature.settings.MotoHubSettings
 import io.motohub.android.feature.settings.AndroidAutoAspectMatchingMode
+import io.motohub.android.session.FrameLogThrottle
 import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.session.ProjectionRuntime
@@ -94,6 +95,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
     private var backpressureGuard = VideoBackpressureGuard()
     private val videoStreamStartRequested = AtomicBoolean(false)
     private val framesAccepted = AtomicLong(0)
+    private val frameLogThrottle = FrameLogThrottle()
     /** When the dash last took a still. The stills path's liveness signal; see the offer below. */
     private val lastStillAcceptedAt = AtomicLong(0)
     private val recoveryRequested = AtomicBoolean(false)
@@ -684,9 +686,13 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                     if (handle.transport.offerAccessUnit(accessUnit)) {
                         backpressureGuard.onAccepted()
                         val accepted = framesAccepted.incrementAndGet()
-                        if (accepted == 1L || accepted % FRAME_LOG_INTERVAL == 0L) {
-                            ProjectionEventLog.record("ANDROID AUTO", "Frames sent: $accepted.")
-                        }
+                        frameLogThrottle.rateSuffixIfDue(accepted, SystemClock.elapsedRealtime())
+                            ?.let { rate ->
+                                ProjectionEventLog.record(
+                                    "ANDROID AUTO",
+                                    "Frames sent: $accepted$rate."
+                                )
+                            }
                         true
                     } else {
                         // A single rejection is a pushFrame() overlap, not a dead link - only a
@@ -783,9 +789,13 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                     backpressureGuard.onAccepted()
                     lastStillAcceptedAt.set(SystemClock.elapsedRealtime())
                     val sent = framesAccepted.incrementAndGet()
-                    if (sent == 1L || sent % FRAME_LOG_INTERVAL == 0L) {
-                        ProjectionEventLog.record("JPEG", "Stills sent to the dashboard: $sent.")
-                    }
+                    frameLogThrottle.rateSuffixIfDue(sent, SystemClock.elapsedRealtime())
+                        ?.let { rate ->
+                            ProjectionEventLog.record(
+                                "JPEG",
+                                "Stills sent to the dashboard: $sent$rate."
+                            )
+                        }
                 } else {
                     // A refused still is this path's normal resting state, not a fault. The source
                     // offers one every 100ms and this dash takes about two a second, so the other
@@ -1145,6 +1155,9 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         )
         tBoxHandle = recoveredHandle
         TBoxSessionRegistry.install(recoveredHandle)
+        // install() resets the claim list; this session is still using it. Without this, an AIDL
+        // connect landing mid-recovery saw an empty consumer set and was admitted beside us.
+        TBoxSessionRegistry.claim(SESSION_CONSUMER)
         capabilityStore.recordDiscovery(previousHandle.motorcycle, host)
         observeActiveSession(recoveredHandle)
         startBikeStream(recoveredHandle)
@@ -1239,7 +1252,9 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                     // stops the transport and drops the network.
                     if (TBoxSessionRegistry.releaseAndClear(SESSION_CONSUMER, releasedHandle)) {
                         releasedHandle.transport.stop()
-                        releasedHandle.networkConnector.disconnect()
+                        // The network itself is the registry's to drop: clear() released the
+                        // session's lease on the shared connector, which disconnects only when
+                        // no other owner (the Hub UI, the AIDL bridge) still needs it.
                     }
                 } finally {
                     // Last thing this service ever does: the scope outlived stopSelf() before,
@@ -1362,7 +1377,6 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         private const val AAP_VIDEO_READY_TIMEOUT_MS = 60_000L
         private const val TBOX_NETWORK_REBIND_TIMEOUT_MS = 8_000L
         private const val VIDEO_CONFIGURATION_TIMEOUT_MS = 10_000L
-        private const val FRAME_LOG_INTERVAL = 300L
         private const val WATCHDOG_TICK_MS = 5_000L
         private const val WATCHDOG_STALL_MS = 10_000L
         private const val NETWORK_LOSS_GRACE_MILLIS = 60_000L

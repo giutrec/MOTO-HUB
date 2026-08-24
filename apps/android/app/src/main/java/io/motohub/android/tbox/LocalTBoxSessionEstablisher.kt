@@ -13,8 +13,9 @@ fun createTBoxSessionEstablisher(context: Context): TBoxSessionEstablisher =
     LocalTBoxSessionEstablisher(context)
 
 class LocalTBoxSessionEstablisher(private val context: Context) : TBoxSessionEstablisher {
+
     override val transport: TBoxTransport = SelectingTBoxTransport(context)
-    override val networkConnector: TBoxNetworkConnector = TBoxNetworkConnector(context)
+    override val networkConnector: TBoxNetworkConnector = TBoxNetworkConnectors.shared(context)
     private val capabilityStore = TBoxCapabilityStore(context)
 
     override suspend fun connectAndInstall(
@@ -23,6 +24,9 @@ class LocalTBoxSessionEstablisher(private val context: Context) : TBoxSessionEst
         onNetworkError: (Throwable) -> Unit,
         onDiscoveryError: (Throwable) -> Unit
     ): Boolean {
+        TBoxNetworkConnectors.acquire(context, TBoxSessionEstablisher.NETWORK_OWNER)
+        // The lease survives a network failure on purpose: the specifier request outlives its
+        // timeout (v1.1.17) and a retry joins the hunt already in progress.
         val connected = TBoxLinkResolver.connect(context, networkConnector, profile)
         val link = connected.getOrElse { onNetworkError(it); return false }
         onNetworkConnected()
@@ -38,8 +42,8 @@ class LocalTBoxSessionEstablisher(private val context: Context) : TBoxSessionEst
         val host = discovered.getOrElse {
             transport.stop()
             link.disconnect()
-            networkConnector.disconnect()
             TBoxSessionRegistry.clear()
+            TBoxNetworkConnectors.release(TBoxSessionEstablisher.NETWORK_OWNER)
             onDiscoveryError(it)
             return false
         }

@@ -18,6 +18,15 @@ interface TBoxSessionEstablisher {
     val transport: TBoxTransport
     val networkConnector: TBoxNetworkConnector
 
+    companion object {
+        /**
+         * The establisher's name in [TBoxNetworkConnectors]' interest ledger. On the interface
+         * because the ViewModel that drives a PRO establisher releases the lease its establisher
+         * acquired - one constant, not a string agreed across files.
+         */
+        const val NETWORK_OWNER = "pro-establisher"
+    }
+
     /**
      * Establishes the connection and installs the session into TBoxSessionRegistry.
      * Returns true when the session is READY. The callbacks let the shared UI keep its exact

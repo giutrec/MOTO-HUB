@@ -19,7 +19,7 @@ import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxLinkResolver
 import io.motohub.android.tbox.TBoxModelProfile
 import io.motohub.android.tbox.TBoxProtocolMemory
-import io.motohub.android.tbox.TBoxNetworkConnector
+import io.motohub.android.tbox.TBoxNetworkConnectors
 import io.motohub.android.tbox.TBoxSessionHandle
 import io.motohub.android.tbox.TBoxSessionRegistry
 
@@ -56,7 +56,9 @@ internal object CoreConnectFailureRecord {
 /** Establishes and tears down a T-Box session on behalf of an AIDL caller. */
 class CoreTBoxConnector(private val context: Context) {
 
-    private val networkConnector = TBoxNetworkConnector(context)
+    // The process's one shared connector (see TBoxNetworkConnectors): an AIDL connect beside a
+    // UI-established session used to put a second exclusive Wi-Fi request on the air.
+    private val networkConnector = TBoxNetworkConnectors.shared(context)
     private val transport = SelectingTBoxTransport(context)
     private val capabilityStore = TBoxCapabilityStore(context)
     private var installed = false
@@ -104,8 +106,11 @@ class CoreTBoxConnector(private val context: Context) {
             CoreConnectFailureRecord.record(IpcBridgeContract.CONNECT_STAGE_REFUSED, refusal)
             return false
         }
+        TBoxNetworkConnectors.acquire(context, AIDL_NETWORK_OWNER)
         val connected = TBoxLinkResolver.connect(context, networkConnector, profile, formedGroup)
         val link = connected.getOrElse {
+            // The lease is kept on a network failure: the specifier request deliberately
+            // outlives its timeout (v1.1.17) and the next AIDL retry joins that hunt.
             ProjectionEventLog.error("IPC_TBOX", "AIDL connect: T-Box network connection failed.", it)
             CoreConnectFailureRecord.record(
                 IpcBridgeContract.CONNECT_STAGE_NETWORK,
@@ -163,8 +168,8 @@ class CoreTBoxConnector(private val context: Context) {
             }
             transport.stop()
             link.disconnect()
-            networkConnector.disconnect()
             TBoxSessionRegistry.clear()
+            TBoxNetworkConnectors.release(AIDL_NETWORK_OWNER)
             return false
         }
         // Record what discovery settled on, so the next ride skips the slow path.
@@ -188,13 +193,16 @@ class CoreTBoxConnector(private val context: Context) {
      */
     suspend fun cancel() {
         transport.stop()
-        networkConnector.disconnect()
         TBoxSessionRegistry.clear()
+        TBoxNetworkConnectors.release(AIDL_NETWORK_OWNER)
     }
 
     suspend fun disconnect() = disconnectActiveSession()
 
     companion object {
+        /** The AIDL bridge's name in [TBoxNetworkConnectors]' interest ledger. */
+        private const val AIDL_NETWORK_OWNER = "aidl-bridge"
+
         /**
          * Tears down whatever session the registry holds, whoever established it.
          *
@@ -208,7 +216,10 @@ class CoreTBoxConnector(private val context: Context) {
         suspend fun disconnectActiveSession() {
             val handle = TBoxSessionRegistry.current() ?: return
             handle.transport.stop()
-            handle.networkConnector.disconnect()
+            // No direct connector teardown: clear() releases the session's own lease in the
+            // shared-connector ledger, and the bridge's lease goes with CoreTBoxConnectors.clear()
+            // (its sole caller pairs the two). The network drops when the last of them is gone -
+            // never out from under a lease the UI still holds.
             TBoxSessionRegistry.clear(handle)
         }
     }

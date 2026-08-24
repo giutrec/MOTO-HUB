@@ -21,6 +21,7 @@ import android.media.projection.MediaProjectionManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.os.PowerManager
 import android.os.ParcelFileDescriptor
 import androidx.core.app.NotificationCompat
@@ -29,6 +30,7 @@ import io.motohub.android.R
 import io.motohub.android.encoding.AvcEncoder
 import io.motohub.android.encoding.EncoderProfile
 import io.motohub.android.i18n.motoHubText
+import io.motohub.android.session.FrameLogThrottle
 import io.motohub.android.session.ProjectionEventLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -59,6 +61,7 @@ class AoaExternalService : Service() {
     private var aoaFileDescriptor: ParcelFileDescriptor? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private val framesSent = AtomicLong(0)
+    private val frameLogThrottle = FrameLogThrottle()
     private val capturing = AtomicBoolean(false)
     @Volatile private var stopping = false
 
@@ -168,12 +171,13 @@ class AoaExternalService : Service() {
                     try {
                         outputStream.write(accessUnit)
                         val count = framesSent.incrementAndGet()
-                        if (count == 1L || count % FRAME_LOG_INTERVAL == 0L) {
-                            ProjectionEventLog.record(
-                                "AOA_ENCODER",
-                                "AOA frames sent: $count."
-                            )
-                        }
+                        frameLogThrottle.rateSuffixIfDue(count, SystemClock.elapsedRealtime())
+                            ?.let { rate ->
+                                ProjectionEventLog.record(
+                                    "AOA_ENCODER",
+                                    "AOA frames sent: $count$rate."
+                                )
+                            }
                         true
                     } catch (e: IOException) {
                         serviceScope.launch {
@@ -380,7 +384,6 @@ class AoaExternalService : Service() {
         private const val EXTERNAL_HEIGHT = 720
         private const val EXTERNAL_FRAMERATE = 30
         private const val EXTERNAL_BITRATE = 4_194_304
-        private const val FRAME_LOG_INTERVAL = 120L
 
         fun start(context: Context, resultCode: Int, resultData: Intent) {
             val intent = Intent(context, AoaExternalService::class.java)

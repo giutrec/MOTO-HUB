@@ -36,9 +36,21 @@ object TBoxPortScanner {
     private val CANDIDATE_PORTS = (10915..10935).toList()
     private const val CONNECT_TIMEOUT_MS = 1_200
 
+    /** This scanner's name in [TBoxNetworkConnectors]' interest ledger. */
+    private const val OWNER = "port-scan"
+
     suspend fun scan(context: Context, profile: MotorcycleProfile): Result<TBoxPortScanResult> =
         withContext(Dispatchers.IO) {
-            val connector = TBoxNetworkConnector(context)
+            // A diagnostic must not steal the radio from a ride: refused outright when the shared
+            // connector is working a different motorcycle on someone else's behalf. For the SAME
+            // SSID, connect() below reuses the already-active network instead of re-joining.
+            val connector = TBoxNetworkConnectors.tryAcquireForDiagnostics(context, OWNER, profile.ssid)
+                ?: return@withContext Result.failure(
+                    IllegalStateException(
+                        "MOTO-HUB is connected to a different motorcycle right now. " +
+                            "Disconnect it first, then scan."
+                    )
+                )
             var establishedLink: TBoxLink? = null
             val result = runCatching {
                 val link = TBoxLinkResolver.connect(context, connector, profile).getOrThrow()
@@ -86,7 +98,9 @@ object TBoxPortScanner {
             // release), so the link must be disconnected too or the group survives the scan and
             // pollutes the next real connection as a stale formed group.
             establishedLink?.let { runCatching { it.disconnect() } }
-            connector.disconnect()
+            // Release, never disconnect: with a session live on the same SSID this is not the
+            // last interest, and the scan ends without touching the ride's network.
+            TBoxNetworkConnectors.release(OWNER)
             result
         }
 

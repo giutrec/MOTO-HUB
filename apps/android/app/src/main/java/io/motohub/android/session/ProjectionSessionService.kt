@@ -87,6 +87,7 @@ class ProjectionSessionService : Service() {
      */
     private val capturing = AtomicBoolean(false)
     private val framesAccepted = AtomicLong(0)
+    private val frameLogThrottle = FrameLogThrottle()
     private val capabilityStore by lazy { TBoxCapabilityStore(this) }
     private val mainHandler = Handler(Looper.getMainLooper())
     private lateinit var displayDimmer: PhoneDisplayDimmer
@@ -277,9 +278,13 @@ class ProjectionSessionService : Service() {
                     if (handle.transport.offerAccessUnit(accessUnit)) {
                         backpressureGuard.onAccepted()
                         val accepted = framesAccepted.incrementAndGet()
-                        if (accepted == 1L || accepted % FRAME_LOG_INTERVAL == 0L) {
-                            ProjectionEventLog.record("ENCODER", "Frames sent to T-Box: $accepted.")
-                        }
+                        frameLogThrottle.rateSuffixIfDue(accepted, SystemClock.elapsedRealtime())
+                            ?.let { rate ->
+                                ProjectionEventLog.record(
+                                    "ENCODER",
+                                    "Frames sent to T-Box: $accepted$rate."
+                                )
+                            }
                         true
                     } else {
                         // A single rejection is a pushFrame() overlap, not a dead link - only a
@@ -544,7 +549,9 @@ class ProjectionSessionService : Service() {
                 // Another mode may still be streaming on this session.
                 if (TBoxSessionRegistry.releaseAndClear(SESSION_CONSUMER, releasedHandle)) {
                     releasedHandle.transport.stop()
-                    releasedHandle.networkConnector.disconnect()
+                    // The network itself is the registry's to drop: clear() released the
+                    // session's lease on the shared connector, which disconnects only when
+                    // no other owner (the Hub UI, the AIDL bridge) still needs it.
                 }
             }
         } else {
@@ -666,7 +673,6 @@ class ProjectionSessionService : Service() {
         private const val EXTRA_RESULT_DATA = "result_data"
         private const val VIDEO_CONFIGURATION_TIMEOUT_MS = 10_000L
         private const val AUTO_DIM_DELAY_MS = 5_000L
-        private const val FRAME_LOG_INTERVAL = 120L
         private const val ADAPTIVE_TICK_MS = 5_000L
         private const val NETWORK_REJOIN_WAIT_MILLIS = 75_000L
         private const val RECOVERY_RETRY_MILLIS = 5_000L
@@ -722,9 +728,13 @@ class ProjectionSessionService : Service() {
                     ?.offerJpegFrame(jpeg, frameId) ?: false
                 if (accepted) {
                     val sent = framesAccepted.incrementAndGet()
-                    if (sent == 1L || sent % FRAME_LOG_INTERVAL == 0L) {
-                        ProjectionEventLog.record("JPEG", "Stills sent to the dashboard: $sent.")
-                    }
+                    frameLogThrottle.rateSuffixIfDue(sent, SystemClock.elapsedRealtime())
+                        ?.let { rate ->
+                            ProjectionEventLog.record(
+                                "JPEG",
+                                "Stills sent to the dashboard: $sent$rate."
+                            )
+                        }
                 }
                 accepted
             },
