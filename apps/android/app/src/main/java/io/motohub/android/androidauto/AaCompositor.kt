@@ -54,6 +54,8 @@ class AaCompositor(
     private var pbuffer: EGLSurface = EGL14.EGL_NO_SURFACE
     private var encoderWindowSurface: EGLSurface = EGL14.EGL_NO_SURFACE
     private var previewWindowSurface: EGLSurface = EGL14.EGL_NO_SURFACE
+    /** The Surface [previewWindowSurface] was created against, so a resize can keep it. */
+    private var attachedPreviewSurface: Surface? = null
 
     private var program = 0
     private var aPosition = 0
@@ -210,14 +212,31 @@ class AaCompositor(
     fun setPreview(surface: Surface, width: Int, height: Int) {
         handler.post {
             try {
-                previewWindowSurface = replaceWindowSurface(previewWindowSurface, surface, "preview")
+                // A resize of the SAME Surface keeps its EGL window surface. The preview panel
+                // animates open and closed, and Android delivers one surfaceChanged per frame of
+                // that animation (1220x2712, x2710, x2707, ... over ~700ms). Destroying and
+                // recreating the EGL window surface on each of them made eglCreateWindowSurface
+                // fail with EGL_BAD_ALLOC while the previous one was still being torn down -
+                // 65 failures in 46 seconds in rider 315e0af3's log (2026-08-24), each one a
+                // preview frame that never drew. EGL follows the underlying buffer queue's size
+                // on its own; only a different Surface needs a new window surface.
+                val attaching =
+                    surface !== attachedPreviewSurface || previewWindowSurface == EGL14.EGL_NO_SURFACE
+                if (attaching) {
+                    previewWindowSurface = replaceWindowSurface(previewWindowSurface, surface, "preview")
+                    attachedPreviewSurface = surface.takeIf { previewWindowSurface != EGL14.EGL_NO_SURFACE }
+                }
                 previewCanvasW = width
                 previewCanvasH = height
                 computePreviewViewport()
-                log(
-                    "[COMPOSITOR] phone preview=${width}x$height rect=" +
-                        "${previewVpW}x$previewVpH @($previewVpX,$previewVpY)"
-                )
+                // Once per attach, not once per animation frame: the resize storm above also put
+                // 60-odd identical-looking lines into every support log for one preview opening.
+                if (attaching) {
+                    log(
+                        "[COMPOSITOR] phone preview=${width}x$height rect=" +
+                            "${previewVpW}x$previewVpH @($previewVpX,$previewVpY)"
+                    )
+                }
                 if (hasContent) drawFrame()
             } catch (failure: Throwable) {
                 log("[COMPOSITOR] preview attach failed: $failure")
@@ -228,6 +247,7 @@ class AaCompositor(
     fun clearPreview() {
         handler.post {
             previewWindowSurface = destroyWindowSurface(previewWindowSurface)
+            attachedPreviewSurface = null
             previewCanvasW = 0
             previewCanvasH = 0
             previewVpX = 0
@@ -535,6 +555,7 @@ class AaCompositor(
             runCatching { if (::surfaceTexture.isInitialized) surfaceTexture.release() }
             encoderWindowSurface = destroyWindowSurface(encoderWindowSurface)
             previewWindowSurface = destroyWindowSurface(previewWindowSurface)
+            attachedPreviewSurface = null
             if (eglDisplay != EGL14.EGL_NO_DISPLAY) {
                 EGL14.eglMakeCurrent(
                     eglDisplay,
