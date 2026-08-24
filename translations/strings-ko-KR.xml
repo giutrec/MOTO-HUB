@@ -12,6 +12,8 @@
     <string name="language_korean">한국어 (대한민국)</string>
     <string name="language_french">Français</string>
     <string name="language_spanish">Español</string>
+    <string name="language_german">Deutsch</string>
+    <string name="language_dutch">Nederlands</string>
     <string name="language_title">언어</string>
     <string name="language_description">MOTO-HUB에서 사용하는 언어를 선택하세요</string>
     <string name="language_detail_description">MOTO-HUB는 기본적으로 전화 언어를 따릅니다. 이 앱에 대해 재정의하려면 아래에서 언어를 선택하세요.</string>
@@ -1566,7 +1568,6 @@
 
     <!-- About screen -->
     <string name="legacy_your_phone_your_motorcycle_display_c5956fcb">당신의 휴대폰.\n당신의 모터사이클 디스플레이.</string>
-    <string name="legacy_moto_hub_connects_an_android_14_phone_to_a_motor_403bf630">MOTO-HUB는 Android 14 이상 휴대폰을 EasyConn으로 페어링되는 모터사이클 계기판에 연결합니다. EasyConn은 CFMOTO를 비롯한 여러 제조사가 탑재하는 Carbit 소프트웨어입니다. 화면 및 앱 미러링, Android Auto 프로젝션, 저장된 모터사이클 프로필, 기기 내 진단을 지원합니다.</string>
     <string name="legacy_follow_development_join_our_community_report_iss_b8b8fffa">개발 상황을 확인하고, 커뮤니티에 참여하고, 문제를 보고하고, 릴리스를 내려받으세요.</string>
     <string name="legacy_moto_hub_is_an_independent_project_it_is_not_aff_9e4c2633">MOTO-HUB는 독립적인 프로젝트입니다. Carbit, CFMOTO, EasyConn을 사용하는 다른 제조사, Google 또는 Android Auto와 제휴하거나 이들의 승인 또는 후원을 받지 않았습니다. 모든 제품명과 상표는 각 소유자에게 귀속됩니다.</string>
     <string name="legacy_moto_hub_is_an_experimental_proof_of_concept_not_34b4b321">MOTO-HUB는 실험적인 개념 검증이며, 상용 수준의 제품이 아닙니다.</string>
@@ -1714,4 +1715,26 @@
     <string name="legacy_moto_hub_is_still_looking_for_a_video_format_you_44b4c53c">MOTO-HUB는 계기판이 표시할 수 있는 영상 형식을 계속 찾고 있지만, Android Auto가 실행 중일 때만 테스트할 수 있습니다. Ride Dashboard는 항상 자체 형식을 보냅니다.</string>
     <string name="legacy_connect_once_with_android_auto_and_the_search_mo_71871380">Android Auto로 한 번만 연결하면 검색이 알아서 진행됩니다.</string>
     <string name="legacy_got_it_7f79855f">알겠습니다</string>
+
+    <!-- ===========================================================
+         Catalogue sweep, 2026-08-24: strings this worktree draws but had no
+         identifier for. The photo-picker values come from the pro-poc
+         catalogues, where the same source strings are already translated;
+         the About paragraph is this worktree's own, rewritten when CORE
+         dropped to Android 12.
+         ================================================================== -->
+
+    <!-- Source: MainActivity.kt -->
+    <string name="legacy_camera_permission_is_required_to_take_a_photo_951c5abe">사진을 촬영하려면 카메라 권한이 필요합니다</string>
+
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_browse_files_e6b23981">파일 찾아보기</string>
+    <string name="legacy_choose_from_gallery_1d40e025">갤러리에서 선택</string>
+    <string name="legacy_downloads_cloud_drives_and_any_other_folder_eb4e2c46">다운로드, 클라우드 드라이브 및 기타 모든 폴더.</string>
+    <string name="legacy_open_the_camera_and_shoot_it_now_75ae0eed">카메라를 열어 지금 촬영합니다.</string>
+    <string name="legacy_pick_one_of_your_photos_913c1c70">내 사진 중에서 고릅니다.</string>
+    <string name="legacy_take_a_photo_cefc733a">사진 촬영</string>
+
+    <!-- Source: feature/about/AboutScreen.kt -->
+    <string name="legacy_moto_hub_connects_an_android_12_phone_to_a_motor_b791c32e">MOTO-HUB는 Android 12 이상 휴대폰을 EasyConn으로 페어링되는 모터사이클 계기판에 연결합니다. EasyConn은 CFMOTO를 비롯한 여러 제조사가 탑재하는 Carbit 소프트웨어입니다. 화면 및 앱 미러링, Android Auto 프로젝션, 저장된 모터사이클 프로필, 기기 내 진단을 지원합니다.</string>
 </resources>

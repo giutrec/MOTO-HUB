@@ -12,6 +12,8 @@
     <string name="language_korean">한국어 (대한민국)</string>
     <string name="language_french">Français</string>
     <string name="language_spanish">Español</string>
+    <string name="language_german">Deutsch</string>
+    <string name="language_dutch">Nederlands</string>
     <string name="language_title">Language</string>
     <string name="language_description">Choose the language used by MOTO-HUB</string>
     <string name="language_detail_description">MOTO-HUB follows the phone language by default. Choose a language below to override it for this app.</string>
@@ -1573,7 +1575,6 @@
 
     <!-- About screen -->
     <string name="legacy_your_phone_your_motorcycle_display_c5956fcb">Your phone.\nYour motorcycle display.</string>
-    <string name="legacy_moto_hub_connects_an_android_14_phone_to_a_motor_403bf630">MOTO-HUB connects an Android 14+ phone to a motorcycle dashboard that pairs over EasyConn — the Carbit software several manufacturers ship, CFMOTO among them. It supports screen and app mirroring, Android Auto projection, saved motorcycle profiles, and on-device diagnostics.</string>
     <string name="legacy_follow_development_join_our_community_report_iss_b8b8fffa">Follow development, join our community, report issues, and download releases.</string>
     <string name="legacy_moto_hub_is_an_independent_project_it_is_not_aff_9e4c2633">MOTO-HUB is an independent project. It is not affiliated with, endorsed by, or sponsored by Carbit, CFMOTO, any other manufacturer whose dashboard uses EasyConn, Google, or Android Auto. All product names and marks belong to their respective owners.</string>
     <string name="legacy_moto_hub_is_an_experimental_proof_of_concept_not_34b4b321">MOTO-HUB is an experimental proof-of-concept, not a production-grade product.</string>
@@ -1721,4 +1722,26 @@
     <string name="legacy_moto_hub_is_still_looking_for_a_video_format_you_44b4c53c">MOTO-HUB is still looking for a video format your dashboard can display, but it can only test one while Android Auto is running - the Ride Dashboard always sends its own format.</string>
     <string name="legacy_connect_once_with_android_auto_and_the_search_mo_71871380">Connect once with Android Auto and the search moves on by itself.</string>
     <string name="legacy_got_it_7f79855f">Got it</string>
+
+    <!-- ===========================================================
+         Catalogue sweep, 2026-08-24: strings this worktree draws but had no
+         identifier for. The photo-picker values come from the pro-poc
+         catalogues, where the same source strings are already translated;
+         the About paragraph is this worktree's own, rewritten when CORE
+         dropped to Android 12.
+         ================================================================== -->
+
+    <!-- Source: MainActivity.kt -->
+    <string name="legacy_camera_permission_is_required_to_take_a_photo_951c5abe">Camera permission is required to take a photo</string>
+
+    <!-- Source: feature/garage/MotorcycleDetailsScreen.kt -->
+    <string name="legacy_browse_files_e6b23981">Browse files</string>
+    <string name="legacy_choose_from_gallery_1d40e025">Choose from gallery</string>
+    <string name="legacy_downloads_cloud_drives_and_any_other_folder_eb4e2c46">Downloads, cloud drives and any other folder.</string>
+    <string name="legacy_open_the_camera_and_shoot_it_now_75ae0eed">Open the camera and shoot it now.</string>
+    <string name="legacy_pick_one_of_your_photos_913c1c70">Pick one of your photos.</string>
+    <string name="legacy_take_a_photo_cefc733a">Take a photo</string>
+
+    <!-- Source: feature/about/AboutScreen.kt -->
+    <string name="legacy_moto_hub_connects_an_android_12_phone_to_a_motor_b791c32e">MOTO-HUB connects an Android 12+ phone to a motorcycle dashboard that pairs over EasyConn — the Carbit software several manufacturers ship, CFMOTO among them. It supports screen and app mirroring, Android Auto projection, saved motorcycle profiles, and on-device diagnostics.</string>
 </resources>
