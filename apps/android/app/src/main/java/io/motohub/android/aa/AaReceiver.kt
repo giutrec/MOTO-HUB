@@ -20,6 +20,7 @@ import io.motohub.android.androidauto.AndroidAutoCapabilityProfile
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 import io.motohub.android.androidauto.AndroidAutoNightModeStore
 
@@ -67,6 +68,45 @@ class AaReceiver(
     private var registrationListener: NsdManager.RegistrationListener? = null
 
     @Volatile private var transport: AapTransport? = null
+
+    /**
+     * The single session slot, taken before anything is built and released when the session ends.
+     *
+     * Both entry points - gearhead dialling in on [PORT] and us dialling out to
+     * [HEAD_UNIT_SERVER_PORT] - used to test `transport != null` and then call handleConnection,
+     * which assigns `transport` several object constructions later (one of them a SharedPreferences
+     * read that hits disk the first time). @Volatile makes that read visible; it does not make
+     * check-then-act atomic, and on Android Auto releases where the self-mode pokes still land a
+     * rider who has also started the head unit server has both paths live at once. Two sessions
+     * through that window means two SSL handshakes, and the loser is left with no reference - so
+     * `stop()` never reaches it, and its `onQuit` tears down the session that won.
+     */
+    private val sessionSlot = AtomicBoolean(false)
+
+    /** True only for the caller that took the slot; the loser must close its own socket. */
+    private fun claimSession(): Boolean = sessionSlot.compareAndSet(false, true)
+
+    private fun releaseSession() { sessionSlot.set(false) }
+
+    /**
+     * Runs a claimed session, making sure a failure on the way up gives the slot back.
+     *
+     * [handleConnection] returns with the session still *running*, so the slot cannot simply be
+     * freed in a `finally` - only the two places that know the session is over may release it. But
+     * everything before `startReading()` can throw, and an exception escaping there would leave the
+     * slot taken with nothing to release it: the receiver would then refuse every later connection
+     * for the rest of the ride. On the accept thread it would also reach Android's default handler
+     * and take the process down mid-ride, the same way the head unit server poller guards against.
+     */
+    private fun runSession(socket: Socket) {
+        try {
+            handleConnection(socket)
+        } catch (failure: Exception) {
+            log("[AA] session failed to start: ${failure.message}")
+            try { socket.close() } catch (_: Exception) {}
+            releaseSession()
+        }
+    }
     @Volatile private var connection: SocketAccessoryConnection? = null
     @Volatile private var videoReadyFired = false
     /**
@@ -244,6 +284,7 @@ class AaReceiver(
         serverSocket = null
         acceptThread?.interrupt(); acceptThread = null
         headUnitServerThread?.interrupt(); headUnitServerThread = null
+        releaseSession()
         // The nav app can no longer retract its last turn once the session is gone.
         AaNavigationGuidance.clear()
         AaLog.sink = null
@@ -280,14 +321,14 @@ class AaReceiver(
                 if (!awaitNextPoll()) return
                 continue
             }
-            if (!running || transport != null) {
+            if (!running || !claimSession()) {
                 try { socket.close() } catch (_: Exception) {}
                 return
             }
             log("[AA] <<< connected to Android Auto's head unit server on :$HEAD_UNIT_SERVER_PORT")
             androidAutoConnected = true
             androidAutoConnectedSinceStart = true
-            handleConnection(socket)
+            runSession(socket)
             return
         }
     }
@@ -383,12 +424,12 @@ class AaReceiver(
             androidAutoConnected = true
             androidAutoConnectedSinceStart = true
             log("[AA] <<< Android Auto connected from ${client.inetAddress?.hostAddress}")
-            if (transport != null) {
+            if (!claimSession()) {
                 log("[AA] already have a session — dropping extra connection")
                 try { client.close() } catch (_: Exception) {}
                 continue
             }
-            thread(name = "aa-session", isDaemon = true) { handleConnection(client) }
+            thread(name = "aa-session", isDaemon = true) { runSession(client) }
         }
     }
 
@@ -409,6 +450,7 @@ class AaReceiver(
             transport = null
             try { conn.disconnect() } catch (_: Exception) {}
             connection = null
+            releaseSession()
             onSessionEnded(clean, userExit)
         }
        transport = t
@@ -427,6 +469,8 @@ class AaReceiver(
             transport = null
             try { conn.disconnect() } catch (_: Exception) {}
             connection = null
+            // Nothing else will: onQuit only fires for a transport that started.
+            releaseSession()
             return
         }
         AaInputBridge.install(checkNotNull(input))
