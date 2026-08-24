@@ -428,15 +428,30 @@ class IpcBridgeService : Service() {
                             transport.offerAccessUnit(frame.payload)
                         }
                         if (!accepted) {
-                            consecutiveRejectedFrames++
-                            if (consecutiveRejectedFrames >= MAX_CONSECUTIVE_REJECTED_FRAMES) {
-                                val kind = if (frame.isStill) "still" else "AVC"
-                                ProjectionEventLog.warning(
-                                    "IPC_TBOX",
-                                    "PRO video pipe stopped because CORE rejected " +
-                                        "$consecutiveRejectedFrames consecutive $kind frames."
-                                )
-                                break
+                            // A refused STILL is flow control, not death. The Yunmo transport
+                            // refuses by design whenever the dash has not acknowledged the
+                            // stills already on the wire (STILL_SEND_WINDOW) - the X-Cape acks
+                            // two-ish a second against ten offered, so three consecutive
+                            // refusals arrive within ~300ms on a perfectly healthy link.
+                            // Counting them here killed the pipe moments after the dash had
+                            // acknowledged the first frame, over and over, which the rider saw
+                            // as "the dashboard shows for a few moments, then disappears"
+                            // (X-Cape 1200 field report, 2026-08-24) - while Mirroring, whose
+                            // stills go to the same transport in-process without this counter,
+                            // worked. Dropping the frame is the whole contract: PRO keeps the
+                            // freshest picture coming, and a genuinely dead session still
+                            // closes the pipe through watchTransportForCompanion (the
+                            // transport's own FatalError/Stopped events).
+                            if (!frame.isStill) {
+                                consecutiveRejectedFrames++
+                                if (consecutiveRejectedFrames >= MAX_CONSECUTIVE_REJECTED_FRAMES) {
+                                    ProjectionEventLog.warning(
+                                        "IPC_TBOX",
+                                        "PRO video pipe stopped because CORE rejected " +
+                                            "$consecutiveRejectedFrames consecutive AVC frames."
+                                    )
+                                    break
+                                }
                             }
                         } else {
                             consecutiveRejectedFrames = 0

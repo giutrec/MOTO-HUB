@@ -276,6 +276,21 @@ class YunmoTransport(context: Context) : TBoxTransport {
         /** The still waiting for the socket. Latest wins: an unsent still ages out in one tick. */
         private val pendingStill = AtomicReference<PendingStill?>(null)
 
+        /**
+         * The id just below the first still this connection ever offered, and the floor the
+         * in-flight arithmetic measures against until the dash's first ack arrives.
+         *
+         * Still ids come from the sender's own counter, which does not restart when a watchdog
+         * recovery rebuilds this connection - so the first still of a recovered session arrived
+         * carrying id 10 into a transport whose lastAckedId was -1, the window arithmetic read
+         * eleven stills in flight against a window of two, and every offer was refused until the
+         * dash's ack for that first frame happened to land (X-Cape 1200 field log, 2026-08-24).
+         * Anchoring the floor at first-offer-minus-one makes a fresh connection start at one in
+         * flight whatever the inherited id says; the first real ack takes over from there.
+         */
+        @Volatile
+        private var stillIdFloor = -1
+
         @Volatile
         private var pendingDim: YunmoProtocol.DimensionReport? = null
 
@@ -484,6 +499,7 @@ class YunmoTransport(context: Context) : TBoxTransport {
             // The dash draws its own arrows in SimpleNavi and discards whatever arrives; skipping
             // keeps the capture draining so the resume is immediate.
             if (simpleNaviActive) return true
+            if (lastOfferedStillId == -1) stillIdFloor = frameId - 1
             if (stillsInFlight() >= YunmoProtocol.STILL_SEND_WINDOW) return false
 
             // Latest wins. A still that has not reached the socket yet is worth nothing beside the
@@ -522,7 +538,7 @@ class YunmoTransport(context: Context) : TBoxTransport {
          * dropped waiting for a window that was never really full).
          */
         private fun stillsInFlight(): Int =
-            YunmoProtocol.stillsInFlight(lastOfferedStillId, lastAckedId)
+            YunmoProtocol.stillsInFlight(lastOfferedStillId, maxOf(lastAckedId, stillIdFloor))
 
         private fun sendAccessUnit(avcc: ByteArray) {
             // The dash paints its own arrows in this state and drops whatever we push. Skipping

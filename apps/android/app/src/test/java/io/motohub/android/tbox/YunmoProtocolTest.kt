@@ -284,4 +284,20 @@ class YunmoProtocolTest {
         // newest id still empties the window.
         assertEquals(0, YunmoProtocol.stillsInFlight(lastOfferedId = 120, lastAckedId = 120))
     }
+
+    /**
+     * A watchdog recovery rebuilds the connection but not the sender's id counter, so the first
+     * still of the new connection can carry any id. The transport anchors a floor at
+     * first-offer-minus-one and clamps lastAcked to it until the dash's first ack arrives -
+     * without that, id 10 into a fresh connection read as eleven stills in flight against a
+     * window of two, and every offer was refused (X-Cape 1200 field log, 2026-08-24).
+     */
+    @Test
+    fun `an inherited still id does not jam a fresh connection's window`() {
+        val floor = 10 - 1 // set on the first offer, before any ack
+        assertEquals(1, YunmoProtocol.stillsInFlight(lastOfferedId = 10, lastAckedId = maxOf(-1, floor)))
+        assertEquals(2, YunmoProtocol.stillsInFlight(lastOfferedId = 11, lastAckedId = maxOf(-1, floor)))
+        // The first real ack takes over from the floor.
+        assertEquals(1, YunmoProtocol.stillsInFlight(lastOfferedId = 11, lastAckedId = maxOf(10, floor)))
+    }
 }
