@@ -65,14 +65,20 @@
         <meta-data
             android:name="io.sentry.auto-init"
             android:value="false" />
-        <!-- configChanges: mirroring turns the phone to the dashboard's shape
-             (MirrorOrientationLock). Without it the rotation would tear this activity down and
-             take the screen-capture consent flow with it; Compose recomposes on the configuration
-             change either way. -->
+        <!-- configChanges: without it a rotation tears this activity down, and every screen
+             that had drilled down goes back to its tab's root, because Compose state lives in the
+             activity that was just thrown away. Compose relayouts on a configuration change
+             perfectly well without being recreated, so the recreation is pure loss. This also
+             covers the QR scanner, which forces portrait and restores the previous orientation
+             afterwards.
+
+             `locale` and `uiMode` are deliberately absent. A language change has to re-resolve
+             resources, and entering car mode is a big enough shift that the old behaviour is the
+             safer one to keep. Kept in step with the ADVANCED manifest. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|keyboard|navigation|density|fontScale"
             android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

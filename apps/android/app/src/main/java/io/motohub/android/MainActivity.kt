@@ -102,8 +102,6 @@ import io.motohub.android.feature.update.latestNewerApkRelease
 import io.motohub.android.session.ProjectionSessionService
 import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.session.ProjectionRuntime
-import io.motohub.android.session.ProjectionRuntimeState
-import io.motohub.android.session.MirrorOrientationLock
 import io.motohub.android.session.PhoneDisplayDimmer
 import io.motohub.android.session.PhoneDisplayDimPreferences
 import io.motohub.android.session.SessionPhase
@@ -113,7 +111,6 @@ import io.motohub.android.externaldisplay.AoaExternalRuntimeState
 import io.motohub.android.externaldisplay.AoaExternalService
 import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxModelProfile
-import io.motohub.android.tbox.ProfileOverride
 import io.motohub.android.tbox.TBoxPortScanResult
 import io.motohub.android.tbox.TBoxPortScanner
 import io.motohub.android.tbox.CompanionAppRegistry
@@ -464,55 +461,6 @@ class MainActivity : ComponentActivity() {
                         Toast.makeText(context, motoHubText("Camera permission is required to take a photo"), Toast.LENGTH_SHORT).show()
                     }
                 }
-                // Mirroring only fills the TFT if the phone is turned the same way the panel is -
-                // see MirrorOrientationLock for why nothing further down the pipeline can fix a
-                // portrait phone on a landscape dash. Resolved before consent is asked for, from
-                // the geometry a previous ride measured, because the live one arrives much later.
-                val mirrorShape = remember(state.session.motorcycle, displayGeometryStore) {
-                    val motorcycle = state.session.motorcycle
-                    MirrorOrientationLock.shapeFor(
-                        saved = motorcycle?.ssid?.let(displayGeometryStore::load),
-                        modelProfile = TBoxModelProfile.resolve(
-                            motorcycle?.modelId,
-                            null,
-                            ProfileOverride.byKey(motorcycle?.profileOverrideKey)
-                        )
-                    )
-                }
-                // Deliberately not rememberSaveable. The lock belongs to this activity instance -
-                // a new one starts at the manifest's orientation anyway - and a flag that survived
-                // process death would rotate the phone on the next launch with no session to end it.
-                var mirrorOrientationLocked by remember { mutableStateOf(false) }
-                DisposableEffect(mirrorOrientationLocked, mirrorShape) {
-                    if (!mirrorOrientationLocked) {
-                        onDispose { }
-                    } else {
-                        // The activity keeps its instance across the rotation (configChanges in the
-                        // manifest), so the consent flow and the projection token both survive it.
-                        val previous = this@MainActivity.requestedOrientation
-                        this@MainActivity.requestedOrientation = mirrorShape.requestedOrientation
-                        ProjectionEventLog.record(
-                            "MIRROR",
-                            "Holding the phone in ${mirrorShape.name.lowercase()} so the mirrored " +
-                                "picture fills the dashboard."
-                        )
-                        onDispose {
-                            this@MainActivity.requestedOrientation = previous
-                            ProjectionEventLog.record("MIRROR", "Released the orientation lock.")
-                        }
-                    }
-                }
-                // Every way a mirroring session can end - the rider stopping it, the transport
-                // failing, the service being killed - arrives here as one of these two states, so
-                // this is the single place that has to give the phone its rotation back.
-                val projectionRuntime by ProjectionRuntime.state.collectAsStateWithLifecycle()
-                LaunchedEffect(projectionRuntime) {
-                    if (projectionRuntime is ProjectionRuntimeState.Stopped ||
-                        projectionRuntime is ProjectionRuntimeState.Failed
-                    ) {
-                        mirrorOrientationLocked = false
-                    }
-                }
                 val projectionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.StartActivityForResult()
                 ) { result ->
@@ -524,15 +472,8 @@ class MainActivity : ComponentActivity() {
                         ProjectionSessionService.start(context, result.resultCode, result.data!!)
                         viewModel.onProjectionRequested()
                     } else {
-                        mirrorOrientationLocked = false
                         viewModel.onProjectionCancelled()
                     }
-                }
-                // Both entry points into mirroring go through here so the lock is never applied by
-                // only one of them: the consent dialog itself should already be the right way up.
-                val launchMirrorConsent: () -> Unit = {
-                    mirrorOrientationLocked = true
-                    projectionLauncher.launch(projectionManager.createScreenCaptureIntent())
                 }
                 val externalDisplayProjectionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.StartActivityForResult()
@@ -649,7 +590,7 @@ class MainActivity : ComponentActivity() {
                     if (projectionPermissionPending) {
                         projectionPermissionPending = false
                         if (granted) {
-                            launchMirrorConsent()
+                            projectionLauncher.launch(projectionManager.createScreenCaptureIntent())
                         } else {
                             viewModel.onNotificationPermissionDenied()
                         }
@@ -715,7 +656,7 @@ class MainActivity : ComponentActivity() {
                             Manifest.permission.POST_NOTIFICATIONS
                         ) == PackageManager.PERMISSION_GRANTED
                     if (notificationGranted) {
-                        launchMirrorConsent()
+                        projectionLauncher.launch(projectionManager.createScreenCaptureIntent())
                     } else {
                         projectionPermissionPending = true
                         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
