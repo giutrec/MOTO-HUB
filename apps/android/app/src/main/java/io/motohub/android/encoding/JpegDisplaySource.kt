@@ -78,11 +78,16 @@ class JpegDisplaySource(
     private var croppedCanvas: Canvas? = null
     private val jpegBuffer = ByteArrayOutputStream(DEFAULT_JPEG_BUFFER_BYTES)
     /** Read by the capture thread, written by the send thread. */
-    @Volatile private var quality = QUALITY_LADDER.first()
-    private var qualityStep = 0
-    private var goodWindows = 0
+    @Volatile private var quality = JpegQualityLadder.QUALITY_LADDER.first()
+
+    /** Decides that quality, one window at a time. Everything about *when* stays here. */
+    private val ladder = JpegQualityLadder()
     private var adaptAtMillis = 0L
     private var adaptAccepted = 0
+
+    /** Stills handed to the transport in this window, refused ones included. Zero means the
+     *  window measured the phone, not the dashboard - see [JpegQualityLadder]. */
+    private var adaptOffered = 0
     private var compressedAtMillis = 0L
     private var periodMillis = 100L
 
@@ -216,13 +221,17 @@ class JpegDisplaySource(
                 // numbering frames that were never sent throws the two out of step - it was
                 // running six ids ahead of reality in the field log of 2026-08-21.
                 onFrame(jpeg, frameId.get()) -> {
+                    adaptOffered++
                     lastSent = jpeg
                     frameId.incrementAndGet()
                     sent++
                     bytesSent += jpeg.size
                     recordAccepted()
                 }
-                else -> refused++
+                else -> {
+                    adaptOffered++
+                    refused++
+                }
             }
             adaptQuality()
             reportThroughput()
@@ -261,35 +270,40 @@ class JpegDisplaySource(
         val now = SystemClock.elapsedRealtime()
         val elapsed = now - adaptAtMillis
         if (elapsed < ADAPT_INTERVAL_MS) return
+        val offered = adaptOffered
+        val accepted = adaptAccepted
+        adaptAtMillis = now
+        adaptAccepted = 0
+        adaptOffered = 0
         // Stills a second, not a share of the offers made. The two used to be the same number
         // divided by the tick rate, and stopped being so the moment the capture thread started
         // pacing itself off the accepted rate: a ratio would then have measured this class against
         // its own throttle and walked the quality to the floor by construction.
-        val fps = adaptAccepted * 1000.0 / elapsed
-        val previous = qualityStep
-        if (fps < TARGET_FPS_LOW && qualityStep < QUALITY_LADDER.lastIndex) {
-            qualityStep++
-            goodWindows = 0
-        } else if (fps > TARGET_FPS_HIGH && qualityStep > 0) {
-            // Climb back slowly. Stepping up on a single good window makes the picture pulse
-            // between two qualities every couple of seconds, which reads worse than either.
-            if (++goodWindows >= WINDOWS_BEFORE_CLIMBING) {
-                qualityStep--
-                goodWindows = 0
+        val fps = accepted * 1000.0 / elapsed
+        when (val outcome = ladder.onWindow(offered, accepted, elapsed)) {
+            is JpegQualityLadder.Outcome.IdleHold -> if (outcome.first) {
+                ProjectionEventLog.record(
+                    "JPEG",
+                    "Nothing to send to the dashboard; holding the still quality at $quality " +
+                        "instead of reading an idle wire as congestion."
+                )
             }
-        } else {
-            goodWindows = 0
+
+            is JpegQualityLadder.Outcome.Changed -> {
+                quality = outcome.quality
+                ProjectionEventLog.record(
+                    "JPEG",
+                    if (outcome.probe) {
+                        "Still quality now $quality, trying a finer rung (the dashboard was " +
+                            "taking %.1f stills a second and keeping up)."
+                    } else {
+                        "Still quality now $quality (the dashboard was taking %.1f stills a second)."
+                    }.format(fps)
+                )
+            }
+
+            JpegQualityLadder.Outcome.Unchanged -> Unit
         }
-        if (qualityStep != previous) {
-            quality = QUALITY_LADDER[qualityStep]
-            ProjectionEventLog.record(
-                "JPEG",
-                "Still quality now $quality (the dashboard was taking %.1f stills a second)."
-                    .format(fps)
-            )
-        }
-        adaptAtMillis = now
-        adaptAccepted = 0
     }
 
     /**
@@ -369,30 +383,7 @@ class JpegDisplaySource(
     }
 
     private companion object {
-        /**
-         * Ride MO's compression quality is the first rung and the ceiling; the rest is headroom
-         * for a dash that cannot drink that fast. The floor is a picture that is visibly coarse in
-         * gradients but keeps road lines and labels legible, which beats a sharp one that arrives
-         * twice a second.
-         *
-         * The bottom two rungs were added after the X-Cape spent a whole ride pinned at 20 and
-         * still only managing 2.2 stills a second: this dash budgets bytes, so the only way to buy
-         * frames is to spend fewer of them. They are meant to be reached rarely and they do look
-         * blocky; if a rider reports the picture as mushy rather than laggy, take 12 away first.
-         */
-        val QUALITY_LADDER = intArrayOf(60, 50, 40, 32, 25, 20, 16, 12)
-
         const val ADAPT_INTERVAL_MS = 2_000L
-
-        /**
-         * Stills a second to aim for, with a wide deadband between them: below [TARGET_FPS_LOW]
-         * the picture judders badly enough that a coarser one is the better trade, above
-         * [TARGET_FPS_HIGH] there is room to spend on looking better. Nothing between the two is
-         * worth a change - the ladder pulsing up and down reads worse than either rung.
-         */
-        const val TARGET_FPS_LOW = 5.0
-        const val TARGET_FPS_HIGH = 7.0
-        const val WINDOWS_BEFORE_CLIMBING = 3
 
         /** How much of the accepted interval to wait before compressing again. */
         const val CAPTURE_AHEAD = 0.5
