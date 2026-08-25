@@ -1126,7 +1126,10 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         videoStreamStartRequested.set(false)
 
         previousHandle.transport.stop()
-        TBoxSessionRegistry.clear(previousHandle)
+        // Kept, not dropped: the recovery below reuses this very link, and on Wi-Fi Direct
+        // releasing the group here is what made the rejoin impossible (see the retained-link
+        // note on TBoxSessionRegistry).
+        TBoxSessionRegistry.clear(previousHandle, retainLinkForRecovery = true)
         val link = TBoxLinkResolver.reacquire(
             applicationContext,
             previousHandle.networkConnector,

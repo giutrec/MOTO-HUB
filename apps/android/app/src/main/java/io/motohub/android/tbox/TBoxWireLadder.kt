@@ -121,8 +121,24 @@ object TBoxWireLadder {
         return RUNGS.getOrElse(progress.rungIndex) { RUNGS.first() }
     }
 
-    fun load(context: Context, motorcycle: MotorcycleProfile): TBoxLadderProgress {
-        val raw = preferences(context).getString(motorcycle.id, null) ?: return TBoxLadderProgress()
+    fun load(context: Context, motorcycle: MotorcycleProfile): TBoxLadderProgress =
+        parseProgress(storedProgress(context, motorcycle.id))
+
+    /**
+     * The stored JSON for one motorcycle, verbatim, for the companion app to be told over the
+     * bridge - see IpcBridgeContract.CONTRACT_VERSION_WIRE_LADDER. Null when this bike has no
+     * ladder yet.
+     */
+    fun storedProgress(context: Context, motorcycleId: String): String? =
+        preferences(context).getString(motorcycleId, null)
+
+    /**
+     * Reads what [save] wrote, wherever it comes from: this process's preferences, or Core's
+     * answer arriving in the companion app. Anything unreadable is a fresh walk rather than an
+     * error - a ladder is a guess in progress, and a corrupt one is worth exactly as much as none.
+     */
+    fun parseProgress(raw: String?): TBoxLadderProgress {
+        if (raw == null) return TBoxLadderProgress()
         return runCatching {
             val json = JSONObject(raw)
             TBoxLadderProgress(

@@ -98,7 +98,9 @@ class TBoxWifiDirectConnector(
                     // Adopting comes before joining, and the check is awaited rather than left to
                     // race the join: asking the framework to form a group that is already up is
                     // how a working link gets torn back down.
-                    if (!adoptsExistingGroup(manager, channel, profile, outcome)) {
+                    if (adoptsExistingGroup(manager, channel, profile, outcome)) {
+                        footprint.adoptedExistingGroup = true
+                    } else {
                         join(manager, channel, profile, outcome, footprint)
                     }
                     outcome.await()
@@ -919,6 +921,13 @@ class TBoxWifiDirectConnector(
                 delay(CANCEL_SETTLE_MS)
             }
         }
+        if (footprint.adoptedExistingGroup) {
+            // See P2pJoinFootprint.adoptedExistingGroup: the group outlives this attempt, so all
+            // that is left to hand back is the channel.
+            log("Leaving the Wi-Fi Direct group up: this attempt adopted it rather than forming it.")
+            runCatching { channel.close() }
+            return
+        }
         // Outside the budget above: it is fire-and-forget, and it is also what closes the channel.
         removeGroup(manager, channel, closeChannelAfter = true)
     }
@@ -963,6 +972,17 @@ class TBoxWifiDirectConnector(
 
         /** `connect()` was called at all, accepted or not, so an invitation may be outstanding. */
         var connectIssued = false
+
+        /**
+         * The group was already up and this attempt adopted it instead of forming one.
+         *
+         * Nothing here may then remove it. Whoever formed it - the companion app, or an earlier
+         * session of this process - is still counting on it, and a removed group is not a group
+         * that can be joined again: field log 90438e1e (Voge, 2026-08-25) has Core adopting the
+         * companion's group, failing to read its address, removing it on the way out, and then
+         * being refused every join for the rest of the ride.
+         */
+        var adoptedExistingGroup = false
     }
 
     companion object {

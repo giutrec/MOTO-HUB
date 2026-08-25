@@ -472,8 +472,48 @@ object ProjectionEventLog {
         .replace(BEARER_TOKEN_PATTERN, "Bearer <redacted>")
         .replace(API_KEY_LITERAL_PATTERN, "<redacted-key>")
         .replace(MAC_ADDRESS_PATTERN, "<redacted-mac>")
-        .replace(IPV4_ADDRESS_PATTERN, "<redacted-ip>")
+        .redactAddressesSparingVersions()
         .take(MAX_MESSAGE_CHARS)
+
+    /**
+     * Redacts IPv4 addresses without eating four-part version numbers.
+     *
+     * A version like `1.0.13.1` is a valid IPv4 address as far as any pattern can tell, and the
+     * dashboard identity line is made of exactly those: field log 90438e1e (2026-08-25) reads
+     * `Unrecognised dashboard: package=?, version=V0.0.1(?), sdk=<redacted-ip>` - the one line
+     * whose whole purpose is to say which firmware this is, with the firmware redacted out of it.
+     * The version had to be recovered from the raw CLIENT_INFO hex dump further up the same log.
+     *
+     * So a quad introduced by a version-ish key is held back from the address pass and put back
+     * afterwards. Nothing else changes: an address anywhere else in the message, keyed or bare, is
+     * still replaced, and a key nobody thought of is redacted rather than published - the rule
+     * only spares what it can name.
+     */
+    private fun String.redactAddressesSparingVersions(): String {
+        val spared = mutableListOf<String>()
+        val held = VERSION_QUAD_PATTERN.replace(this) { match ->
+            spared += match.groupValues[3]
+            "${match.groupValues[1]}${match.groupValues[2]}$VERSION_PLACEHOLDER"
+        }
+        val redacted = held.replace(IPV4_ADDRESS_PATTERN, "<redacted-ip>")
+        if (spared.isEmpty()) return redacted
+        var index = 0
+        return redacted.replace(VERSION_PLACEHOLDER) { spared.getOrElse(index++) { "" } }
+    }
+
+    private fun String.replace(literal: String, next: () -> String): String {
+        val builder = StringBuilder(length)
+        var from = 0
+        while (true) {
+            val at = indexOf(literal, from)
+            if (at < 0) {
+                builder.append(this, from, length)
+                return builder.toString()
+            }
+            builder.append(this, from, at).append(next())
+            from = at + literal.length
+        }
+    }
 
     private fun formatTime(timestampMillis: Long): String =
         SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(Date(timestampMillis))
@@ -524,4 +564,15 @@ object ProjectionEventLog {
     private val IPV4_ADDRESS_PATTERN = Regex(
         "\\b(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|[01]?\\d?\\d)\\b"
     )
+    /**
+     * A four-part number introduced by a key that can only be announcing a version. The keys are
+     * the ones this app actually logs (its own lines and the dashboard's CLIENT_INFO fields);
+     * anything else keeps being treated as an address.
+     */
+    private val VERSION_QUAD_PATTERN = Regex(
+        "(?i)\\b(sdk|sdkversion|version|versionname|versioncode|firmware|pxc|pxcversion|" +
+            "release|build)(\"?\\s*[:=]\\s*\"?v?)((?:\\d{1,3}\\.){3}\\d{1,3})\\b"
+    )
+    /** Cannot occur in a log line: the redaction runs before anything else could write it. */
+    private const val VERSION_PLACEHOLDER = "\u0000version\u0000"
 }

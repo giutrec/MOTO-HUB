@@ -34,8 +34,9 @@ object IpcBridgeContract {
      * 3: getLastConnectFailure() + getLastConnectFailureStage().
      * 4: videoWantsStills(), and the extended video-pipe frame in [VideoPipeFraming].
      * 5: getActiveProfileKey().
+     * 6: getLastVideoSessionFailure().
      */
-    const val CONTRACT_VERSION = 5
+    const val CONTRACT_VERSION = 7
 
     /** First [CONTRACT_VERSION] whose Core implements connectOverFormedGroup(). */
     const val CONTRACT_VERSION_FORMED_GROUP = 2
@@ -63,6 +64,29 @@ object IpcBridgeContract {
      * 1.1.91: the dashboard reappeared and died every ten seconds while Android Auto worked).
      */
     const val CONTRACT_VERSION_ACTIVE_PROFILE = 5
+
+    /**
+     * First [CONTRACT_VERSION] whose Core says why startVideoSession() returned null, through
+     * getLastVideoSessionFailure().
+     *
+     * Until this, the companion app answered every video-negotiation failure with one hard-coded
+     * sentence about the phone-connection screen and other apps holding the T-Box - EasyConn
+     * help, on a boundary that also carries ThinkerRide. A KOVE dash whose firmware waits for the
+     * rider to long-press UP was therefore reported as a dash refusing the stream, and two riders
+     * chased that instead of the gesture (32e132d0, 1013eadf).
+     */
+    const val CONTRACT_VERSION_VIDEO_FAILURE_REASON = 6
+
+    /**
+     * First [CONTRACT_VERSION] whose Core answers getWireLadderProgress(), so a diagnostics report
+     * can state which wire an unidentified dashboard is actually being given.
+     *
+     * The ladder is walked in Core and persisted in Core's own preferences. The companion app read
+     * the preferences of ITS process, which nothing there ever writes, and every report from every
+     * rider therefore said "rung 0, TRYING, no dashboard fingerprint" - a sentence about the
+     * companion app's empty store, printed where the reader expects a fact about the motorcycle.
+     */
+    const val CONTRACT_VERSION_WIRE_LADDER = 7
 
     /**
      * Which half of Core's connect produced the last failure, answered by

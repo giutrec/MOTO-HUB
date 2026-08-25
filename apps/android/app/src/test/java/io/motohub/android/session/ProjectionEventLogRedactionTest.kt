@@ -47,6 +47,43 @@ class ProjectionEventLogRedactionTest {
         assertEquals(message, ProjectionEventLog.redact(message))
     }
 
+    /**
+     * The dashboard identity line, which is four-part version numbers and nothing else. Field log
+     * 90438e1e (2026-08-25) carried it as `sdk=<redacted-ip>`: the only line that says which
+     * firmware a rider has, with the firmware scrubbed out of it as if it were an address.
+     */
+    @Test
+    fun keepsAFourPartVersionThatIsAnnouncedAsOne() {
+        val message =
+            "Unrecognised dashboard: package=?, version=V0.0.1(?), sdk=1.0.13.1, pxc=1.0.2.3"
+
+        assertEquals(message, ProjectionEventLog.redact(message))
+    }
+
+    @Test
+    fun keepsAFourPartVersionInsideAQuotedJsonDump() {
+        val redacted = ProjectionEventLog.redact("""{"sdkVersion":"1.0.13.1","pxcVersion":"1.0.2"}""")
+
+        assertTrue(redacted.contains("1.0.13.1"))
+    }
+
+    /** The sparing rule must not become a way to smuggle an address through the scrub. */
+    @Test
+    fun stillRedactsAddressesAlongsideASparedVersion() {
+        val redacted = ProjectionEventLog.redact(
+            "sdk=1.0.13.1 connected to 192.168.49.1 from 192.168.49.37"
+        )
+
+        assertEquals("sdk=1.0.13.1 connected to <redacted-ip> from <redacted-ip>", redacted)
+    }
+
+    @Test
+    fun stillRedactsAnAddressThatNoKeyExcuses() {
+        val redacted = ProjectionEventLog.redact("phone=10.0.0.4, dash=10.0.0.1")
+
+        assertFalse(redacted.contains("10.0.0."))
+    }
+
     @Test
     fun redactsTheDashboardsStableIdentifiersInARawClientInfoDump() {
         // Verbose T-Box logging is on by default, so the raw CLIENT_INFO JSON reaches logs

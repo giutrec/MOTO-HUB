@@ -168,4 +168,42 @@ interface ITBoxTransportService {
      * what its dead transaction reads as. Same tail-position rule as the calls above.
      */
     String getActiveProfileKey();
+
+    /**
+     * Why the last startVideoSession() returned null, in Core's own words to a rider. Null when
+     * the last call succeeded, when none has run, or when Core predates this call.
+     *
+     * startVideoSession() answers a bare parcel-or-null, and for a long time that was everything
+     * the companion app knew: it printed its own summary, which is help for a busy EasyConn
+     * session, for every cause there is. On a ThinkerRide dash that summary is not merely vague
+     * but wrong - the KOVE 450 Rally firmware starts projection FROM THE DASH (long-press UP) and
+     * nothing on the phone can trigger it, so Core's transport says exactly that and the rider
+     * was shown "put the bike on its phone-connection screen and make sure no other app is
+     * connected" instead. Two riders (32e132d0, 1013eadf) retried for days against a dash that
+     * was waiting for them, while the sentence naming the gesture sat in Core's log.
+     *
+     * This is getLastConnectFailure()'s counterpart one call further on. Read it only after a
+     * null answer; nothing here clears it except the next startVideoSession().
+     *
+     * Same tail-position rule as the calls above.
+     */
+    String getLastVideoSessionFailure();
+
+    /**
+     * Where the wire ladder stands for one motorcycle, as the JSON Core itself persists, or null
+     * when Core has never walked it for that bike (or predates this call).
+     *
+     * Core owns the ladder because Core is where the wire is chosen, and this is the only way the
+     * companion app can report the truth about it. Its diagnostics report used to read its OWN
+     * copy of the same preferences - untouched in that process, and therefore rung 0 / TRYING /
+     * no fingerprint for every rider alive. Field log 90438e1e (2026-08-25): the report said the
+     * search had not started while Core's log, in the same file, had already recorded "rung 0 …
+     * STREAMED. Staying on this rung (AWAITING_RIDER)" the day before.
+     *
+     * The raw JSON rather than a parcel of fields: both apps compile the same ladder, so the same
+     * parser reads it on the other side, and a rung gaining a field needs no contract change.
+     *
+     * Same tail-position rule as the calls above.
+     */
+    String getWireLadderProgress(String motorcycleId);
 }

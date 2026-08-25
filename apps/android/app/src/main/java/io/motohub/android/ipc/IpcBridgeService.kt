@@ -45,6 +45,8 @@ import io.motohub.android.tbox.ProfileOverride
 import io.motohub.android.tbox.TBoxEvent
 import io.motohub.android.tbox.TBoxModelProfile
 import io.motohub.android.tbox.TBoxSessionHandle
+import io.motohub.android.tbox.TBoxTransport
+import io.motohub.android.tbox.TBoxWireLadder
 import io.motohub.android.tbox.SelectingTBoxTransport
 import io.motohub.android.tbox.TBoxSessionRegistry
 import io.motohub.android.tbox.negotiateVideoConfiguration
@@ -81,6 +83,21 @@ class IpcBridgeService : Service() {
     @Volatile private var lastKnownHandle: TBoxSessionHandle? = null
     @Volatile private var activeConnect: Pair<CoreTBoxConnector, Deferred<Boolean>>? = null
 
+    /**
+     * Why the last [ITBoxTransportService.startVideoSession] answered null, kept for the caller
+     * to read afterwards. The call can only say "no parcel", and the sentence explaining it used
+     * to live nowhere but this log - so a companion app printed its own EasyConn-shaped summary
+     * over a ThinkerRide dash that was simply waiting for the rider to press UP on it.
+     *
+     * A plain field rather than a process-wide record like [CoreConnectFailureRecord]: the whole
+     * negotiation happens inside this service, so there is no second class to reach it from.
+     *
+     * NOT named after the AIDL call it answers: Kotlin sees the Stub's `getLastVideoSessionFailure()`
+     * as a read-only synthetic property, which inside the binder object would shadow a field of
+     * that name and turn every assignment below into "'val' cannot be reassigned".
+     */
+    @Volatile private var videoSessionFailureReason: String? = null
+
     private val tboxTransportBinder = object : ITBoxTransportService.Stub() {
         override fun isSessionReady(): Boolean = TBoxSessionRegistry.current() != null
 
@@ -107,69 +124,90 @@ class IpcBridgeService : Service() {
         override fun startVideoSession(): EncoderProfileParcel? =
             kotlinx.coroutines.runBlocking {
                 closeVideoStreamPipe()
-                var handle = TBoxSessionRegistry.current() ?: return@runBlocking null
+                videoSessionFailureReason = null
+                var handle = TBoxSessionRegistry.current() ?: run {
+                    videoSessionFailureReason =
+                        "MOTO-HUB Core has no T-Box session open. Connect to the motorcycle again."
+                    return@runBlocking null
+                }
                 val fallbackArea = TBoxModelProfile.fallbackVideoArea(
                     handle.motorcycle.modelId,
                     null,
                     ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
                 )
-                var result = handle.transport.negotiateVideoConfiguration(
-                    host = handle.host,
-                    savedArea = null,
-                    fallbackArea = fallbackArea,
-                    timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
-                )
-                if (result.isFailure) {
-                    // NOT a timing issue - RideDaemonTransport.stop() (called whenever ANY mode's
-                    // session ends, e.g. Android Auto) fully tears down the underlying
-                    // MobileSession (session = null), so a bare retry of start(host) fails
-                    // identically every time with "Call discover() with an active T-Box link
-                    // before starting the session". A rider's manual "Connect" again works only
-                    // because it re-runs discover() from scratch - do that here instead of a
-                    // pointless delayed retry of the exact same broken call.
-                    ProjectionEventLog.warning(
-                        "IPC_TBOX",
-                        "startVideoSession negotiation failed (first attempt): " +
-                            "${result.exceptionOrNull()?.message}. Re-discovering the T-Box before retrying."
+                // For as long as this call blocks - up to 75s on a ThinkerRide dash - the
+                // transport's notices are the only thing that can tell the rider the wait is now
+                // on him. Core's own modes collect these, but none of them is running when a
+                // companion app owns the session, so relay them across for the whole window and
+                // stop when the answer is in. The transport object survives the re-discovery
+                // below (handle.copy keeps it), so one collector covers both attempts.
+                val noticeRelay = relayTransportNoticesFor(handle.transport)
+                try {
+                    var result = handle.transport.negotiateVideoConfiguration(
+                        host = handle.host,
+                        savedArea = null,
+                        fallbackArea = fallbackArea,
+                        timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
                     )
-                    val rediscovered = handle.transport.discover(handle.link, handle.motorcycle.modelId)
-                    val freshHost = rediscovered.getOrNull()
-                    if (freshHost == null) {
+                    if (result.isFailure) {
+                        // NOT a timing issue - RideDaemonTransport.stop() (called whenever ANY mode's
+                        // session ends, e.g. Android Auto) fully tears down the underlying
+                        // MobileSession (session = null), so a bare retry of start(host) fails
+                        // identically every time with "Call discover() with an active T-Box link
+                        // before starting the session". A rider's manual "Connect" again works only
+                        // because it re-runs discover() from scratch - do that here instead of a
+                        // pointless delayed retry of the exact same broken call.
                         ProjectionEventLog.warning(
                             "IPC_TBOX",
-                            "Re-discovery failed: ${rediscovered.exceptionOrNull()?.message}"
+                            "startVideoSession negotiation failed (first attempt): " +
+                                "${result.exceptionOrNull()?.message}. Re-discovering the T-Box before retrying."
                         )
-                    } else {
-                        handle = handle.copy(host = freshHost)
-                        TBoxSessionRegistry.install(handle)
-                        result = handle.transport.negotiateVideoConfiguration(
-                            host = handle.host,
-                            savedArea = null,
-                            fallbackArea = fallbackArea,
-                            timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
-                        )
+                        val rediscovered = handle.transport.discover(handle.link, handle.motorcycle.modelId)
+                        val freshHost = rediscovered.getOrNull()
+                        if (freshHost == null) {
+                            ProjectionEventLog.warning(
+                                "IPC_TBOX",
+                                "Re-discovery failed: ${rediscovered.exceptionOrNull()?.message}"
+                            )
+                        } else {
+                            handle = handle.copy(host = freshHost)
+                            TBoxSessionRegistry.install(handle)
+                            result = handle.transport.negotiateVideoConfiguration(
+                                host = handle.host,
+                                savedArea = null,
+                                fallbackArea = fallbackArea,
+                                timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
+                            )
+                        }
                     }
-                }
-                val configuration = result.getOrElse {
-                    ProjectionEventLog.warning(
+                    val configuration = result.getOrElse {
+                        ProjectionEventLog.warning(
+                            "IPC_TBOX",
+                            "startVideoSession negotiation failed: ${it.message}"
+                        )
+                        // The transport's own sentence, verbatim: on a ThinkerRide dash it names the
+                        // long-press-UP gesture that is the only thing which starts projection there,
+                        // and the caller has no way to work that out from a null parcel.
+                        videoSessionFailureReason = it.message?.takeIf { message -> message.isNotBlank() }
+                            ?: "The motorcycle did not open its video channel."
+                        return@runBlocking null
+                    }
+                    val area = configuration.rawArea
+                    ProjectionEventLog.record(
                         "IPC_TBOX",
-                        "startVideoSession negotiation failed: ${it.message}"
+                        "Video session started for a companion app; TFT area ${area.width}x${area.height} " +
+                            "(source=${configuration.source})."
                     )
-                    return@runBlocking null
+                    EncoderProfileParcel(
+                        width = area.width,
+                        height = area.height,
+                        frameRate = 30,
+                        bitRate = 2_500_000,
+                        usedFallback = configuration.source == io.motohub.android.tbox.TBoxVideoAreaSource.FALLBACK
+                    )
+                } finally {
+                    noticeRelay.cancel()
                 }
-                val area = configuration.rawArea
-                ProjectionEventLog.record(
-                    "IPC_TBOX",
-                    "Video session started for a companion app; TFT area ${area.width}x${area.height} " +
-                        "(source=${configuration.source})."
-                )
-                EncoderProfileParcel(
-                    width = area.width,
-                    height = area.height,
-                    frameRate = 30,
-                    bitRate = 2_500_000,
-                    usedFallback = configuration.source == io.motohub.android.tbox.TBoxVideoAreaSource.FALLBACK
-                )
             }
 
         override fun offerAccessUnit(accessUnit: ByteArray): Boolean =
@@ -242,6 +280,16 @@ class IpcBridgeService : Service() {
         override fun getLastConnectFailure(): String? = CoreConnectFailureRecord.reason()
 
         override fun getLastConnectFailureStage(): Int = CoreConnectFailureRecord.stage()
+
+        // The same courtesy one call further on: read after a null startVideoSession(). Not
+        // cleared here either - the caller logs it and then shows it, which is two reads.
+        override fun getLastVideoSessionFailure(): String? = videoSessionFailureReason
+
+        // Verbatim, not re-encoded: the companion app runs the same TBoxWireLadder parser on the
+        // other side, so anything this end can store, that end can read.
+        override fun getWireLadderProgress(motorcycleId: String?): String? =
+            motorcycleId?.takeIf { it.isNotBlank() }
+                ?.let { TBoxWireLadder.storedProgress(this@IpcBridgeService, it) }
 
         // The caller formed the Wi-Fi Direct group in its own process and passes the addresses it
         // resolved there, because this one cannot resolve them for a group it did not form. Bad
@@ -412,11 +460,44 @@ class IpcBridgeService : Service() {
      * timer instead of by a socket takes a path that is already proven rather than a new one.
      * The teardown itself stays with the companion: it owns the reconnect.
      */
+    /**
+     * Passes one transport notice to every bound companion.
+     *
+     * Logged here as well as sent, under the same T-BOX tag Core's own modes use, so the two
+     * halves of a rider's exported log read identically: the sentence appears in Core's half
+     * because Core produced it, and in the companion's half because the companion was told.
+     */
+    private fun broadcastTransportNotice(message: String) {
+        ProjectionEventLog.record("T-BOX", message)
+        if (sessionListeners.registeredCallbackCount == 0) return
+        val count = sessionListeners.beginBroadcast()
+        for (i in 0 until count) {
+            // A companion older than this call has no onTransportNotice() in its stub. The
+            // interface is oneway, so that transaction simply fails on the far side and nothing
+            // is thrown here - but a listener whose process died between beginBroadcast() and
+            // this line would be, and one dead companion must not silence the others.
+            runCatching { sessionListeners.getBroadcastItem(i).onTransportNotice(message) }
+        }
+        sessionListeners.finishBroadcast()
+    }
+
+    /** Relays [TBoxEvent.Warning] to bound companions until the returned job is cancelled. */
+    private fun relayTransportNoticesFor(transport: TBoxTransport): Job = serviceScope.launch {
+        transport.events.collect { event ->
+            if (event is TBoxEvent.Warning) broadcastTransportNotice(event.message)
+        }
+    }
+
     private fun watchTransportForCompanion() {
         transportWatchJob?.cancel()
         val transport = TBoxSessionRegistry.current()?.transport ?: return
         transportWatchJob = serviceScope.launch {
             transport.events.collect { event ->
+                // A notice is not a verdict: relay it and leave the pipe alone.
+                if (event is TBoxEvent.Warning) {
+                    broadcastTransportNotice(event.message)
+                    return@collect
+                }
                 val reason = when (event) {
                     is TBoxEvent.FatalError -> event.message
                     TBoxEvent.Stopped -> "The T-Box ended the session."

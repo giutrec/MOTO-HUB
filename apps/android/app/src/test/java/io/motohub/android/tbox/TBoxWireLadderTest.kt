@@ -40,6 +40,44 @@ class TBoxWireLadderTest {
     }
 
     /**
+     * The ladder crosses a process boundary now: Core stores it, the companion app reports it, and
+     * the JSON in between is read by this one parser on both sides. A report that cannot decode
+     * Core's answer is a report that quietly claims a fresh search - the failure this call exists
+     * to end (field log 90438e1e, 2026-08-25).
+     */
+    @Test
+    fun `a stored ladder survives the trip to the companion app`() {
+        val stored = """
+            {"rung":2,"state":"AWAITING_RIDER","attempts":3,"fingerprint":"HU/51/37504/V0.0.1",
+             "outcome":"STREAMED","noAaSessions":4,"nudged":true}
+        """.trimIndent()
+
+        val progress = TBoxWireLadder.parseProgress(stored)
+
+        assertEquals(2, progress.rungIndex)
+        assertEquals(TBoxLadderState.AWAITING_RIDER, progress.state)
+        assertEquals(3, progress.attemptsOnRung)
+        assertEquals("HU/51/37504/V0.0.1", progress.fingerprint)
+        assertEquals("STREAMED", progress.lastOutcome)
+        assertEquals(4, progress.sessionsWithoutAndroidAuto)
+        assertTrue(progress.androidAutoNudgeShown)
+    }
+
+    @Test
+    fun `an unreachable Core reads as a fresh ladder, not as a crash`() {
+        assertEquals(TBoxLadderProgress(), TBoxWireLadder.parseProgress(null))
+        assertEquals(TBoxLadderProgress(), TBoxWireLadder.parseProgress("not json at all"))
+    }
+
+    /** A rung index from another version of the app must not index past the table. */
+    @Test
+    fun `a rung this build does not have is clamped instead of throwing`() {
+        val progress = TBoxWireLadder.parseProgress("""{"rung":97,"state":"TRYING"}""")
+
+        assertEquals(TBoxWireLadder.RUNGS.lastIndex, progress.rungIndex)
+    }
+
+    /**
      * The 2026-08-11 Zontes 368G runs: indexed framing made the dash drop the video socket at 6s
      * and 17s, where the plain stream held its full 30s timeout. Only that shape indicts the wire.
      */
