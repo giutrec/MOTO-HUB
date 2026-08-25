@@ -35,8 +35,9 @@ object IpcBridgeContract {
      * 4: videoWantsStills(), and the extended video-pipe frame in [VideoPipeFraming].
      * 5: getActiveProfileKey().
      * 6: getLastVideoSessionFailure().
+     * 7: getWireLadderProgress().
      */
-    const val CONTRACT_VERSION = 7
+    const val CONTRACT_VERSION = 8
 
     /** First [CONTRACT_VERSION] whose Core implements connectOverFormedGroup(). */
     const val CONTRACT_VERSION_FORMED_GROUP = 2
@@ -87,6 +88,19 @@ object IpcBridgeContract {
      * companion app's empty store, printed where the reader expects a fact about the motorcycle.
      */
     const val CONTRACT_VERSION_WIRE_LADDER = 7
+
+    /**
+     * First [CONTRACT_VERSION] whose Core hands over a dashboard's CLIENT_INFO capabilities,
+     * through getCapabilitiesJson().
+     *
+     * The same shape of bug as [CONTRACT_VERSION_WIRE_LADDER], in the store next door. CLIENT_INFO
+     * is read on the EasyConn command socket, which lives in Core; the companion app's own
+     * capability store is written by nobody when Core owns the link, which is every installation
+     * that has Core. So the companion resolved the GENERIC profile for every dash ever connected,
+     * and its diagnostics report said `capabilities: null` for every rider - 68 motorcycle rows
+     * out of 68 in the collector on 2026-08-25, with no exception in the whole history.
+     */
+    const val CONTRACT_VERSION_ACTIVE_CAPABILITIES = 8
 
     /**
      * Which half of Core's connect produced the last failure, answered by

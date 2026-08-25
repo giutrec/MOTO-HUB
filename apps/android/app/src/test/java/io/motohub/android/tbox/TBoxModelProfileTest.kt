@@ -420,4 +420,62 @@ class TBoxModelProfileTest {
         )
         assertEquals(TBoxModelProfile.GENERIC, TBoxModelProfile.resolve("21334", zontes))
     }
+
+    /**
+     * Rider 36ee9d2c (2026-08-24), a Benelli TRK 702X: CLIENT_INFO carries no brand, no model and
+     * no HUName a profile knows, so the only thing that matched was the 0.9.23 + linux_no_package
+     * firmware dialect - and that scored CFMOTO 800NK 3, CL-C450 1, GENERIC 0. Core's Android
+     * Auto took the win and letterboxed his 800x480 panel to 763x458 behind a CFMOTO dash's 22px
+     * status-bar margin.
+     */
+    private val benelliTrk702x = TBoxCapabilities(
+        huName = "ZHKJ13-1122",
+        packageName = "linux_no_package",
+        pxcVersion = "1.0.2",
+        sdkVersion = "0.9.23.4",
+        versionName = "1.0.0",
+        versionCode = "0",
+        supportFunction = 128,
+        screenTouch = false,
+        landscapeAdaptive = true,
+        productType = 3,
+        screenType = 1,
+        flavor = "51",
+        channel = "34813"
+    )
+
+    @Test
+    fun `a Carbit-licensed dash is not claimed by the CFMOTO firmware dialect`() {
+        assertEquals(TBoxModelProfile.GENERIC, TBoxModelProfile.resolve(null, benelliTrk702x))
+        assertEquals(TBoxModelProfile.GENERIC, TBoxModelProfile.resolve("34813", benelliTrk702x))
+    }
+
+    @Test
+    fun `the same firmware dialect still identifies a dash no other licence claims`() {
+        // The guard must not cost a real 800NK its profile: same dialect, no Carbit licence.
+        val nk800 = benelliTrk702x.copy(huName = null, flavor = "65540", channel = null)
+        assertEquals(TBoxModelProfile.CFMOTO_800NK, TBoxModelProfile.resolve(null, nk800))
+        // And a dash that reports no flavour at all is exactly where it was before the guard.
+        assertEquals(
+            TBoxModelProfile.CFMOTO_800NK,
+            TBoxModelProfile.resolve(null, nk800.copy(flavor = null))
+        )
+    }
+
+    @Test
+    fun `a dash that names itself outranks its licence`() {
+        // The licence only stops a fingerprint carrying the profile alone. A unit that says
+        // 800NK in CLIENT_INFO is one, whoever licensed the stack it runs.
+        val named = benelliTrk702x.copy(huName = "CFMOTO 800NK")
+        assertEquals(TBoxModelProfile.CFMOTO_800NK, TBoxModelProfile.resolve(null, named))
+    }
+
+    @Test
+    fun `the CL-C450 corroboration cannot carry that profile either`() {
+        // With CFMOTO_800NK refused, this was the next thing standing: one point for 0.9.23,
+        // enough to put a 544x512 profile on an 800x480 Benelli panel.
+        assertEquals(TBoxModelProfile.GENERIC, TBoxModelProfile.resolve(null, benelliTrk702x))
+        val clc450 = benelliTrk702x.copy(huName = "48FB4C-0001")
+        assertEquals(TBoxModelProfile.CL_C450, TBoxModelProfile.resolve(null, clc450))
+    }
 }

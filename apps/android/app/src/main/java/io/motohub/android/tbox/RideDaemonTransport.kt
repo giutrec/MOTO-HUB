@@ -1458,6 +1458,14 @@ class RideDaemonTransport(
                         )
                     }
                     motorcycleProfile?.let { motorcycle ->
+                        // Kept HERE, not only in the session services that observe this event:
+                        // when the companion app drives the session over the AIDL bridge none of
+                        // them is running, and CLIENT_INFO - the only thing that can identify a
+                        // dash whose QR carries no model id - was decoded and then dropped by
+                        // both processes. This is where it arrives, so this is where it is kept;
+                        // the observers' own write becomes a harmless second copy of the same
+                        // snapshot.
+                        TBoxCapabilityStore(appContext).recordCapabilities(motorcycle, capabilities)
                         TBoxWireLadder.onDashboardIdentified(appContext, motorcycle, capabilities)
                     }
                     mutableEvents.tryEmit(TBoxEvent.Capabilities(capabilities))

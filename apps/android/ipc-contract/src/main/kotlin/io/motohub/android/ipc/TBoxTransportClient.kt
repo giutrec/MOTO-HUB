@@ -209,6 +209,19 @@ class TBoxTransportClient(
             ?.takeIf { it.isNotBlank() }
 
     /**
+     * One motorcycle's CLIENT_INFO capabilities, as the JSON Core stores, or null when Core has
+     * never seen CLIENT_INFO for that bike, is not bound, or predates
+     * [IpcBridgeContract.CONTRACT_VERSION_ACTIVE_CAPABILITIES].
+     *
+     * Only Core's copy exists: the dash says CLIENT_INFO on the EasyConn command socket, which is
+     * Core's, and the identical preferences file in this process is written by nobody whenever
+     * Core owns the link. Null therefore means "keep resolving from the model id alone", which is
+     * what this app did for every dash before this call.
+     */
+    fun capabilitiesJson(motorcycleId: String): String? =
+        onCore("capabilitiesJson") { it.getCapabilitiesJson(motorcycleId) }?.takeIf { it.isNotBlank() }
+
+    /**
      * Why Core's last [startVideoSession] answered null, as Core would put it to a rider, or null
      * when Core is not bound, the call succeeded, or Core predates
      * [IpcBridgeContract.CONTRACT_VERSION_VIDEO_FAILURE_REASON].

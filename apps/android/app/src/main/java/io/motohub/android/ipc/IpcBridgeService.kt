@@ -46,6 +46,7 @@ import io.motohub.android.tbox.TBoxEvent
 import io.motohub.android.tbox.TBoxModelProfile
 import io.motohub.android.tbox.TBoxSessionHandle
 import io.motohub.android.tbox.TBoxTransport
+import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxWireLadder
 import io.motohub.android.tbox.SelectingTBoxTransport
 import io.motohub.android.tbox.TBoxSessionRegistry
@@ -290,6 +291,13 @@ class IpcBridgeService : Service() {
         override fun getWireLadderProgress(motorcycleId: String?): String? =
             motorcycleId?.takeIf { it.isNotBlank() }
                 ?.let { TBoxWireLadder.storedProgress(this@IpcBridgeService, it) }
+
+        // Verbatim for the same reason, and read from the store rather than from the live
+        // session: the caller that needs this most is a diagnostics report written with nothing
+        // connected, and a dash only says CLIENT_INFO once per session anyway.
+        override fun getCapabilitiesJson(motorcycleId: String?): String? =
+            motorcycleId?.takeIf { it.isNotBlank() }
+                ?.let { TBoxCapabilityStore(this@IpcBridgeService).encodedCapabilities(it) }
 
         // The caller formed the Wi-Fi Direct group in its own process and passes the addresses it
         // resolved there, because this one cannot resolve them for a group it did not form. Bad

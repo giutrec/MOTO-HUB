@@ -206,4 +206,24 @@ interface ITBoxTransportService {
      * Same tail-position rule as the calls above.
      */
     String getWireLadderProgress(String motorcycleId);
+
+    /**
+     * One motorcycle's CLIENT_INFO capabilities, as the JSON TBoxCapabilityStore persists, or
+     * null when Core has never seen CLIENT_INFO for that bike (or predates this call).
+     *
+     * CLIENT_INFO arrives on the EasyConn command socket, which lives in Core, so Core's store is
+     * the only one a Core-owned session ever fills. The companion app reads the identically named
+     * preferences file in ITS process, which nothing there writes: every ADVANCED installation in
+     * the field reports `capabilities: null` (68 motorcycle rows out of 68 in the collector,
+     * 2026-08-25) and therefore resolves the generic profile no matter what the dash said about
+     * itself. Rider 36ee9d2c's Benelli ran the Ride Dashboard as generic while Core's Android
+     * Auto, one process away, had scored the same dash and was applying another profile's screen
+     * margins to it. Same failure as getWireLadderProgress(), one store over.
+     *
+     * By id rather than for the active session: the diagnostics report is written when nothing is
+     * connected, and it is one of the readers this exists for.
+     *
+     * Same tail-position rule as the calls above.
+     */
+    String getCapabilitiesJson(String motorcycleId);
 }

@@ -630,6 +630,9 @@ enum class TBoxModelProfile(
          * matches), reimplemented against [TBoxCapabilities]. Highest positive score wins; a
          * score of 0 means "no claim" and is never selected over [GENERIC].
          */
+        /** CLIENT_INFO `flavor` of Carbit's white-label EasyConn stack; never a CFMOTO unit. */
+        private const val CARBIT_LICENCE_FLAVOR = "51"
+
         private fun score(profile: TBoxModelProfile, capabilities: TBoxCapabilities): Int {
             // Combined lowercase fallback for the same free-text keyword matching resolve()
             // used before this scoring existed (carModel included) - kept alongside the more
@@ -650,6 +653,15 @@ enum class TBoxModelProfile(
             val mirrorOverlayTouch = capabilities.mirrorOverlayTouch ?: false
             val screenTouch = capabilities.screenTouch ?: false
             val landscapeAdaptive = capabilities.landscapeAdaptive ?: false
+            // CLIENT_INFO's `flavor` names the manufacturer that licensed the EasyConn stack
+            // in this dashboard, and it is the one field here that can rule a family OUT rather
+            // than in. 51 is Carbit's white-label stack - the reference fork scores exactly that
+            // number for the Morini SoftAP / Alltrhike units, and every flavor-51 dash in the
+            // collector is a rebadge (two VOGE, one Benelli) while the CFMOTO reference unit
+            // reports 65540. It is used below only to stop a CFMOTO profile being carried by a
+            // firmware fingerprint with no CFMOTO identity behind it; a dash that names itself
+            // still wins, licence or no licence.
+            val carbitLicensed = capabilities.flavor?.trim() == CARBIT_LICENCE_FLAVOR
 
             fun cfdl26BaseScore(): Int {
                 // Identity signals: things only a CFDL26-family CFMOTO dash reports. A modern
@@ -697,8 +709,23 @@ enum class TBoxModelProfile(
                 CFMOTO_800NK -> {
                     var points = 0
                     if (identity.contains("800nk") || identity.contains("800 nk")) points += 4
-                    if (sdkVersion.startsWith("0.9.23") && identity.contains("linux_no_package")) points += 3
                     if (identity.contains("crcp")) points += 2
+                    // sdkVersion 0.9.23.x with package linux_no_package is a firmware DIALECT -
+                    // the older CFDL16-family EasyConn, which other manufacturers ship too - and
+                    // it is the only term here that can carry this profile with nothing else
+                    // agreeing. The same discipline cfdl26BaseScore() states applies: it
+                    // corroborates a CFMOTO identity, it must not establish one over a licence
+                    // saying somebody else built this dash. Rider 36ee9d2c's Benelli TRK 702X
+                    // matched on it alone and scored 3, so Core's Android Auto dressed a Benelli
+                    // in a CFMOTO panel's 22px top margin (visible: an 800x480 TFT letterboxed to
+                    // 763x458) while the Ride Dashboard, which had no capabilities to score at
+                    // all, used none.
+                    if (sdkVersion.startsWith("0.9.23") &&
+                        identity.contains("linux_no_package") &&
+                        (points > 0 || !carbitLicensed)
+                    ) {
+                        points += 3
+                    }
                     points
                 }
                 CFMOTO_MTX800 -> {
@@ -731,7 +758,11 @@ enum class TBoxModelProfile(
                 CL_C450 -> {
                     var points = 0
                     if (identity.contains("48fb4c")) points += 4
-                    if (sdkVersion.startsWith("0.9.23")) points += 1
+                    // Same rule, same reason, and not hypothetical: with CFMOTO_800NK refused
+                    // this lone corroborating point was the next thing standing, and it would
+                    // have moved a Benelli's 800x480 panel onto a 544x512 profile on the strength
+                    // of both dashes running 0.9.23 firmware.
+                    if (sdkVersion.startsWith("0.9.23") && (points > 0 || !carbitLicensed)) points += 1
                     points
                 }
                 MOTO_HUB_SIMULATOR -> {
