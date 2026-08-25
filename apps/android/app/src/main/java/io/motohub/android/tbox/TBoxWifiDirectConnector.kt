@@ -304,13 +304,21 @@ class TBoxWifiDirectConnector(
     }
 
     /**
-     * Brings the P2P state machine into a state where `connect()` can succeed, then issues it.
+     * Joins the dash, giving a wedged P2P stack time to come back rather than reporting its
+     * first refusal as the dash's fault.
      *
-     * The order matters and mirrors what the OEM EasyConn app does, which is the counterpart the
-     * dash was built for: discover the peer, stop discovery, clear a half-open invitation, and
-     * only then connect. Firing `connect()` straight after `discoverPeers()` - which is what this
-     * connector used to do - leaves a scan running and a stale invitation in place, and the
-     * framework answers with a bare `ERROR` ("internal error") or forms no group at all.
+     * A framework that refuses `discoverPeers()` and rejects `connect()` in milliseconds is not
+     * answering about the dash at all - it is a stack that has not finished letting go of the
+     * group we just tore down. One round of [attemptJoin] takes about two and a half seconds
+     * there, so the old single round turned a 35s budget into a 2.5s one, and the watchdog above
+     * spent the rider's whole recovery window re-asking the same question 41 times.
+     * Field log 7c7e9e44 (CFMOTO 800MT-X, POCO/HyperOS, 2026-08-24): the video pipe died at
+     * 18:31:32, and every one of the 41 recovery attempts that followed over the next five
+     * minutes was refused this way; a join an hour later was accepted at once.
+     *
+     * So a refused round is now retried inside the same budget, with a settle in between, and
+     * only the last one reports a failure - one that names the fix (toggle Wi-Fi) instead of
+     * repeating the framework's bare "internal error".
      */
     private suspend fun join(
         manager: WifiP2pManager,
@@ -319,11 +327,73 @@ class TBoxWifiDirectConnector(
         outcome: CompletableDeferred<Result<TBoxLink.WifiDirect>>,
         footprint: P2pJoinFootprint
     ) {
+        val startedAt = System.nanoTime()
+        var round = 1
+        while (true) {
+            if (outcome.isCompleted) return
+            val reason = attemptJoin(manager, channel, profile, outcome, footprint)
+                ?: return // Accepted, pending, or a failure this round already published.
+            val elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000
+            if (!shouldSettleAndRetryJoin(elapsedMillis, CONNECT_TIMEOUT_MS)) {
+                // The permission is already ruled out by connect()'s preflight, so the remaining
+                // rider-fixable cause of a bare rejection is the phone-wide location toggle.
+                // Named only when it is actually off - a hint that appears on every failure is
+                // one riders learn to skip.
+                val hint = if (WifiDirectGate.isLocationEnabled(appContext)) {
+                    ""
+                } else {
+                    " ${WifiDirectGate.LOCATION_OFF_HINT}"
+                }
+                // The counts go to the log, not into the message: a companion app compares
+                // consecutive failure reasons to tell "the same answer again" from "something
+                // changed", and a message carrying elapsed seconds is never twice the same.
+                log(
+                    "Giving up this Wi-Fi Direct join: $round round(s) refused outright in " +
+                        "${elapsedMillis / 1_000}s."
+                )
+                outcome.complete(
+                    Result.failure(
+                        IllegalStateException(
+                            "Wi-Fi Direct connect() failed: ${reasonName(reason)}. The phone's " +
+                                "Wi-Fi Direct stack refused every attempt of this join. Turn " +
+                                "Wi-Fi off and on again on the phone, then reconnect.$hint"
+                        )
+                    )
+                )
+                return
+            }
+            round++
+            log(
+                "The phone's Wi-Fi Direct stack refused this join outright; letting it settle " +
+                    "for ${WEDGE_SETTLE_MS / 1_000}s and trying again (round $round)."
+            )
+            delay(WEDGE_SETTLE_MS)
+        }
+    }
+
+    /**
+     * One round of the join the OEM EasyConn app performs, which is the counterpart the dash was
+     * built for: discover the peer, stop discovery, clear a half-open invitation, and only then
+     * connect. Firing `connect()` straight after `discoverPeers()` - which is what this connector
+     * used to do - leaves a scan running and a stale invitation in place, and the framework
+     * answers with a bare `ERROR` ("internal error") or forms no group at all.
+     *
+     * Returns null when the round handed the outcome over - `connect()` accepted, a group
+     * pending, or a failure already published - and the rejection reason when every `connect()`
+     * of the round came back refused, which is [join]'s cue to settle and try again.
+     */
+    private suspend fun attemptJoin(
+        manager: WifiP2pManager,
+        channel: WifiP2pManager.Channel,
+        profile: MotorcycleProfile,
+        outcome: CompletableDeferred<Result<TBoxLink.WifiDirect>>,
+        footprint: P2pJoinFootprint
+    ): Int? {
         // A group that was already formed settles through the receiver; joining again would tear
         // down the link the caller is about to use.
-        if (outcome.isCompleted) return
+        if (outcome.isCompleted) return null
         val peer = discoverPeer(manager, channel, profile, outcome, footprint)
-        if (outcome.isCompleted) return
+        if (outcome.isCompleted) return null
 
         // Discovery and connect() contend for the same radio state machine; leaving the scan
         // running is a known way to get connect() rejected.
@@ -340,9 +410,9 @@ class TBoxWifiDirectConnector(
             awaitAction { listener -> manager.cancelConnect(channel, listener) }
             delay(CANCEL_SETTLE_MS)
         }
-        if (outcome.isCompleted) return
+        if (outcome.isCompleted) return null
 
-        connectWithRetry(manager, channel, profile, peer, outcome, footprint)
+        return connectWithRetry(manager, channel, profile, peer, outcome, footprint)
     }
 
     /**
@@ -398,6 +468,11 @@ class TBoxWifiDirectConnector(
      * `ERROR` in ~2ms - the rejection snapshot shows "dash peer=not in the peer list" - so
      * re-sending the same address can never succeed there, while the credentials join carries
      * no peer address and is accepted by those same frameworks.
+     *
+     * Returns null when the outcome was handed over (accepted, pending, or a published failure)
+     * and the last rejection reason when both attempts were refused - a refusal is [join]'s to
+     * judge, because only it knows how much of the join budget is left to wait out a wedged
+     * stack.
      */
     private suspend fun connectWithRetry(
         manager: WifiP2pManager,
@@ -406,9 +481,10 @@ class TBoxWifiDirectConnector(
         peer: WifiP2pDevice?,
         outcome: CompletableDeferred<Result<TBoxLink.WifiDirect>>,
         footprint: P2pJoinFootprint
-    ) {
-        repeat(CONNECT_ATTEMPTS) { attempt ->
-            if (outcome.isCompleted) return
+    ): Int? {
+        var lastReason: Int? = null
+        for (attempt in 0 until CONNECT_ATTEMPTS) {
+            if (outcome.isCompleted) return null
             val joinPeer = peer?.takeIf { attempt == 0 }
             // buildConfig(profile, null) is the credentials form; it returns null when the SSID
             // or passphrase cannot express one (setNetworkName rejects non-"DIRECT-" names,
@@ -424,7 +500,7 @@ class TBoxWifiDirectConnector(
                         )
                     )
                 )
-                return
+                return null
             }
             log(
                 if (joinPeer != null) "Joining the dash at ${joinPeer.deviceAddress} (attempt ${attempt + 1})."
@@ -436,33 +512,18 @@ class TBoxWifiDirectConnector(
             when (val reason = issueConnect(manager, channel, config)) {
                 null -> {
                     log("Wi-Fi Direct connect() accepted; waiting for the group to form.")
-                    return
+                    return null
                 }
                 WifiP2pManager.BUSY -> {
                     // A stale group is being torn down; the connection-changed broadcast still fires.
                     log("Wi-Fi Direct connect() busy; waiting for the pending group.")
-                    return
+                    return null
                 }
                 else -> {
+                    lastReason = reason
                     if (attempt == CONNECT_ATTEMPTS - 1) {
                         logConnectRejectionDiagnostics(manager, channel, profile, peer)
-                        // The permission is already ruled out by connect()'s preflight, so the
-                        // remaining rider-fixable cause of a bare rejection is the phone-wide
-                        // location toggle. Named only when it is actually off - a hint that
-                        // appears on every failure is one riders learn to skip.
-                        val hint = if (WifiDirectGate.isLocationEnabled(appContext)) {
-                            ""
-                        } else {
-                            " ${WifiDirectGate.LOCATION_OFF_HINT}"
-                        }
-                        outcome.complete(
-                            Result.failure(
-                                IllegalStateException(
-                                    "Wi-Fi Direct connect() failed: ${reasonName(reason)}.$hint"
-                                )
-                            )
-                        )
-                        return
+                        return reason
                     }
                     log("Wi-Fi Direct connect() failed (${reasonName(reason)}); retrying.")
                     logConnectRejectionDiagnostics(manager, channel, profile, peer)
@@ -470,6 +531,7 @@ class TBoxWifiDirectConnector(
                 }
             }
         }
+        return lastReason
     }
 
     /**
@@ -921,12 +983,40 @@ class TBoxWifiDirectConnector(
         private const val P2P_RELEASE_TIMEOUT_MS = 4_000L
         private const val CONNECT_ATTEMPTS = 2
         private const val CONNECT_RETRY_DELAY_MS = 1_200L
+
+        /**
+         * How long a stack that refused a whole join round is left alone before the next one.
+         *
+         * Long enough to be a different question than the one just refused - the refusals come
+         * back in single-digit milliseconds - and short enough that four rounds still fit the
+         * 35s budget, so a dash that is merely slow to answer is not starved of attempts.
+         */
+        private const val WEDGE_SETTLE_MS = 6_000L
+
+        /** What one refused round costs, measured on the field logs: discovery refusal, the
+         * preparation calls, two instant rejections and the retry delay between them. */
+        private const val WEDGE_ROUND_COST_MS = 3_000L
         private const val IP_POLL_TIMEOUT_MS = 10_000L
         private const val IP_POLL_INTERVAL_MS = 500L
         private const val ADOPT_VERIFY_TIMEOUT_MS = 3_000L
         private const val ADOPT_VERIFY_POLL_MS = 300L
         private const val GROUP_OWNER_IP = "192.168.49.1"
         private const val DIRECT_PREFIX = "DIRECT-"
+
+        /**
+         * Whether a join round that was refused outright should be retried after a settle,
+         * given how much of the whole-join budget it has already spent.
+         *
+         * The settle and one more round have to fit, or the retry would be cut off mid-flight by
+         * [CONNECT_TIMEOUT_MS] and the rider would get "no group formed in 35s" - a message about
+         * the dash - for what is a refusal by their own phone.
+         */
+        internal fun shouldSettleAndRetryJoin(
+            elapsedMillis: Long,
+            budgetMillis: Long,
+            settleMillis: Long = WEDGE_SETTLE_MS,
+            roundCostMillis: Long = WEDGE_ROUND_COST_MS
+        ): Boolean = elapsedMillis + settleMillis + roundCostMillis <= budgetMillis
 
         /** Wi-Fi Direct group names always start with "DIRECT-" (Android convention). */
         fun isWifiDirectSsid(ssid: String): Boolean =
