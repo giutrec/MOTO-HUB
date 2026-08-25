@@ -249,6 +249,17 @@ class TBoxTransportClient(
     fun openDiagnosticLogSnapshot(): ParcelFileDescriptor? =
         runCatching { service?.openDiagnosticLogSnapshot() }.getOrNull()
 
+    /**
+     * Core's port scan of the ACTIVE session's dash, as the JSON described in the AIDL, or null
+     * when no session is installed, the service is not bound, or Core predates
+     * [IpcBridgeContract.CONTRACT_VERSION_PORT_SCAN].
+     *
+     * Blocking on the caller's thread for as long as the probes take - call it off the main
+     * thread, like [startVideoSession].
+     */
+    fun scanTBoxPorts(): String? =
+        onCore("scanTBoxPorts") { it.scanTBoxPorts() }?.takeIf { it.isNotBlank() }
+
     /** True when the clear reached Core; false when unbound or Core predates the method. */
     fun clearDiagnosticLog(): Boolean =
         runCatching { service?.also { it.clearDiagnosticLog() } != null }.getOrDefault(false)

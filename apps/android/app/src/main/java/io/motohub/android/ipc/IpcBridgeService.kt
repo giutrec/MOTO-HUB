@@ -33,6 +33,8 @@ import io.motohub.android.androidauto.AndroidAutoRuntime
 import io.motohub.android.androidauto.AndroidAutoRuntimeState
 import io.motohub.android.androidauto.AndroidAutoNightModeStore
 import io.motohub.android.androidauto.AndroidAutoSessionService
+import io.motohub.android.androidauto.TBoxScreenMargins
+import io.motohub.android.androidauto.TBoxScreenMarginsStore
 import io.motohub.android.androidauto.withFullVideoTarget
 import io.motohub.android.encoding.VideoBackpressureGuard
 import io.motohub.android.feature.settings.AndroidAutoAspectMatchingMode
@@ -44,6 +46,7 @@ import io.motohub.android.tbox.FormedP2pGroup
 import io.motohub.android.tbox.ProfileOverride
 import io.motohub.android.tbox.TBoxEvent
 import io.motohub.android.tbox.TBoxModelProfile
+import io.motohub.android.tbox.TBoxPortScanner
 import io.motohub.android.tbox.TBoxSessionHandle
 import io.motohub.android.tbox.TBoxTransport
 import io.motohub.android.tbox.TBoxCapabilityStore
@@ -298,6 +301,33 @@ class IpcBridgeService : Service() {
         override fun getCapabilitiesJson(motorcycleId: String?): String? =
             motorcycleId?.takeIf { it.isNotBlank() }
                 ?.let { TBoxCapabilityStore(this@IpcBridgeService).encodedCapabilities(it) }
+
+        /**
+         * Probes the dash's ports over the session's OWN link, which is why this belongs here at
+         * all: the caller cannot do it. Only one process holds the T-Box network, and when a
+         * companion drives the connect that process is this one - so the companion's scanner had
+         * no socket, no peer address, and no way to recognise its own motorcycle, and refused
+         * every scan a rider ran while connected (field log 7efdfa33, 2026-08-25).
+         *
+         * Nothing is requested, joined or torn down: the link belongs to the session and outlives
+         * this call untouched, so a scan during a ride costs the ride nothing.
+         */
+        override fun scanTBoxPorts(): String? {
+            val handle = TBoxSessionRegistry.current() ?: return null
+            val peerIp = handle.host.ipAddress.takeIf { it.isNotBlank() } ?: return null
+            return runCatching {
+                kotlinx.coroutines.runBlocking {
+                    TBoxPortScanner.encode(TBoxPortScanner.scanOverLink(handle.link, peerIp))
+                }
+            }.getOrElse { failure ->
+                ProjectionEventLog.warning(
+                    "DIAGNOSTICS",
+                    "Port scan requested by the companion app failed.",
+                    failure
+                )
+                null
+            }
+        }
 
         // The caller formed the Wi-Fi Direct group in its own process and passes the addresses it
         // resolved there, because this one cannot resolve them for a group it did not form. Bad
@@ -837,6 +867,31 @@ class IpcBridgeService : Service() {
                         AndroidAutoDisplayModeStore(ctx).save(
                             motorcycle,
                             AndroidAutoDisplayMode.valueOf(settings.displayMode)
+                        )
+                    }
+                }
+            }
+            // Screen margins, for the same reason as the display mode above and with the same
+            // per-motorcycle key: AndroidAutoSessionService composites against THIS store, so
+            // until this mirror existed the two halves projected the same panel differently -
+            // Android Auto inset to a 680x408 viewport by a right margin of 120 while the
+            // companion's Ride Dashboard filled all 800x480 of it (field log 7efdfa33,
+            // 2026-08-25). Gated on screenMarginsProvided, which the companion sets only when its
+            // own store really holds a taught value: this app ships the same ruler, and an empty
+            // companion store must not push four zeros over a calibration made here.
+            runCatching {
+                if (settings.screenMarginsProvided) {
+                    TBoxSessionRegistry.current()?.motorcycle?.let { motorcycle ->
+                        val margins = TBoxScreenMargins(
+                            top = settings.screenMarginTop,
+                            bottom = settings.screenMarginBottom,
+                            left = settings.screenMarginLeft,
+                            right = settings.screenMarginRight
+                        )
+                        TBoxScreenMarginsStore(ctx).save(motorcycle, margins)
+                        ProjectionEventLog.record(
+                            "IPC_AA",
+                            "Screen margins mirrored from companion: $margins."
                         )
                     }
                 }

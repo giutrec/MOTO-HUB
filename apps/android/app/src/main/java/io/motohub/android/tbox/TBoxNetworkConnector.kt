@@ -192,6 +192,38 @@ class TBoxNetworkConnector(context: Context) {
     @Volatile
     private var specifierSubmitImportance = 0
 
+    /**
+     * When Android first said the network was AVAILABLE for the live request, so the join can be
+     * split into "the phone associated" and "the phone got an address". They are different
+     * failures and, on a slow join, different suspects.
+     */
+    @Volatile
+    private var specifierAssociatedAt = 0L
+
+    /**
+     * Whether the join this request produced has already been timed. Link properties change again
+     * during a session (DHCP renewals, an IPv6 address arriving late) and every one of them
+     * re-enters the same branch: without this the log would carry a fresh "joined in" line, each
+     * measuring from the same old submit, for a network that joined once.
+     */
+    @Volatile
+    private var joinTimingReported = false
+
+    /**
+     * Who held the network request when the specifier was submitted - the interest ledger's own
+     * words, e.g. "hub-ui, pro-establisher" for a join this app's screen asked for, or a list
+     * containing "aidl-bridge" for one the companion app asked for over IPC.
+     *
+     * The whole point of recording it: in the pair, EVERY specifier request is submitted by CORE,
+     * so a log cannot otherwise tell a join the rider started here from one ADVANCED delegated -
+     * and a tester reporting "CORE connects instantly, ADVANCED takes forever" (2026-08-25) is a
+     * claim about exactly that difference, with nothing in any log to weigh it against. Read
+     * before taking [requestLock]: TBoxNetworkConnectors.release() holds its own lock while
+     * calling in here, so asking it anything from under [requestLock] would close the cycle.
+     */
+    @Volatile
+    private var specifierRequestedBy = ""
+
     /** Terminal failure produced by the registered callback, observed by [awaitRequestedNetwork]. */
     @Volatile
     private var pendingFailure: Throwable? = null
@@ -730,6 +762,36 @@ class TBoxNetworkConnector(context: Context) {
      * caller's patience, because Android keeps matching a live request against every later Wi-Fi
      * scan — that background hunt is exactly what a screen-off recovery needs.
      */
+    /**
+     * How long this join actually took, once, in one line - or null when there is nothing new to
+     * measure (already reported, or a network reused rather than requested).
+     *
+     * Written because "ADVANCED is slower to connect than CORE" could not be checked. Every
+     * specifier request in the pair is submitted by CORE, whether the rider tapped Connect in CORE
+     * or in ADVANCED, so a report's log shows the same lines either way and the only evidence was
+     * an impression. This says which of the two asked ([specifierRequestedBy]), at what process
+     * importance, and splits the wait into association and address - so the two paths can be
+     * compared as numbers, and a slow join can be blamed on the right half of it.
+     *
+     * Deliberately not an average or a verdict: one line per join, and the reader does the
+     * arithmetic. A single sample is not a claim about a build.
+     */
+    private fun joinTimingSummary(profile: MotorcycleProfile): String? {
+        if (joinTimingReported) return null
+        val submittedAt = specifierSubmittedAt.takeIf { it > 0L } ?: return null
+        joinTimingReported = true
+        val now = SystemClock.elapsedRealtime()
+        val total = now - submittedAt
+        val associated = specifierAssociatedAt.takeIf { it > 0L }?.let { it - submittedAt }
+        return joinTimingLine(
+            ssid = profile.ssid,
+            totalMs = total,
+            associatedMs = associated,
+            askedBy = specifierRequestedBy,
+            importance = specifierSubmitImportance
+        )
+    }
+
     private fun submitSpecifierRequest(profile: MotorcycleProfile) {
         logVisibleApSnapshot(profile)
         lateinit var networkCallback: ConnectivityManager.NetworkCallback
@@ -739,6 +801,7 @@ class TBoxNetworkConnector(context: Context) {
                 // one signal that separates "never joined the AP" from "joined it and got no IP",
                 // and its absence across a whole rider log is itself the diagnosis.
                 networkGranted = true
+                if (specifierAssociatedAt == 0L) specifierAssociatedAt = SystemClock.elapsedRealtime()
                 ProjectionEventLog.debug(
                     "NETWORK",
                     "Android granted network=$network for ${profile.ssid}; awaiting a usable IPv4 address."
@@ -822,6 +885,7 @@ class TBoxNetworkConnector(context: Context) {
                         "NETWORK",
                         "T-Box Wi-Fi validated and process-bound: ssid=${profile.ssid}, network=$network, addresses=$addresses."
                     )
+                    joinTimingSummary(profile)?.let { ProjectionEventLog.record("NETWORK", it) }
                     if (MotoHubSettings.verboseTBoxLogging(appContext)) {
                         runCatching { wifiManager.connectionInfo }.getOrNull()?.let { info ->
                             ProjectionEventLog.debug(
@@ -905,6 +969,8 @@ class TBoxNetworkConnector(context: Context) {
             .build()
 
         val importanceNow = processImportance()
+        // Outside the lock on purpose - see specifierRequestedBy.
+        val requestedBy = TBoxNetworkConnectors.describeOwners()
         ProjectionEventLog.debug(
             "NETWORK",
             "Submitting WifiNetworkSpecifier request for ${profile.ssid} without INTERNET " +
@@ -934,6 +1000,9 @@ class TBoxNetworkConnector(context: Context) {
             lastSampledRssi = UNSAMPLED_RSSI
             lastSampleDescription = null
             specifierSubmittedAt = SystemClock.elapsedRealtime()
+            specifierAssociatedAt = 0L
+            joinTimingReported = false
+            specifierRequestedBy = requestedBy
             specifierSubmitImportance = importanceNow
             callback = networkCallback
             registeredCallbacks += networkCallback
@@ -1385,6 +1454,28 @@ class TBoxNetworkConnector(context: Context) {
  * WPA3 is called out on its own because it is the one answer that indicts this app: the specifier
  * only offers a WPA2 passphrase, so a dash that requires SAE cannot be joined at all.
  */
+/**
+ * The sentence [TBoxNetworkConnector.joinTimingSummary] logs, without a Context so it can be
+ * tested.
+ *
+ * @param associatedMs time to Android's AVAILABLE callback, or null when none was seen - which is
+ *   itself an answer (an address appeared without this app ever being told the phone associated)
+ *   and must not be reported as an association at 0 ms.
+ */
+internal fun joinTimingLine(
+    ssid: String,
+    totalMs: Long,
+    associatedMs: Long?,
+    askedBy: String,
+    importance: Int
+): String {
+    val asked = askedBy.takeIf { it.isNotBlank() } ?: "nobody on the ledger"
+    val phases = associatedMs
+        ?.let { ": associated after ${it}ms, address ${totalMs - it}ms later" }
+        ?: " (no AVAILABLE callback was seen for it)"
+    return "Joined $ssid in ${totalMs}ms$phases; asked by $asked at process importance $importance."
+}
+
 internal fun securityName(capabilities: String?): String {
     val caps = capabilities.orEmpty().uppercase()
     val schemes = buildList {

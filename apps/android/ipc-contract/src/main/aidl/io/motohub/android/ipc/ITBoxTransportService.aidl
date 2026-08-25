@@ -226,4 +226,23 @@ interface ITBoxTransportService {
      * Same tail-position rule as the calls above.
      */
     String getCapabilitiesJson(String motorcycleId);
+
+    /**
+     * Probes the well-known EasyConn ports on the dash of the ACTIVE session, over the link Core
+     * already holds, and answers the result as JSON: {"peerIp":"...","ports":[{"port":10930,
+     * "status":"OPEN|REFUSED|NO_RESPONSE","detail":"..."}]}. Null when no session is installed,
+     * when the peer address cannot be derived, or on a Core that predates this call.
+     *
+     * The scan exists for a dash that answers nothing on the documented port, and the moment a
+     * rider wants it is the moment they are connected to that dash. In the companion app that is
+     * exactly when it could not run: the scanner opens a Wi-Fi connection of its own, and with
+     * Core owning the link the companion's connector has no network, no peer, and no way to tell
+     * "the same motorcycle" from "another one" - so every scan during a session was refused
+     * (field log 7efdfa33, 2026-08-25). Core scans over the session's own link and asks Android
+     * for nothing, so nothing about the ride is disturbed.
+     *
+     * Blocking, like startVideoSession(): the probes run in parallel with a short connect timeout
+     * each. Same tail-position rule as the calls above.
+     */
+    String scanTBoxPorts();
 }

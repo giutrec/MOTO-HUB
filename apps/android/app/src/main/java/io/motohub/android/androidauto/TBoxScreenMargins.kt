@@ -34,6 +34,18 @@ data class TBoxScreenMargins(
     }
 }
 
+/**
+ * [TBoxScreenMarginsStore.loadStored]'s decision, without a Context so it can be tested: the four
+ * edges as they came out of the preferences, with [TBoxScreenMarginsStore.UNSET] standing for
+ * "no value stored". Null unless ALL FOUR are present - a half-written record is not a teaching,
+ * and filling its gaps with zeros is how a stored zero and a missing value become the same answer
+ * on the companion boundary, which is exactly what must not happen there.
+ */
+internal fun storedMargins(edges: List<Int>): TBoxScreenMargins? {
+    if (edges.size != 4 || edges.any { it == TBoxScreenMarginsStore.UNSET }) return null
+    return TBoxScreenMargins(top = edges[0], bottom = edges[1], left = edges[2], right = edges[3])
+}
+
 /** Stores margins per motorcycle so one bike's panel furniture never affects another's. */
 class TBoxScreenMarginsStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences(
@@ -59,6 +71,18 @@ class TBoxScreenMarginsStore(context: Context) {
             .putInt(key(profile.ssid, "right"), margins.right)
             .apply()
     }
+
+    /**
+     * What this store actually holds for [profile], or null when the rider has never taught it.
+     *
+     * [load] cannot answer that question: it folds "nothing saved" into the model profile's
+     * defaults, which is right for compositing and wrong for handing the value to the other half
+     * of the pair. Four zeros returned because nothing was ever taught would overwrite, on the
+     * companion boundary, a calibration the rider did in the other app - and zero margins are a
+     * legitimate answer a rider can also teach, so the two cases cannot be told apart afterwards.
+     */
+    fun loadStored(profile: MotorcycleProfile): TBoxScreenMargins? =
+        storedMargins(EDGES.map { edge -> preferences.getInt(key(profile.ssid, edge), UNSET) })
 
     fun reset(profile: MotorcycleProfile) {
         preferences.edit()
@@ -88,7 +112,13 @@ class TBoxScreenMarginsStore(context: Context) {
 
     private fun key(ssid: String, edge: String): String = "$ssid:$edge"
 
-    private companion object {
-        const val PREFERENCES_NAME = "tbox_screen_margins"
+    internal companion object {
+        private const val PREFERENCES_NAME = "tbox_screen_margins"
+
+        /** Order matters: [loadStored] reads the edges positionally, and so does [storedMargins]. */
+        private val EDGES = listOf("top", "bottom", "left", "right")
+
+        /** Outside the 0..[TBoxScreenMargins.MAX] range a saved margin can occupy. */
+        const val UNSET = -1
     }
 }

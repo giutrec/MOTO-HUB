@@ -98,11 +98,19 @@ object TBoxNetworkConnectors {
     }
 
     /**
-     * A short-lived diagnostic's acquire: refused (null) when another owner is working a
-     * DIFFERENT SSID - the port scanner must not steal the radio from a ride in progress.
-     * Granted when the connector is already on (or hunting) the same SSID, where
-     * [TBoxNetworkConnector.connect] reuses the active network, and granted when nobody holds
-     * an interest at all.
+     * A short-lived diagnostic's acquire: refused (null) when another owner holds the request and
+     * this connector is not the one on [ssid] - the port scanner must not steal the radio from a
+     * ride in progress. Granted when the connector is already on (or hunting) the same SSID,
+     * where [TBoxNetworkConnector.connect] reuses the active network, and granted when nobody
+     * holds an interest at all.
+     *
+     * A refusal here does NOT mean another motorcycle. It used to say so, and in the companion
+     * app it said so every single time: there the Wi-Fi is joined inside CORE, so this process's
+     * connector never has an active profile and [TBoxNetworkConnector.isHuntingFor] can only
+     * answer false - the one rider connected to their one motorcycle was told MOTO-HUB was busy
+     * with a different one (field log 7efdfa33, 2026-08-25). The caller that owns the CORE link
+     * asks CORE to scan instead; what is left here is the local case, and the log now names the
+     * holder and the SSID rather than guessing at a second bike.
      */
     fun tryAcquireForDiagnostics(context: Context, owner: String, ssid: String): TBoxNetworkConnector? =
         synchronized(lock) {
@@ -110,14 +118,29 @@ object TBoxNetworkConnectors {
             if (ledger.isHeldByOthers(owner) && !shared.isHuntingFor(ssid)) {
                 ProjectionEventLog.record(
                     "NETWORK",
-                    "$owner refused the T-Box network: ${ledger.describe()} is using it for " +
-                        "another motorcycle."
+                    "$owner refused the T-Box network: ${ledger.describe()} holds it and this " +
+                        "process is not on $ssid."
                 )
                 return null
             }
             ledger.acquire(owner)
             shared
         }
+
+    /**
+     * Who currently holds the request, in the ledger's own words, for a log line that needs to say
+     * WHY a join happened rather than only that it did.
+     *
+     * In the CORE/ADVANCED pair every specifier request is submitted by CORE - the rider tapping
+     * Connect in ADVANCED reaches Android through the same code - so a log cannot otherwise tell
+     * the two apart, and "ADVANCED is slower than CORE to connect" had nothing to be weighed
+     * against (tester report, 2026-08-25). "aidl-bridge" among the holders is the companion's
+     * fingerprint; "hub-ui" is this app's own screen.
+     *
+     * Never call this while holding [TBoxNetworkConnector]'s request lock: [release] takes this
+     * object's lock and then that one, so the reverse order would close the cycle.
+     */
+    fun describeOwners(): String = synchronized(lock) { ledger.describe() }
 
     /**
      * [owner] no longer needs the network. Disconnects the connector only when this was the last

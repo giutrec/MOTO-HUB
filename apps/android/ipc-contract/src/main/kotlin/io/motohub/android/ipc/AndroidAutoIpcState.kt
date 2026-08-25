@@ -36,8 +36,10 @@ object IpcBridgeContract {
      * 5: getActiveProfileKey().
      * 6: getLastVideoSessionFailure().
      * 7: getWireLadderProgress().
+     * 8: getCapabilitiesJson().
+     * 9: scanTBoxPorts().
      */
-    const val CONTRACT_VERSION = 8
+    const val CONTRACT_VERSION = 9
 
     /** First [CONTRACT_VERSION] whose Core implements connectOverFormedGroup(). */
     const val CONTRACT_VERSION_FORMED_GROUP = 2
@@ -101,6 +103,22 @@ object IpcBridgeContract {
      * out of 68 in the collector on 2026-08-25, with no exception in the whole history.
      */
     const val CONTRACT_VERSION_ACTIVE_CAPABILITIES = 8
+
+    /**
+     * First [CONTRACT_VERSION] whose Core runs the T-Box port scan on the companion's behalf,
+     * through scanTBoxPorts().
+     *
+     * The scanner needs a socket on the dash's network, and when Core owns the link the companion
+     * has none: its own TBoxNetworkConnector never joined anything, so the diagnostic's
+     * "is this the same motorcycle?" test could not answer yes and the scan was refused with
+     * "MOTO-HUB is connected to a different motorcycle right now" - to a rider with one
+     * motorcycle, connected to it (field log 7efdfa33, 2026-08-25). Asking Core, which does hold
+     * the link, is the only way the inspector can run at the moment a rider would want it: while
+     * connected to the dash that is misbehaving.
+     *
+     * A companion still scans locally when nothing is connected; that path never needed Core.
+     */
+    const val CONTRACT_VERSION_PORT_SCAN = 9
 
     /**
      * Which half of Core's connect produced the last failure, answered by
