@@ -5,6 +5,7 @@ package io.motohub.android.tbox
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.os.SystemClock
 import io.motohub.android.session.ProjectionEventLog
 import java.io.IOException
 import java.io.OutputStream
@@ -337,9 +338,12 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
 
         fun bindServers() {
             val busy = mutableListOf<Int>()
-            controlServer = bindOrNull(ThinkerRideProtocol.CONTROL_PORT) ?: run { busy += ThinkerRideProtocol.CONTROL_PORT; null }
-            heartbeatServer = bindOrNull(ThinkerRideProtocol.HEARTBEAT_PORT) ?: run { busy += ThinkerRideProtocol.HEARTBEAT_PORT; null }
-            videoServer = bindOrNull(ThinkerRideProtocol.VIDEO_PORT) ?: run { busy += ThinkerRideProtocol.VIDEO_PORT; null }
+            // One deadline for the whole phase, not one per port: three ports a rival app really
+            // holds must not cost three separate waits.
+            val deadline = SystemClock.elapsedRealtime() + BIND_RETRY_WINDOW_MS
+            controlServer = bindOrNull(ThinkerRideProtocol.CONTROL_PORT, deadline) ?: run { busy += ThinkerRideProtocol.CONTROL_PORT; null }
+            heartbeatServer = bindOrNull(ThinkerRideProtocol.HEARTBEAT_PORT, deadline) ?: run { busy += ThinkerRideProtocol.HEARTBEAT_PORT; null }
+            videoServer = bindOrNull(ThinkerRideProtocol.VIDEO_PORT, deadline) ?: run { busy += ThinkerRideProtocol.VIDEO_PORT; null }
             if (busy.isNotEmpty()) {
                 error(
                     "Ports ${busy.joinToString()} are already in use on this phone, so the " +
@@ -348,12 +352,49 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
             }
         }
 
-        private fun bindOrNull(port: Int): ServerSocket? = runCatching {
-            ServerSocket().apply {
-                reuseAddress = true
-                bind(InetSocketAddress(port), 1)
+        /**
+         * Binds one server port, retrying until [deadline] for a port that is busy right now to
+         * come free. The deadline is shared by all three ports of one [bindServers].
+         *
+         * The wait is there because the commonest holder of these ports is US, milliseconds ago.
+         * A watchdog recovery tears the old session down and rebuilds it immediately: in rider
+         * a7cda9d1's log (2026-08-24 17:34:35) the registry cleared at .162 and the rebind failed
+         * at .171 - nine milliseconds - with "close the other dashboard/mirroring app", which was
+         * not only wrong but cost recovery attempt 1 of the 3 that fit in the watchdog's 120s.
+         * The very same bind succeeded five seconds later on attempt 2. The dash's own accepted
+         * connections outlive our close() for as long as the kernel needs to finish tearing them
+         * down, and SO_REUSEADDR does not cover a socket that has not reached TIME_WAIT yet.
+         *
+         * A port a DIFFERENT app holds still ends on the same honest error - just [BIND_RETRY_WINDOW_MS]
+         * later, once per connect attempt.
+         */
+        private fun bindOrNull(port: Int, deadline: Long): ServerSocket? {
+            val startedAt = SystemClock.elapsedRealtime()
+            var retried = false
+            while (true) {
+                val bound = runCatching {
+                    ServerSocket().apply {
+                        reuseAddress = true
+                        bind(InetSocketAddress(port), 1)
+                    }
+                }.getOrNull()
+                if (bound != null) {
+                    // Logged only when the wait was actually needed: this is the line that tells
+                    // a future reader a recovery raced its own teardown rather than a rival app.
+                    if (retried) {
+                        ProjectionEventLog.record(
+                            "THINKERRIDE",
+                            "Port $port was still busy when this session started and came free " +
+                                "after ${SystemClock.elapsedRealtime() - startedAt}ms."
+                        )
+                    }
+                    return bound
+                }
+                if (SystemClock.elapsedRealtime() + BIND_RETRY_STEP_MS > deadline) return null
+                retried = true
+                Thread.sleep(BIND_RETRY_STEP_MS)
             }
-        }.getOrNull()
+        }
 
         fun startAccepting() {
             acceptLoop("control", controlServer) { socket -> runControl(socket) }
@@ -629,6 +670,18 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
          * [VIDEO_CONNECT_TIMEOUT_MS] so the second attempt still has a window to be answered in.
          */
         const val LATE_PAIR_CONFIRM_WINDOW_MS = 20_000L
+
+        /**
+         * How long [bindServers] keeps trying busy server ports before calling them taken -
+         * for all three together, not each. Sized for the case it exists for: our own previous
+         * session's sockets finishing their teardown, which took under five seconds in the log
+         * that prompted it and normally takes a few hundred milliseconds. A rival app will still
+         * be there afterwards, and gets the same honest error it always did.
+         */
+        const val BIND_RETRY_WINDOW_MS = 3_000L
+
+        /** How often [bindOrNull] retries inside [BIND_RETRY_WINDOW_MS]. */
+        const val BIND_RETRY_STEP_MS = 100L
 
         /** How long [stop] gives the mirror-stop packets to leave the phone. */
         const val BLE_DRAIN_TIMEOUT_MS = 1_500L

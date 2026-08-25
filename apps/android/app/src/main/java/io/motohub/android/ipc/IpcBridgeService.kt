@@ -495,8 +495,18 @@ class IpcBridgeService : Service() {
                 }
             }
         } catch (failure: Throwable) {
-            if (failure !is kotlinx.coroutines.CancellationException) {
-                ProjectionEventLog.error("IPC_TBOX", "PRO video pipe reader stopped.", failure)
+            when {
+                failure is kotlinx.coroutines.CancellationException -> Unit
+                // "read interrupted by close() on another thread" is not a symptom of anything:
+                // it is what THIS process's own closeVideoStreamPipe() looks like from inside the
+                // read, and nothing on the far end can produce it. Stopping the Ride Dashboard by
+                // hand therefore ended every session with an ERROR and a full stack trace - rider
+                // a7cda9d1, 2026-08-25 11:41:45, one second after "User requested Ride Dashboard
+                // stop" - which is a lie in the log and a needs-attention badge in the collector
+                // for an app that did exactly what it was told.
+                failure is java.io.InterruptedIOException ->
+                    ProjectionEventLog.debug("IPC_TBOX", "PRO video pipe reader ended with the stream close.")
+                else -> ProjectionEventLog.error("IPC_TBOX", "PRO video pipe reader stopped.", failure)
             }
         } finally {
             synchronized(videoStreamLock) {
