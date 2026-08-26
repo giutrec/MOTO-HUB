@@ -1,34 +1,40 @@
 # Generated dependency record. Update this file whenever hudlib.aar is rebuilt.
 source_repository=https://github.com/vincenzobpt/ridedaemon-lib
-source_commit=da7253b3c12f1a116d989d2ec89954b0e3d5bcdc
+source_commit=8aa76b849b7118ab8883f89181787d9307c7b043
 source_dirty=false
 source_checkout=refs/ridedaemon-lib-motohub
 gomobile_android_api=31
 artifact=apps/android/app/libs/hudlib.aar
-sha256=48c5f876880e5dac36f77f361b26aa8d0d2a6b34bf0d37a93cd0ed47ba558319
+sha256=9a9da827c4b16bd77c5f7a474e54f2f4b4d3417ff1bfdd1c93b179bfcb967b9d
 license=GPL-3.0-only
 
-# Rebuilt 2026-08-18: the 0x10600 echo rule is now permissive. It used to hand
-# the dash its own timestamp back only when that stamp matched an exact 29-char
-# layout - anchored, space separator, precisely nine fractional digits - and
-# rewrote everything else with phone time. Firmware that formats the field even
-# slightly differently had a perfectly good clock overwritten; the reference
-# implementation measured that as clusters landing HOURS out on Voge, QJ,
-# X-Cape and Griffin, and dropped the strict check in their 2.0.10.
+# Rebuilt 2026-08-26: a teardown no longer reports itself as a dash failure, and
+# the notice a surviving PXC channel produces now says which channel died and
+# how long the dash had been ignoring it.
 #
-# Now: echo unless the dash sent nothing, sent epoch, or filled the field with
-# something that is not printable text of at least a date's length. That last
-# guard is ours and theirs lacks it - without it a short request carrying two
-# raw bytes echoes back as an all-but-empty body, which is the exact shape that
-# put Morini and Voge at 1970 to begin with. The old 18-byte regression test
-# still passes because of it.
+# The media control and media stream listeners gained the isStopping() guard the
+# PXC server has always had - without it every stop emitted a fatal "use of
+# closed network connection", which is net.ErrClosed, i.e. our own CloseAll
+# reported back as the dash's fault. In a field log from a Voge dash over
+# Wi-Fi Direct it was the FIRST line of the teardown, ahead of the dash-side EOF
+# that actually caused it, because each callback is relayed on its own
+# goroutine. Both listeners also took the per-connection fatality rule already
+# used for PXC: fatal only when nothing else is being served there.
 #
-# Built with -androidapi 31 to match this worktree's minSdk. CORE is minSdk 31
-# since "Run on Android 12 and 13"; pro-poc and the experiment worktree are
-# still 34, so they keep the 34 build. An AAR must never require a higher API
-# than the app's minSdk.
+# Deliberately unchanged: the proactive keepalive. The ~18-minute ETIMEDOUT on
+# an abandoned CAR_DATA is tcp_retries2 counting from the first unacknowledged
+# byte, sent at the start of the session, so stopping the writes later cannot
+# save that socket - only never writing to it would, and that trades a known
+# 7-second death for a suspected one on a single correlation.
 #
-# Verified in the artifact by grepping the .so for the relaxed year pattern -
-# present here, absent in the previous AAR. Binding surface diffed against the
-# previous AAR: identical.
-source_note=clock-ack-echoes-any-plausible-dash-stamp
+# Built with -androidapi 31, and pro-poc now records 31 too. It used to say 34,
+# but both worktrees have been carrying the same API-31 artifact since 1.1.95;
+# the field was describing an intention rather than the file. 31 is safe in both
+# (CORE is minSdk 31, pro-poc 34) because an AAR must never require a HIGHER API
+# than the app's minSdk - lower always works.
+#
+# Verified in the artifact: 4 ABIs as before, binding surface unchanged, the new
+# format strings present in libgojni.so, and the same .so byte-for-byte inside
+# app-debug.apk and app-core-debug.apk. app-pro-debug.apk carries zero copies of
+# it, so the GPL boundary still holds.
+source_note=teardown-is-not-a-dash-failure

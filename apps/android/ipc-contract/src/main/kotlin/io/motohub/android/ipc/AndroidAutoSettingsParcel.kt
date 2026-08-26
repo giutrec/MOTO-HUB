@@ -103,5 +103,25 @@ data class AndroidAutoSettingsParcel(
      * finished. The gate makes the absent case leave CORE's own state alone.
      */
     val handlebarCaptureOnlyProvided: Boolean = false,
-    val handlebarCaptureOnly: Boolean = false
+    val handlebarCaptureOnly: Boolean = false,
+    /**
+     * Whether this caller's "reconnect automatically" switch is on, and therefore whether an
+     * Android Auto session Core runs on its behalf should re-establish itself when the dash drops
+     * it mid-ride instead of ending.
+     *
+     * Core decides that from ITS copy of the switch, and a rider driving the companion app has
+     * never seen that copy: they set the switch here, the session runs over there, and the two
+     * disagree in silence. Field log 8d5a1631 (2026-08-26, a Voge dash over Wi-Fi Direct) is what
+     * that costs - the dash ended a healthy twenty-minute session with the link still up, Core's
+     * own switch was off, nothing retried, and the rider had their dashboard back thirty-six
+     * minutes later by relaunching the app by hand.
+     *
+     * [autoRecoveryProvided] gates it for the reason every gate here exists, and here the reason
+     * bites harder than most: Core ships this switch in its own settings too, and a caller that
+     * predates the field deserializes `false` - which is also the value that means "do not
+     * recover". Without the flag an old companion would quietly switch recovery off for a rider
+     * who had turned it on in Core, and the symptom would be this very bug.
+     */
+    val autoRecoveryProvided: Boolean = false,
+    val autoRecovery: Boolean = true
 ) : Parcelable

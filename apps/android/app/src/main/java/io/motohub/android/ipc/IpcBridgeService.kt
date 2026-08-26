@@ -33,6 +33,7 @@ import io.motohub.android.androidauto.AndroidAutoReceiverOwnership
 import io.motohub.android.androidauto.AndroidAutoRuntime
 import io.motohub.android.androidauto.AndroidAutoRuntimeState
 import io.motohub.android.androidauto.AndroidAutoNightModeStore
+import io.motohub.android.androidauto.companionAutoRecovery
 import io.motohub.android.androidauto.AndroidAutoSessionService
 import io.motohub.android.androidauto.TBoxScreenMargins
 import io.motohub.android.androidauto.TBoxScreenMarginsStore
@@ -1172,6 +1173,21 @@ class IpcBridgeService : Service() {
                     // before this parcel arrived, so acting on the value now is what makes the
                     // rider's first ride after enabling behave like every later one.
                     io.motohub.android.tbox.EcBtpClockChannel.refresh(ctx)
+                }
+            }
+            // Whether a dropped session is retried is decided in Core, by
+            // AndroidAutoSessionService, from CORE's copy of the switch - so a rider who set it in
+            // the companion app configured the process that does not run the session. Mirrored for
+            // the same reason as the Bluetooth clock above, and gated for a sharper one: `false`
+            // is both "an old caller said nothing" and "do not recover", so without the flag an
+            // old companion would switch recovery off for a rider who enabled it here.
+            companionAutoRecovery(settings.autoRecoveryProvided, settings.autoRecovery)?.let { on ->
+                runCatching {
+                    MotoHubSettings.setAutoRecovery(ctx, on)
+                    ProjectionEventLog.record(
+                        "IPC_AA",
+                        "Automatic reconnection mirrored from companion: enabled=$on."
+                    )
                 }
             }
             ProjectionEventLog.record("IPC_AA", "Applied companion Android Auto settings snapshot.")

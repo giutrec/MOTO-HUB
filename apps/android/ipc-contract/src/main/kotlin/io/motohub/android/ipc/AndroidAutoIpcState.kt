@@ -50,8 +50,11 @@ object IpcBridgeContract {
      *     One bump for three calls: they are the same fault seen from three sides - the handlebar
      *     of an Android Auto session is decoded in Core, and everything that configures, permits
      *     or teaches it lives in the companion app.
+     * 14: the auto-recovery field in [AndroidAutoSettingsParcel]. No call appended - the parcel
+     *     grew, and a caller has to be able to ask whether Core reads the new field before it can
+     *     tell "recovery is off" from "this Core never heard the question".
      */
-    const val CONTRACT_VERSION = 13
+    const val CONTRACT_VERSION = 14
 
     /** First [CONTRACT_VERSION] whose Core implements connectOverFormedGroup(). */
     const val CONTRACT_VERSION_FORMED_GROUP = 2
@@ -207,6 +210,21 @@ object IpcBridgeContract {
      * to make. Rider 315e0af3, 2026-08-24 to 08-26.
      */
     const val CONTRACT_VERSION_CORE_BLUETOOTH = 13
+
+    /**
+     * First [CONTRACT_VERSION] whose Core honours the auto-recovery field of
+     * [AndroidAutoSettingsParcel] instead of deciding from its own copy of the switch.
+     *
+     * The same shape as the Bluetooth clock and the handlebar block above: the setting is offered
+     * in the companion app, the thing it governs runs in Core. What makes this one worse is that
+     * both halves ship the switch ON, so nothing looks wrong until a rider turns it off in one
+     * app and expects the other to agree - or, as in field log 8d5a1631, until a session ends
+     * mid-ride and only the half without a screen knows why nothing came back.
+     *
+     * Below this the companion cannot make Core recover, and should not claim otherwise in its
+     * own settings screen.
+     */
+    const val CONTRACT_VERSION_AUTO_RECOVERY = 14
 
     /**
      * Which half of Core's connect produced the last failure, answered by

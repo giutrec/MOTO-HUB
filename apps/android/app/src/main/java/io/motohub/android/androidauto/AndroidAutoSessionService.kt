@@ -1072,11 +1072,21 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
 
     private fun handleRecoverableFailure(message: String) {
         if (stopping) return
+        val enabled = MotoHubSettings.autoRecovery(this)
         if (!shouldAutoRecoverAndroidAuto(
                 hasReachedStreaming = hasReachedStreaming,
-                enabled = MotoHubSettings.autoRecovery(this)
+                enabled = enabled
             )
         ) {
+            // Say why nothing will be retried. Without this line the log shows a session ending
+            // and then simply stops, and "reconnection is switched off" reads exactly like
+            // "reconnection ran and left no trace" - a distinction that took a full reading of
+            // rider 8d5a1631's log (2026-08-26) to make, on the one question that log was sent to
+            // answer. The failure message itself is untouched on purpose: the collector groups
+            // failures across riders by the text of that line.
+            androidAutoRecoveryRefusal(hasReachedStreaming, enabled)?.let { reason ->
+                ProjectionEventLog.warning("WATCHDOG", "Not reconnecting Android Auto: $reason")
+            }
             fail(message)
             return
         }
