@@ -3,6 +3,7 @@ package io.motohub.android.ipc;
 import android.view.Surface;
 import io.motohub.android.ipc.IAndroidAutoStateListener;
 import io.motohub.android.ipc.INavigationGuidanceListener;
+import io.motohub.android.ipc.IHandlebarGestureListener;
 import io.motohub.android.ipc.AndroidAutoSettingsParcel;
 
 /**
@@ -69,4 +70,16 @@ interface IAndroidAutoReceiverService {
      */
     void registerNavigationGuidanceListener(INavigationGuidanceListener listener);
     void unregisterNavigationGuidanceListener(INavigationGuidanceListener listener);
+
+    /**
+     * Every handlebar gesture CORE's bridge recognises while a session is running, so the
+     * companion app's teaching wizard can see the press the rider was just asked to make.
+     *
+     * Appended after every pre-existing method, like the navigation listener above, so AIDL
+     * transaction ids stay stable across a CORE/companion version skew. A CORE that predates
+     * these calls answers the dead transaction, the registration fails, and the wizard behaves
+     * exactly as it did before - which is to say it sees nothing during an Android Auto session.
+     */
+    void registerHandlebarGestureListener(IHandlebarGestureListener listener);
+    void unregisterHandlebarGestureListener(IHandlebarGestureListener listener);
 }

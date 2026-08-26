@@ -71,6 +71,20 @@ object SentryIntegration {
         }
     }
 
+    /**
+     * The SDK's own per-install id, or null without telemetry. The Android SDK generates it into
+     * `.sentry-installation` under filesDir and publishes it as the options' distinct id; the file
+     * is the fallback in case a future SDK stops doing the latter.
+     */
+    fun sdkInstallationId(context: Context): String? {
+        if (!enabled) return null
+        return runCatching { Sentry.getCurrentScopes().options.distinctId }.getOrNull()?.takeIf { it.isNotBlank() }
+            ?: runCatching {
+                java.io.File(context.applicationContext.filesDir, ".sentry-installation")
+                    .takeIf { it.isFile }?.readText(Charsets.UTF_8)?.trim()?.takeIf { it.isNotEmpty() }
+            }.getOrNull()
+    }
+
     /** Sends a bounded, redacted diagnostic event without changing the local log behavior. */
     fun captureDiagnosticError(source: String, message: String) {
         if (!enabled) return

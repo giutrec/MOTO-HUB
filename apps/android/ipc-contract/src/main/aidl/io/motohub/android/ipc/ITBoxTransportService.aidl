@@ -262,4 +262,65 @@ interface ITBoxTransportService {
      * Same tail-position rule as the calls above.
      */
     String getScreenMargins(String ssid);
+
+    /**
+     * What a session is doing to the dashboard, as
+     * "ok/failing|rejected|accepted|profileKey|ssid" - or null while nothing has been concluded.
+     *
+     * Both verdicts travel, not only the bad one. "ok" is what lets the companion app ask a rider
+     * to KEEP a profile they just picked, and that question needs evidence the picture is landing
+     * rather than merely the absence of a complaint - which a session that never sent a frame
+     * would also produce.
+     *
+     * The one thing a companion app cannot work out for itself, because the video pipe is
+     * one-way: its own offerAccessUnit() reports whether the WRITE into the pipe succeeded, and
+     * a write succeeds perfectly well while the dashboard at the other end refuses every frame.
+     * Core sits where both facts meet, so Core is the only place that can tell "the rider is
+     * looking at a frozen TFT" from "everything is fine".
+     *
+     * This exists because of what that costs a rider who cannot see it. 315e0af3 rode a Moto
+     * Morini X-Cape 1200 for two days with the app reporting a healthy session while the
+     * dashboard took 12 frames in every 100, found the profile picker by accident, pinned the
+     * right profile and fixed it himself in ninety seconds. Nothing in the app had ever
+     * suggested the profile was the problem - or that a picker existed.
+     *
+     * Deliberately latched and answered once per session: it earns the right to ask the rider
+     * one question, and a question asked twice is a question riders learn to dismiss. Cleared
+     * whenever a session is rebuilt, because a rebuild around a different profile is a new
+     * question and deserves a new answer.
+     *
+     * A flat string rather than a parcel for the same reason getActiveProfileKey() is: no new
+     * parcelable to keep in step across two independently-installed apps, and a field added
+     * later needs no contract bump. The network name is last because an SSID may legally contain
+     * the separator and the other fields cannot, so splitting with a fixed limit recovers it
+     * whole. Same tail-position rule as the calls above.
+     */
+    String getDashboardDeliveryReport();
+
+    /**
+     * Whether CORE ITSELF holds BLUETOOTH_CONNECT right now.
+     *
+     * A runtime permission is granted to one package, and the two halves are two packages. The
+     * handlebar of an Android Auto session is decoded by CORE's MediaButtonBridge, which refuses
+     * to take the media volume and audio focus without this grant - so the permission the rider
+     * has to give is CORE's, and every screen that asks for it lives in the companion app. The
+     * companion could not even SEE the gap: it checked its own grant, found it, and reported the
+     * handlebar as ready.
+     *
+     * Rider 315e0af3 (2026-08-24 to 08-26, Moto Morini X-Cape 1200): "AAP: [BTN] capture skipped:
+     * Bluetooth is off or unavailable to this app" in every Android Auto session of every report,
+     * while the companion's own Ride Dashboard logged "capture enabled; audio focus=granted" on
+     * the same phone ten minutes later. He paired the motorcycle, reassigned every button and ran
+     * the teaching wizard to the end; no press could ever have arrived.
+     *
+     * Only the permission, not the adapter: the adapter is one radio and the caller can read its
+     * state for itself. This answers the half that is per-app and therefore invisible from over
+     * there.
+     *
+     * A CORE that predates this call leaves the reply parcel empty, which reads as false - so the
+     * caller must check getContractVersion() against
+     * IpcBridgeContract.CONTRACT_VERSION_CORE_BLUETOOTH first and treat anything older as
+     * "unknown", never as "missing". Same tail-position rule as the calls above.
+     */
+    boolean holdsHandlebarBluetoothPermission();
 }

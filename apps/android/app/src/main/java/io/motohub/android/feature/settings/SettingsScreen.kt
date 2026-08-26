@@ -54,6 +54,7 @@ import io.motohub.android.feature.controls.HandlebarHidCaptureService
 import io.motohub.android.feature.controls.HandlebarInputMode
 import io.motohub.android.feature.controls.HandlebarMappingScreen
 import io.motohub.android.feature.controls.MediaButtonBridge
+import io.motohub.android.feature.diagnostics.report.SupportIdSection
 import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.ui.components.MonoLabel
 import io.motohub.android.ui.components.MotoHubActionRow
@@ -522,6 +523,7 @@ private fun DiagnosticsDetail(
     var verboseLogging by remember { mutableStateOf(MotoHubSettings.verboseTBoxLogging(context)) }
 
     MotoHubDetailScreen(title = motoHubText("Diagnostics"), backLabel = motoHubText("‹ Settings"), onBack = onBack) {
+        SupportIdSection()
         MotoHubCardGroup {
             MotoHubActionRow(
                 title = motoHubText("Network diagnostics"),

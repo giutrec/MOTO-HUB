@@ -34,6 +34,8 @@ import io.motohub.android.feature.settings.MotoHubSettings
 import io.motohub.android.feature.settings.AndroidAutoAspectMatchingMode
 import io.motohub.android.session.FrameLogThrottle
 import io.motohub.android.session.MotorcycleProfile
+import io.motohub.android.encoding.VideoDeliveryProbe
+import io.motohub.android.session.DashboardDeliveryMonitor
 import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.session.ProjectionRuntime
 import io.motohub.android.session.ProjectionRuntimeState
@@ -92,7 +94,26 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
     private val capabilityStore by lazy { TBoxCapabilityStore(this) }
     private val bikeStartRequested = AtomicBoolean(false)
     private val transportUnavailable = AtomicBoolean(false)
+    /** One place for both verdicts, so the accept and reject arms cannot drift apart. */
+    private fun publishDeliveryVerdict(
+        verdict: VideoDeliveryProbe.Verdict,
+        handle: TBoxSessionHandle,
+        profile: TBoxModelProfile
+    ) = DashboardDeliveryMonitor.publish(
+        verdict = verdict,
+        ssid = handle.motorcycle.ssid,
+        rejected = deliveryProbe.rejectedCount(),
+        accepted = deliveryProbe.acceptedCount(),
+        profileKey = profile.key
+    )
+
     private var backpressureGuard = VideoBackpressureGuard()
+    /**
+     * Separate from [backpressureGuard] and asking the other question: not "is the link dead" but
+     * "is this dash swallowing anything like what we send it". A session can be perfectly alive by
+     * the guard's measure and still show the rider a frozen picture - see [VideoDeliveryProbe].
+     */
+    private var deliveryProbe = VideoDeliveryProbe()
     private val videoStreamStartRequested = AtomicBoolean(false)
     private val framesAccepted = AtomicLong(0)
     private val frameLogThrottle = FrameLogThrottle()
@@ -665,6 +686,10 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         )
         try {
             backpressureGuard = VideoBackpressureGuard()
+            // A session being (re)built around a profile is a new question, so the rider may be
+            // asked again - including when they have just picked a different profile themselves.
+            deliveryProbe = VideoDeliveryProbe()
+            DashboardDeliveryMonitor.clear()
 
             // The one dash that is fed stills instead of video. Its OEM app never runs its own
             // H.264 path, and a dash that acknowledges every frame while painting none is what
@@ -685,6 +710,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                 onAccessUnit = { accessUnit ->
                     if (handle.transport.offerAccessUnit(accessUnit)) {
                         backpressureGuard.onAccepted()
+                        deliveryProbe.onAccepted()?.let { publishDeliveryVerdict(it, handle, sessionModelProfile) }
                         val accepted = framesAccepted.incrementAndGet()
                         frameLogThrottle.rateSuffixIfDue(accepted, SystemClock.elapsedRealtime())
                             ?.let { rate ->
@@ -698,6 +724,13 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                         // A single rejection is a pushFrame() overlap, not a dead link - only a
                         // sustained streak ends the session (see VideoBackpressureGuard).
                         val fatal = backpressureGuard.onRejected()
+                        // A dash that refuses most of what we send is not a link to tear down -
+                        // it is a profile that does not match this dashboard, and the only one who
+                        // can settle that is the rider. Concluded once per session; see
+                        // DashboardDeliveryMonitor.
+                        deliveryProbe.onRejected()?.let {
+                            publishDeliveryVerdict(it, handle, sessionModelProfile)
+                        }
                         if (backpressureGuard.isStreakStart()) {
                             ProjectionEventLog.warning(
                                 "ANDROID AUTO",

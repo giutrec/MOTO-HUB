@@ -55,6 +55,8 @@ import io.motohub.android.androidauto.AndroidAutoRuntimeState
 import io.motohub.android.androidauto.AndroidAutoSessionService
 import io.motohub.android.androidauto.AndroidAutoDisplayMode
 import io.motohub.android.androidauto.AndroidAutoDisplayModeStore
+import io.motohub.android.feature.controls.BluetoothStatus
+import io.motohub.android.feature.controls.MediaButtonBridge
 import io.motohub.android.ipc.IpcBridgeContract
 import io.motohub.android.androidauto.TBoxDisplayGeometryStore
 import io.motohub.android.androidauto.TBoxScreenMargins
@@ -100,6 +102,10 @@ import io.motohub.android.feature.update.GithubUpdateInstaller
 import io.motohub.android.feature.update.GithubUpdateRepository
 import io.motohub.android.feature.update.latestNewerApkRelease
 import io.motohub.android.session.ProjectionSessionService
+import io.motohub.android.feature.diagnostics.report.CrashDiagnosticsConsentDialog
+import io.motohub.android.feature.diagnostics.report.DiagnosticReportScheduler
+import io.motohub.android.feature.diagnostics.report.PrivacyNoticeDialog
+import io.motohub.android.session.CrashRecovery
 import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.session.ProjectionRuntime
 import io.motohub.android.session.PhoneDisplayDimmer
@@ -216,12 +222,43 @@ class MainActivity : ComponentActivity() {
     private fun isForegroundEnoughForWifiRequest(): Boolean =
         processImportance() <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE
 
+    private val profileTrialDiagnostics by lazy {
+        io.motohub.android.feature.diagnostics.report.ProfileTrialDiagnosticsOffer.createOrNull(applicationContext)
+    }
+
+    /**
+     * Registered as a field, before STARTED, because that is what the Activity Result API
+     * requires - and because this request can arrive on a cold launch whose only purpose it is.
+     *
+     * Always finishes. An activity the companion app opened to ask one question has nothing to
+     * show once it is answered, and a rider who tapped a button over there should be looking at
+     * that button again - including when the answer is no, which is also what a rider sees once
+     * Android has stopped showing the dialog after two refusals. The card they came from is
+     * still up, with the way to system settings on it.
+     */
+    private val handlebarBluetoothLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        ProjectionEventLog.record(
+            "PERMISSION",
+            "Handlebar Bluetooth permission result: granted=$granted."
+        )
+        // A session is usually already running when this is answered - the rider left it to come
+        // here. Nothing is broadcast when a permission is granted, so the bridge that skipped
+        // capture for want of it has to be told.
+        if (granted) MediaButtonBridge.bluetoothPermissionGranted()
+        finish()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ProjectionEventLog.record("UI", "Main activity created.")
+        // Nothing is sent without consent: this only decides whether there is a reason to ask.
+        DiagnosticReportScheduler.onAppStarted(this, CrashRecovery.previousCrashRecovered)
         enableEdgeToEdge()
         refreshAoaAccessoryConnected(intent)
         handleAndroidAutoPreviewLaunchIntent(intent)
+        handleHandlebarBluetoothRequestIntent(intent)
 
         setContent {
             MotoHubTheme {
@@ -1310,6 +1347,17 @@ class MainActivity : ComponentActivity() {
                         },
                         onCancelConnection = viewModel::cancelConnection,
                         onDisconnect = viewModel::disconnect,
+                        onTryProfile = viewModel::tryProfile,
+                        onKeepTrialledProfile = { sendNow, alwaysSend ->
+                            // The switch first: a rider who ticked both expects the report that
+                            // goes out now to be the first of the automatic ones, not a one-off
+                            // followed by silence.
+                            if (alwaysSend) profileTrialDiagnostics?.enableAutoUpload()
+                            if (sendNow) profileTrialDiagnostics?.sendNow()
+                            viewModel.keepTrialledProfile()
+                        },
+                        onDiscardTrialledProfile = viewModel::discardTrialledProfile,
+                        diagnosticsOffer = profileTrialDiagnostics,
                         onStartProjection = {
                             ProjectionEventLog.record("MIRROR", "User selected mirroring mode.")
                             startMirroring()
@@ -1583,6 +1631,34 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 }
+                // Asked only of riders who never opted in; the scheduler raises this after a
+                // crash and clears it on either answer. Queued behind the safety disclaimer,
+                // which cannot be dismissed and would otherwise sit under it.
+                val crashConsentRequired by DiagnosticReportScheduler.crashConsentRequired
+                    .collectAsStateWithLifecycle()
+                if (crashConsentRequired && !showSafetyDisclaimer) {
+                    var alwaysSendReports by rememberSaveable { mutableStateOf(false) }
+                    var readingPrivacyNotice by rememberSaveable { mutableStateOf(false) }
+                    // The notice replaces the prompt rather than stacking on top of it: the
+                    // question stays pending underneath and is put back the moment it is closed,
+                    // so reading the terms is never a way to accidentally answer them.
+                    if (readingPrivacyNotice) {
+                        PrivacyNoticeDialog(onDismiss = { readingPrivacyNotice = false })
+                    } else {
+                        CrashDiagnosticsConsentDialog(
+                            alwaysSend = alwaysSendReports,
+                            onAlwaysSendChanged = { alwaysSendReports = it },
+                            onSend = {
+                                DiagnosticReportScheduler.onCrashReportConsented(context, alwaysSendReports)
+                            },
+                            onDecline = { DiagnosticReportScheduler.onCrashReportDeclined(context) },
+                            onOpenPrivacyNotice = { readingPrivacyNotice = true },
+                            // Not an answer: the question comes back next launch. Only the
+                            // rider's own yes or no closes it.
+                            onDismiss = { DiagnosticReportScheduler.dismissCrashPromptForNow() }
+                        )
+                    }
+                }
                 if (showSafetyDisclaimer) {
                     var doNotShowAgain by rememberSaveable { mutableStateOf(false) }
                     SafetyDisclaimerDialog(
@@ -1654,6 +1730,7 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         refreshAoaAccessoryConnected(intent)
         handleAndroidAutoPreviewLaunchIntent(intent)
+        handleHandlebarBluetoothRequestIntent(intent)
     }
 
     /**
@@ -1677,6 +1754,42 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    /**
+     * Puts THIS app's BLUETOOTH_CONNECT request in front of the rider because the companion app
+     * asked, then closes so they land back where they tapped.
+     *
+     * A runtime permission belongs to a package, and the handlebar of an Android Auto session is
+     * decoded here - so this app's grant is the one that decides whether a press can arrive, and
+     * every screen that could ask for it is over there. The companion app checked its own grant,
+     * found it, and showed a rider a handlebar that could never work: rider 315e0af3 paired the
+     * motorcycle, remapped every button and ran the teaching wizard to the end across three days
+     * while this app logged "capture skipped: Bluetooth is off or unavailable to this app" in
+     * every single session.
+     *
+     * Answers nothing itself when the grant is already held: the companion asks before sending
+     * anyone here, but the two checks are one process apart and the rider may have granted it in
+     * between.
+     */
+    private fun handleHandlebarBluetoothRequestIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(IpcBridgeContract.EXTRA_REQUEST_HANDLEBAR_BLUETOOTH, false) != true) return
+        // Removed so a configuration change or a later onNewIntent does not ask again: the
+        // launch intent outlives the request it carried.
+        intent.removeExtra(IpcBridgeContract.EXTRA_REQUEST_HANDLEBAR_BLUETOOTH)
+        if (BluetoothStatus.hasConnectPermission(this)) {
+            ProjectionEventLog.record(
+                "PERMISSION",
+                "The companion app asked for handlebar Bluetooth; this app already holds it."
+            )
+            finish()
+            return
+        }
+        ProjectionEventLog.record(
+            "PERMISSION",
+            "Requesting handlebar Bluetooth on the companion app's behalf."
+        )
+        handlebarBluetoothLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+    }
+
     /** Handles the phone-only Android Auto deep-link sent by PRO. */
     private fun handleAndroidAutoPreviewLaunchIntent(intent: Intent?) {
         if (intent?.getBooleanExtra(IpcBridgeContract.EXTRA_START_PHONE_ONLY_ANDROID_AUTO, false) != true) return
@@ -1693,6 +1806,9 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         ProjectionEventLog.debug("UI", "Main activity resumed.")
+        // A report the rider agreed to send while on the dashboard's Wi-Fi has no route out;
+        // coming back to the app is the likeliest moment there is one again.
+        DiagnosticReportScheduler.retryIfPending(this)
     }
 
     override fun onPause() {

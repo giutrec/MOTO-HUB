@@ -172,8 +172,10 @@ class CoreTBoxConnector(private val context: Context) {
             TBoxNetworkConnectors.release(AIDL_NETWORK_OWNER)
             return false
         }
-        // Record what discovery settled on, so the next ride skips the slow path.
-        transport.activeProtocolProfile?.let { discoveredProfile ->
+        // Record what discovery settled on, so the next ride skips the slow path. Read off the
+        // switch itself and not off activeProtocolProfile, which now also carries a pin: what is
+        // worth remembering is what the DASH answered unasked, never what the rider tried.
+        transport.discoverySwitchedProfile?.let { discoveredProfile ->
             TBoxProtocolMemory(context).remember(profile.ssid, discoveredProfile.transportFamily)
         }
         capabilityStore.recordDiscovery(profile, host)

@@ -38,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import io.motohub.android.tbox.ProfileOverride
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -118,7 +119,11 @@ fun HubHomeScreen(
     externalDisplayActive: Boolean = false,
     externalDisplayStreaming: Boolean = false,
     onStartExternalDisplay: () -> Unit = {},
-    onStopExternalDisplay: () -> Unit = {}
+    onStopExternalDisplay: () -> Unit = {},
+    onTryProfile: (ProfileOverride) -> Unit = {},
+    onKeepTrialledProfile: (sendNow: Boolean, enableAutoUpload: Boolean) -> Unit = { _, _ -> },
+    onDiscardTrialledProfile: () -> Unit = {},
+    diagnosticsOffer: DiagnosticsOffer? = null
 ) {
     val session = state.session
     val destination = resolveHubDestination(session, androidAutoActive, externalDisplayActive = externalDisplayActive)
@@ -129,6 +134,34 @@ fun HubHomeScreen(
             session.phase == SessionPhase.REQUESTING_PROJECTION ||
             session.phase == SessionPhase.CAPTURING -> ConnectionState.CONNECTED
         else -> ConnectionState.DISCONNECTED
+    }
+
+    // A drill-down rather than an expanding card: this is a decision with its own evidence and
+    // its own list, and the rider taking it has already been told the wrong thing once.
+    var showProfileTrial by rememberSaveable { mutableStateOf(false) }
+    val deliveryWarning = session.deliveryWarning
+    if (showProfileTrial && deliveryWarning != null) {
+        MotoHubBackground(Modifier.fillMaxSize()) {
+            ProfileTrialScreen(
+                warning = deliveryWarning,
+                suggestions = state.profileSuggestions,
+                onTryProfile = {
+                    showProfileTrial = false
+                    onTryProfile(it)
+                },
+                onBack = { showProfileTrial = false }
+            )
+        }
+        return
+    }
+
+    state.trialToConfirm?.let { trial ->
+        ProfileTrialConfirmation(
+            trial = trial,
+            diagnostics = diagnosticsOffer,
+            onKeep = onKeepTrialledProfile,
+            onDiscard = onDiscardTrialledProfile
+        )
     }
 
     MotoHubBackground(Modifier.fillMaxSize()) {
@@ -142,6 +175,12 @@ fun HubHomeScreen(
                 isConnected = connectionState == ConnectionState.CONNECTED,
                 onMotorcycleTap = { onTabSelected(HubTab.GARAGE) }
             )
+            // Only the failing verdict is a banner. The healthy one travels the same field and
+            // is what the confirmation above is built on - showing it here would put "your
+            // dashboard is not showing this" over a dashboard that is showing it.
+            session.deliveryWarning?.takeIf { !it.healthy }?.let {
+                DeliveryWarningBanner(onOpen = { showProfileTrial = true })
+            }
 
             Box(Modifier.weight(1f)) {
                 Crossfade(targetState = selectedTab, label = "tab") { tab ->

@@ -12,6 +12,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.net.ConnectivityManager
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.os.RemoteCallbackList
@@ -42,6 +43,8 @@ import io.motohub.android.feature.settings.AndroidAutoAspectMatchingMode
 import io.motohub.android.feature.settings.AndroidAutoResolutionMode
 import io.motohub.android.feature.settings.MotoHubSettings
 import io.motohub.android.feature.settings.VideoQuality
+import io.motohub.android.encoding.VideoDeliveryProbe
+import io.motohub.android.session.DashboardDeliveryMonitor
 import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.tbox.FormedP2pGroup
 import io.motohub.android.tbox.ProfileOverride
@@ -54,6 +57,7 @@ import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxWireLadder
 import io.motohub.android.tbox.SelectingTBoxTransport
 import io.motohub.android.tbox.TBoxSessionRegistry
+import io.motohub.android.tbox.TBoxVpnDiagnostics
 import io.motohub.android.tbox.negotiateVideoConfiguration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -66,6 +70,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
@@ -102,6 +107,26 @@ class IpcBridgeService : Service() {
      * that name and turn every assignment below into "'val' cannot be reassigned".
      */
     @Volatile private var videoSessionFailureReason: String? = null
+
+    /**
+     * A VPN's own sentence for a video-negotiation failure it caused, or null when nothing points
+     * at one.
+     *
+     * Here rather than inside the transport because the transport is the GPL library and knows
+     * only about sockets; the routing table and the tunnel's capabilities are Android's, and this
+     * is the nearest place to the failure that can see both.
+     */
+    private fun vpnDiagnosisFor(failure: Throwable, handle: TBoxSessionHandle): String? {
+        if (!TBoxVpnDiagnostics.isVpnBindBlocked(failure)) return null
+        val connectivityManager = getSystemService(ConnectivityManager::class.java) ?: return null
+        val dashAddress = runCatching {
+            java.net.InetAddress.getByName(handle.host.ipAddress)
+        }.getOrNull()
+        return TBoxVpnDiagnostics.userFacingMessage(
+            failure,
+            TBoxVpnDiagnostics.inspect(connectivityManager, dashAddress)
+        )
+    }
 
     private val tboxTransportBinder = object : ITBoxTransportService.Stub() {
         override fun isSessionReady(): Boolean = TBoxSessionRegistry.current() != null
@@ -190,10 +215,16 @@ class IpcBridgeService : Service() {
                             "IPC_TBOX",
                             "startVideoSession negotiation failed: ${it.message}"
                         )
-                        // The transport's own sentence, verbatim: on a ThinkerRide dash it names the
-                        // long-press-UP gesture that is the only thing which starts projection there,
-                        // and the caller has no way to work that out from a null parcel.
-                        videoSessionFailureReason = it.message?.takeIf { message -> message.isNotBlank() }
+                        // A VPN in lockdown gets named before anything else, because the
+                        // transport cannot name it: all it saw was a socket it was not allowed to
+                        // open, and "Binding socket to network 245 failed: EPERM" is what a rider
+                        // was shown four times in 53 seconds on 2026-08-26. The connect path has
+                        // had this translation since 2026-08-15 and this one never did - and this
+                        // is the one that fails, because connect() itself succeeds: Android grants
+                        // the Wi-Fi, mDNS finds the dash, the session installs READY, and only
+                        // then does the first real socket hit the refusal.
+                        videoSessionFailureReason = vpnDiagnosisFor(it, handle)
+                            ?: it.message?.takeIf { message -> message.isNotBlank() }
                             ?: "The motorcycle did not open its video channel."
                         return@runBlocking null
                     }
@@ -279,6 +310,25 @@ class IpcBridgeService : Service() {
 
         override fun getContractVersion(): Int = IpcBridgeContract.CONTRACT_VERSION
 
+        /**
+         * This app's own BLUETOOTH_CONNECT grant, which is the one that decides whether an
+         * Android Auto handlebar works at all: the AVRCP bridge that decodes the presses runs
+         * here, and [MediaButtonBridge] declines to take the media volume and audio focus
+         * without it.
+         *
+         * The companion app cannot see this. It checks the grant of ITS package, finds it, and
+         * shows a handlebar that is ready - while every session logs "capture skipped: Bluetooth
+         * is off or unavailable to this app" over here. Rider 315e0af3 lived on both sides of
+         * that sentence for three days.
+         *
+         * Read live rather than cached: the rider may be answering the request this very second,
+         * in this app, because the companion app asked them to.
+         */
+        override fun holdsHandlebarBluetoothPermission(): Boolean =
+            io.motohub.android.feature.controls.BluetoothStatus.hasConnectPermission(
+                this@IpcBridgeService
+            )
+
         // Read after a false connect(), so the caller can put Core's own reason in front of its
         // rider instead of "Core failed to connect to the T-Box" plus whichever help it happens
         // to have. Not cleared here: the caller may ask more than once (log it, then show it).
@@ -320,6 +370,29 @@ class IpcBridgeService : Service() {
                         TBoxScreenMarginsStore(this@IpcBridgeService).loadStoredBySsid(it)
                     )
                 }
+
+        /**
+         * The latched verdict, flattened for the wire. Null while nothing has been concluded,
+         * which is the answer for every healthy session there is.
+         *
+         * Read from the process-wide monitor rather than from a field here because the judgement
+         * is made on three different paths - Core's own Android Auto, Core's own mirroring, and
+         * the companion's frames arriving on the video pipe - and only one of them runs inside
+         * this service.
+         */
+        override fun getDashboardDeliveryReport(): String? =
+            DashboardDeliveryMonitor.current.value?.let { report ->
+                // The network name goes LAST, and that is not cosmetic: an SSID may legally
+                // contain the separator, the other fields cannot, so a reader splitting with a
+                // fixed limit always recovers the name whole however odd it is.
+                listOf(
+                    if (report.healthy) "ok" else "failing",
+                    report.rejected.toString(),
+                    report.accepted.toString(),
+                    report.profileKey,
+                    report.ssid
+                ).joinToString("|")
+            }
 
         /**
          * Probes the dash's ports over the session's OWN link, which is why this belongs here at
@@ -569,6 +642,30 @@ class IpcBridgeService : Service() {
         }
     }
 
+    /**
+     * Names the session the probe just judged, for the companion app to read back over
+     * [ITBoxTransportService.getDashboardDeliveryReport].
+     *
+     * The profile is taken the same way every session service takes it - the transport's own
+     * answer first - because that is the profile the frames were actually encoded for, and it is
+     * the one the rider will be offered an alternative to.
+     */
+    private fun publishDeliveryVerdict(verdict: VideoDeliveryProbe.Verdict, probe: VideoDeliveryProbe) {
+        val handle = TBoxSessionRegistry.current() ?: return
+        val profile = handle.transport.activeProtocolProfile ?: TBoxModelProfile.resolve(
+            handle.motorcycle.modelId,
+            null,
+            ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
+        )
+        DashboardDeliveryMonitor.publish(
+            verdict = verdict,
+            ssid = handle.motorcycle.ssid,
+            rejected = probe.rejectedCount(),
+            accepted = probe.acceptedCount(),
+            profileKey = profile.key
+        )
+    }
+
     private suspend fun readVideoStream(input: ParcelFileDescriptor) {
         try {
             ParcelFileDescriptor.AutoCloseInputStream(input).use { raw ->
@@ -577,6 +674,12 @@ class IpcBridgeService : Service() {
                     // rejection is a busy transport, not a dead one, and only a streak that is
                     // both long and sustained ends the session. See the block below.
                     val backpressure = VideoBackpressureGuard()
+                    // Whether the companion app's stream is landing at all. This is the ONLY
+                    // place that can tell for the ADVANCED pairing: the pipe is one-way, so the
+                    // companion's own offerAccessUnit() reports whether the WRITE succeeded, not
+                    // whether the dashboard took the frame. See DashboardDeliveryMonitor.
+                    val delivery = VideoDeliveryProbe()
+                    DashboardDeliveryMonitor.clear()
                     while (currentCoroutineContext().isActive) {
                         val frame = try {
                             VideoPipeFraming.read(stream)
@@ -617,17 +720,31 @@ class IpcBridgeService : Service() {
                             // before that by watchTransportForCompanion (the transport's
                             // FatalError/Stopped events), which is what actually closes the pipe
                             // when the link is gone.
-                            if (!frame.isStill && backpressure.onRejected()) {
-                                ProjectionEventLog.warning(
-                                    "IPC_TBOX",
-                                    "PRO video pipe stopped: CORE rejected " +
-                                        "${backpressure.rejectionStreak()} consecutive AVC frames " +
-                                        "over ${backpressure.streakMillis()}ms."
-                                )
-                                break
+                            // Stills are deliberately left out of the delivery probe, and this is
+                            // not an oversight to tidy up later. The Yunmo transport refuses a
+                            // still whenever the dash has not acknowledged the ones already on
+                            // the wire, and the X-Cape acks two-ish a second against ten
+                            // offered - so the JPEG profile, which is the profile that WORKS on
+                            // that dash, refuses most of what it is handed by design. Counting
+                            // those would make the app propose a different profile to the one
+                            // rider who had already found the right one.
+                            if (!frame.isStill) {
+                                delivery.onRejected()?.let { publishDeliveryVerdict(it, delivery) }
+                                if (backpressure.onRejected()) {
+                                    ProjectionEventLog.warning(
+                                        "IPC_TBOX",
+                                        "PRO video pipe stopped: CORE rejected " +
+                                            "${backpressure.rejectionStreak()} consecutive AVC frames " +
+                                            "over ${backpressure.streakMillis()}ms."
+                                    )
+                                    break
+                                }
                             }
                         } else {
                             backpressure.onAccepted()
+                            if (!frame.isStill) {
+                                delivery.onAccepted()?.let { publishDeliveryVerdict(it, delivery) }
+                            }
                         }
                     }
                 }
@@ -697,6 +814,42 @@ class IpcBridgeService : Service() {
 
     private val stateListeners = RemoteCallbackList<IAndroidAutoStateListener>()
     private val navigationListeners = RemoteCallbackList<INavigationGuidanceListener>()
+
+    /**
+     * Companion-app watchers of the handlebar gestures this process recognises.
+     *
+     * The teaching wizard lives over there and the presses are decoded over here, so before this
+     * existed the wizard could not observe a single one during an Android Auto session: it read
+     * [HandlebarGestureFeed], an in-process singleton, in the process that was not listening.
+     */
+    private val handlebarGestureListeners = RemoteCallbackList<IHandlebarGestureListener>()
+    private var handlebarGestureJob: Job? = null
+
+    /**
+     * Starts forwarding once someone is watching, and only then. The feed is a StateFlow that
+     * runs whether or not anyone listens; collecting it for the service's whole life would keep
+     * a coroutine alive through every ride for the few minutes a rider spends teaching.
+     */
+    private fun ensureHandlebarGestureForwarding() {
+        if (handlebarGestureJob?.isActive == true) return
+        handlebarGestureJob = serviceScope.launch {
+            io.motohub.android.feature.controls.HandlebarGestureFeed.lastGesture
+                .filterNotNull()
+                .collect { event ->
+                    if (handlebarGestureListeners.registeredCallbackCount == 0) return@collect
+                    val count = handlebarGestureListeners.beginBroadcast()
+                    for (i in 0 until count) {
+                        runCatching {
+                            handlebarGestureListeners.getBroadcastItem(i).onHandlebarGesture(
+                                event.gesture.id,
+                                event.atElapsedRealtimeMillis
+                            )
+                        }
+                    }
+                    handlebarGestureListeners.finishBroadcast()
+                }
+        }
+    }
     private var compositor: AaCompositor? = null
     private var receiver: AaReceiver? = null
 
@@ -915,6 +1068,38 @@ class IpcBridgeService : Service() {
                     }
                 }
             }
+            // Gated separately from the handlebar block: Core has this picker in its own
+            // settings, so a companion that never sends the field must leave Core's choice
+            // alone rather than reset it to AVRCP. HID capture itself stays per-process - each
+            // edition's own Accessibility Service feeds its own bridges - so this only says
+            // WHICH protocol the remote speaks, which is a property of the motorcycle.
+            //
+            // Missing here until 2026-08-26 while the field, the picker and the companion's
+            // side of the send had all shipped: the commit that added them never reached this
+            // half. A rider who chose HID in the companion app left Core on AVRCP, where
+            // MediaButtonBridge then refused to capture for want of a Bluetooth grant that HID
+            // does not even need (rider 315e0af3).
+            if (settings.handlebarInputModeProvided) {
+                runCatching {
+                    io.motohub.android.feature.controls.HandlebarInputMode.entries
+                        .firstOrNull { it.id == settings.handlebarInputMode }
+                        ?.let {
+                            io.motohub.android.feature.controls.HandlebarControlStore
+                                .setInputMode(ctx, it)
+                        }
+                }
+            }
+            // "Observed, not obeyed", for as long as the rider is being taught. The wizard runs
+            // in the companion app and sets the flag on ITS copy of HandlebarGestureFeed, which
+            // is not the copy an Android Auto session publishes into - so the wizard asked for a
+            // press and this process acted on it, moving the dashboard under a rider who was
+            // told nothing would happen. Gated like the blocks above: false is also the value
+            // that means "obey them", so without the flag an old companion would clear a
+            // teaching session it knows nothing about.
+            if (settings.handlebarCaptureOnlyProvided) {
+                io.motohub.android.feature.controls.HandlebarGestureFeed
+                    .setCaptureOnly(settings.handlebarCaptureOnly)
+            }
             // Handlebar configuration is mirrored from the companion's own stores into Core's:
             // Core's Android Auto bridge reads Core's HandlebarControlStore, so without this the
             // rider's PRO-side configuration never applied to AA sessions. Gated on
@@ -1053,6 +1238,23 @@ class IpcBridgeService : Service() {
 
         override fun unregisterNavigationGuidanceListener(listener: INavigationGuidanceListener) {
             navigationListeners.unregister(listener)
+        }
+
+        override fun registerHandlebarGestureListener(listener: IHandlebarGestureListener) {
+            handlebarGestureListeners.register(listener)
+            ensureHandlebarGestureForwarding()
+        }
+
+        override fun unregisterHandlebarGestureListener(listener: IHandlebarGestureListener) {
+            handlebarGestureListeners.unregister(listener)
+            // The wizard closing is also the moment to stop obeying-nothing: a companion that
+            // died mid-teaching would otherwise leave this process observing presses and acting
+            // on none of them for the rest of the ride.
+            if (handlebarGestureListeners.registeredCallbackCount == 0) {
+                io.motohub.android.feature.controls.HandlebarGestureFeed.setCaptureOnly(false)
+                handlebarGestureJob?.cancel()
+                handlebarGestureJob = null
+            }
         }
 
     }
@@ -1222,6 +1424,9 @@ class IpcBridgeService : Service() {
         sessionListeners.kill()
         stateListeners.kill()
         navigationListeners.kill()
+        handlebarGestureJob?.cancel()
+        handlebarGestureListeners.kill()
+        io.motohub.android.feature.controls.HandlebarGestureFeed.setCaptureOnly(false)
         serviceScope.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()

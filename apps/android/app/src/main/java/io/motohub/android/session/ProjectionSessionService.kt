@@ -26,6 +26,7 @@ import io.motohub.android.encoding.AdaptiveVideoController
 import io.motohub.android.encoding.AvcEncoder
 import io.motohub.android.encoding.EncoderProfile
 import io.motohub.android.encoding.JpegDisplaySource
+import io.motohub.android.encoding.VideoDeliveryProbe
 import io.motohub.android.encoding.VideoBackpressureGuard
 import io.motohub.android.androidauto.DisplayGeometry
 import io.motohub.android.androidauto.TBoxDisplayGeometryStore
@@ -75,7 +76,22 @@ class ProjectionSessionService : Service() {
     private var recoveryJob: Job? = null
     private val recoveryRequested = AtomicBoolean(false)
     private val transportUnavailable = AtomicBoolean(false)
+    /** One place for both verdicts, so the accept and reject arms cannot drift apart. */
+    private fun publishDeliveryVerdict(
+        verdict: VideoDeliveryProbe.Verdict,
+        handle: TBoxSessionHandle,
+        profile: TBoxModelProfile
+    ) = DashboardDeliveryMonitor.publish(
+        verdict = verdict,
+        ssid = handle.motorcycle.ssid,
+        rejected = deliveryProbe.rejectedCount(),
+        accepted = deliveryProbe.acceptedCount(),
+        profileKey = profile.key
+    )
+
     private var backpressureGuard = VideoBackpressureGuard()
+    /** Whether this dash is taking the stream at all, as opposed to whether the link is alive. */
+    private var deliveryProbe = VideoDeliveryProbe()
     private val videoStreamStartRequested = AtomicBoolean(false)
     /**
      * Guards [startCapture] against duplicate concurrent starts. [mediaProjection] is
@@ -261,6 +277,8 @@ class ProjectionSessionService : Service() {
             // thread is the right place to receive it.
             projection.registerCallback(projectionCallback, mainHandler)
             backpressureGuard = VideoBackpressureGuard()
+            deliveryProbe = VideoDeliveryProbe()
+            DashboardDeliveryMonitor.clear()
 
             // The one dash that is fed stills instead of video. Everything below this block - the
             // encoder, its surface, the adaptive controller - is the path every other motorcycle
@@ -277,6 +295,7 @@ class ProjectionSessionService : Service() {
                 onAccessUnit = { accessUnit ->
                     if (handle.transport.offerAccessUnit(accessUnit)) {
                         backpressureGuard.onAccepted()
+                        deliveryProbe.onAccepted()?.let { publishDeliveryVerdict(it, handle, modelProfile) }
                         val accepted = framesAccepted.incrementAndGet()
                         frameLogThrottle.rateSuffixIfDue(accepted, SystemClock.elapsedRealtime())
                             ?.let { rate ->
@@ -290,6 +309,9 @@ class ProjectionSessionService : Service() {
                         // A single rejection is a pushFrame() overlap, not a dead link - only a
                         // sustained streak ends the session (see VideoBackpressureGuard).
                         val fatal = backpressureGuard.onRejected()
+                        deliveryProbe.onRejected()?.let {
+                            publishDeliveryVerdict(it, handle, modelProfile)
+                        }
                         if (backpressureGuard.isStreakStart()) {
                             ProjectionEventLog.warning(
                                 "ENCODER",

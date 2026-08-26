@@ -44,8 +44,14 @@ object IpcBridgeContract {
      * 10: getWireLadderProgress() is keyed by the motorcycle's network name, not its profile id.
      *     No call appended - the argument's meaning changed, which needs the same gate.
      * 11: getScreenMargins().
+     * 12: getDashboardDeliveryReport().
+     * 13: holdsHandlebarBluetoothPermission(), the handlebar gesture listener on
+     *     IAndroidAutoReceiverService, and the capture-only field in [AndroidAutoSettingsParcel].
+     *     One bump for three calls: they are the same fault seen from three sides - the handlebar
+     *     of an Android Auto session is decoded in Core, and everything that configures, permits
+     *     or teaches it lives in the companion app.
      */
-    const val CONTRACT_VERSION = 11
+    const val CONTRACT_VERSION = 13
 
     /** First [CONTRACT_VERSION] whose Core implements connectOverFormedGroup(). */
     const val CONTRACT_VERSION_FORMED_GROUP = 2
@@ -164,6 +170,45 @@ object IpcBridgeContract {
     const val CONTRACT_VERSION_SCREEN_MARGINS = 11
 
     /**
+     * First [CONTRACT_VERSION] whose Core reports a session that connected and is not reaching
+     * the dashboard, through getDashboardDeliveryReport().
+     *
+     * The companion app cannot see this on its own: the video pipe is one-way, so its
+     * offerAccessUnit() answers whether the write into the pipe succeeded, never whether the
+     * dashboard took the frame. Both facts only meet in Core.
+     *
+     * Rider 315e0af3 is why it is worth a call of its own. Two days on a Moto Morini X-Cape 1200
+     * with the generic profile: link healthy, session READY, dashboard taking roughly one frame
+     * in eight, app reporting nothing wrong. He found the profile override in the Garage by
+     * accident, pinned the X-Cape entry, and the same ride went from 132 refusals in five seconds
+     * to 9 in fourteen. The app had every number needed to suggest that, in Core, and no way to
+     * say it to the half with the screen.
+     *
+     * Absent on an older Core, which is what its dead transaction reads as - the companion then
+     * behaves exactly as before, offering nothing.
+     */
+    const val CONTRACT_VERSION_DELIVERY_REPORT = 12
+
+    /**
+     * First [CONTRACT_VERSION] whose Core answers holdsHandlebarBluetoothPermission(), accepts a
+     * handlebar gesture listener, and honours the capture-only field of
+     * [AndroidAutoSettingsParcel].
+     *
+     * Below this the companion app must treat Core's Bluetooth grant as UNKNOWN rather than
+     * missing - the dead transaction's empty reply parcel reads as false, and telling a rider to
+     * grant a permission they already granted is worse than saying nothing.
+     *
+     * All three exist because an Android Auto session's handlebar is decoded in Core while every
+     * screen that configures it is in the companion app, and nothing carried the three things
+     * that have to cross for it to work: the PERMISSION is per-package and only Core's counts;
+     * the taught GESTURES are published into a process-local feed that only Core's process sees;
+     * and the wizard's promise that a press will be observed and not obeyed was set on the
+     * companion's copy of that feed, leaving Core free to act on every press the rider was asked
+     * to make. Rider 315e0af3, 2026-08-24 to 08-26.
+     */
+    const val CONTRACT_VERSION_CORE_BLUETOOTH = 13
+
+    /**
      * Which half of Core's connect produced the last failure, answered by
      * getLastConnectFailureStage(). The distinction is what keeps help for a busy EasyConn session
      * off a failure that never reached one: below [CONNECT_STAGE_DISCOVERY] no session existed for
@@ -208,4 +253,21 @@ object IpcBridgeContract {
      * store before starting the session. Optional: absent means "use whatever Core already has."
      */
     const val EXTRA_ANDROID_AUTO_DISPLAY_MODE = "io.motohub.android.extra.ANDROID_AUTO_DISPLAY_MODE"
+
+    /**
+     * Asks Core to put ITS OWN BLUETOOTH_CONNECT request in front of the rider, then close.
+     *
+     * A runtime permission can only be requested by the package that wants it, and the package
+     * that wants this one is Core - it decodes the handlebar of every Android Auto session. The
+     * companion app can see the gap (holdsHandlebarBluetoothPermission) and explain it, but it
+     * cannot answer it, and sending a rider to hunt through system settings for the second of two
+     * apps with almost the same name is how [handlebarNeedsBluetoothPermission]'s own field
+     * report started.
+     *
+     * Deliberately Core's existing launcher activity rather than a new exported one: the pair
+     * already deep-links this way (see the preview extras above), and an activity whose whole
+     * purpose is to raise a permission dialog is a component worth not adding. Core finishes as
+     * soon as the rider answers, so they land back where they tapped.
+     */
+    const val EXTRA_REQUEST_HANDLEBAR_BLUETOOTH = "io.motohub.android.extra.REQUEST_HANDLEBAR_BLUETOOTH"
 }

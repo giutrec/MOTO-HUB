@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.ipc
 
 import android.content.ComponentName
@@ -270,6 +273,39 @@ class TBoxTransportClient(
      */
     fun scanTBoxPorts(): String? =
         onCore("scanTBoxPorts") { it.scanTBoxPorts() }?.takeIf { it.isNotBlank() }
+
+    /**
+     * Core's verdict on a session that connected and is not reaching the dashboard, or null when
+     * there is nothing to report, the service is not bound, or Core predates
+     * [IpcBridgeContract.CONTRACT_VERSION_DELIVERY_REPORT].
+     *
+     * Parsed here rather than by every caller so the wire format stays this file's business.
+     * A malformed answer is treated as no answer: this drives an offer to the rider, and an
+     * offer built on a field that failed to parse is worse than the silence that came before it.
+     */
+    fun dashboardDeliveryReport(): DashboardDelivery? =
+        runCatching { service?.getDashboardDeliveryReport() }.getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let(DashboardDelivery::parse)
+
+    /**
+     * Whether CORE holds BLUETOOTH_CONNECT - true, false, or null for "cannot be known".
+     *
+     * Three-valued on purpose. The handlebar of an Android Auto session is decoded in Core, so
+     * Core's grant is the one that decides whether a press can arrive, and it is invisible from
+     * this side: this process checks its own, finds it, and reports a handlebar that will never
+     * work (rider 315e0af3, every Android Auto session of every report between 2026-08-24 and
+     * 08-26). But an unbound service and a Core older than
+     * [IpcBridgeContract.CONTRACT_VERSION_CORE_BLUETOOTH] both answer the dead transaction's
+     * empty parcel, which reads as false - and a caller that took that literally would tell a
+     * rider who granted the permission long ago to go and grant it. Null keeps those two cases
+     * out of the advice.
+     */
+    fun coreHoldsHandlebarBluetoothPermission(): Boolean? {
+        if (service == null) return null
+        if (contractVersion() < IpcBridgeContract.CONTRACT_VERSION_CORE_BLUETOOTH) return null
+        return onCore("holdsHandlebarBluetoothPermission") { it.holdsHandlebarBluetoothPermission() }
+    }
 
     /** True when the clear reached Core; false when unbound or Core predates the method. */
     fun clearDiagnosticLog(): Boolean =

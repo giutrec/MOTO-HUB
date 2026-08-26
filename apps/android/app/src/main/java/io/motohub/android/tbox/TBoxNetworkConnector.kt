@@ -33,6 +33,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import java.net.DatagramSocket
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
@@ -870,6 +871,20 @@ class TBoxNetworkConnector(context: Context) {
                             "Android cannot bind MOTO-HUB to the T-Box network."
                         }
                     }.exceptionOrNull()
+                    // bindProcessToNetwork answers a bare false, so the failure above is a
+                    // sentence this file wrote - it carries no errno and therefore no evidence of
+                    // WHY. Under a VPN in lockdown the reason is knowable right here, and knowing
+                    // it now is the difference between a diagnosis and three EasyConn retries
+                    // ending in a stack trace: bind an unconnected datagram socket, which is the
+                    // same netd operation every socket to the dash will attempt, and read the
+                    // errno. Nothing is sent and nothing is connected, so a phone where this
+                    // works pays a socket open and close for it.
+                    val bindEvidence = bindFailure?.let { refusal ->
+                        runCatching { DatagramSocket().use { probe -> network.bindSocket(probe) } }
+                            .exceptionOrNull()
+                            ?.takeIf { TBoxVpnDiagnostics.isVpnBindBlocked(it) }
+                            ?: refusal
+                    }
                     if (bindFailure != null) {
                         // NOT fatal, and this used to be. The process binding only moves this
                         // process's DEFAULT route; every socket that actually talks to the dash is
@@ -884,16 +899,29 @@ class TBoxNetworkConnector(context: Context) {
                         // is in the way - with LAN access allowed, it is not.
                         val routing = TBoxVpnDiagnostics.inspect(connectivityManager, firstIpv4Gateway(linkProperties))
                         processBoundNetwork = null
+                        // No `takeIf { capturesTBox }` any more, and that guard is exactly what
+                        // cost 2026-08-26: it was added so a VPN would not be blamed for merely
+                        // existing, and it also threw away the case where the ERROR is the
+                        // evidence rather than the routes. userFacingMessage already refuses to
+                        // answer without one or the other, so the guard only ever removed true
+                        // diagnoses.
                         processBindingRefusal = TBoxVpnDiagnostics
-                            .userFacingMessage(bindFailure, routing)
-                            ?.takeIf { routing?.capturesTBox == true }
+                            .userFacingMessage(bindEvidence, routing)
                         Log.w(TAG, "T-Box process binding rejected; continuing unbound", bindFailure)
+                        val boundSocketsRefused = TBoxVpnDiagnostics.isVpnBindBlocked(bindEvidence)
                         ProjectionEventLog.warning(
                             "NETWORK",
                             "Process binding rejected for network=$network (${bindFailure.message}); " +
-                                "vpn=${routing?.describe() ?: "none"}. Continuing with " +
-                                "network-bound sockets instead - this is only fatal if the dash " +
-                                "turns out to be unreachable."
+                                "vpn=${routing?.describe() ?: "none"}. " +
+                                if (boundSocketsRefused) {
+                                    "Network-bound sockets are refused too " +
+                                        "(${bindEvidence?.message}) - a VPN in lockdown blocks " +
+                                        "every socket to this link, so the dash is unreachable " +
+                                        "until it is turned off."
+                                } else {
+                                    "Continuing with network-bound sockets instead - this is " +
+                                        "only fatal if the dash turns out to be unreachable."
+                                }
                         )
                         markConnected(network)
                         return

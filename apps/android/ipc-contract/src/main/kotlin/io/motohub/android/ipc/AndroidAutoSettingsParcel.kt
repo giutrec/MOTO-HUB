@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.ipc
 
 import android.os.Parcelable
@@ -82,5 +85,23 @@ data class AndroidAutoSettingsParcel(
     val screenMarginTop: Int = 0,
     val screenMarginBottom: Int = 0,
     val screenMarginLeft: Int = 0,
-    val screenMarginRight: Int = 0
+    val screenMarginRight: Int = 0,
+    /**
+     * True while the rider is being TAUGHT the handlebar: gestures are to be observed and not
+     * obeyed, so the motorcycle does not jump around under a rider performing the presses the
+     * wizard asked for.
+     *
+     * The promise is already made in the companion app, on its own copy of HandlebarGestureFeed -
+     * which is the wrong copy for an Android Auto session, whose bridge is CORE's. So the wizard
+     * said "press your up button" while CORE, hearing the same press, switched the panel under
+     * it. Carried on the settings parcel rather than as a call of its own because it IS a setting
+     * of the handlebar and travels the same path as the rest of the block.
+     *
+     * [handlebarCaptureOnlyProvided] gates it for the same reason every gate here exists: an old
+     * companion deserializes false, and false is also the value that means "obey them" - without
+     * the flag a CORE could not tell a companion that never taught anything from one that just
+     * finished. The gate makes the absent case leave CORE's own state alone.
+     */
+    val handlebarCaptureOnlyProvided: Boolean = false,
+    val handlebarCaptureOnly: Boolean = false
 ) : Parcelable

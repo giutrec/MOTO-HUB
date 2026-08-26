@@ -267,6 +267,24 @@ class MediaButtonBridge(
      * Only the adapter turning on is watched. A permission cannot be granted without leaving the
      * app, and coming back re-runs the session's own start path.
      */
+    /**
+     * Re-attempts a capture that was skipped for want of the Bluetooth grant.
+     *
+     * [awaitBluetooth] watches the ADAPTER, and a permission arriving is not an adapter event -
+     * nothing is broadcast when a rider answers a runtime dialog. Which is exactly the sequence
+     * the companion app's card now produces: it sends the rider to this app to grant the
+     * permission while a session is already running, and without this the handlebar would stay
+     * dead until the next session start, on the ride they granted it for.
+     */
+    private fun retryAfterBluetoothGrant() {
+        handler.post {
+            if (!pendingCapture || captureActive) return@post
+            if (!BluetoothStatus.canReceiveHandlebarKeys(context)) return@post
+            log("[BTN] Bluetooth is allowed now; starting handlebar capture")
+            enableCapture()
+        }
+    }
+
     private fun awaitBluetooth() {
         if (bluetoothWaitReceiver != null) return
         val receiver = object : BroadcastReceiver() {
@@ -367,9 +385,15 @@ class MediaButtonBridge(
         // the Accessibility Service and being dropped downstream for exactly this reason.
         val hidMode = HandlebarControlStore.inputMode(context) == HandlebarInputMode.HID
         if (!hidMode && !BluetoothStatus.canReceiveHandlebarKeys(context)) {
+            // The package name is not decoration. MOTO-HUB is two apps sharing one diagnostics
+            // log, and this line used to say "this app" in a file where two apps are talking:
+            // rider 315e0af3 sent seven reports carrying it, every one of them from CORE, while
+            // the companion app's own bridge printed "capture enabled" a few lines away. Naming
+            // the package is what turns the sentence into a diagnosis.
             log(
-                "[BTN] capture skipped: Bluetooth is off or unavailable to this app, so no " +
-                    "handlebar press can arrive - leaving the media volume and audio focus alone"
+                "[BTN] capture skipped: no usable Bluetooth for ${context.packageName} " +
+                    "(adapter off, or BLUETOOTH_CONNECT never granted to it), so no handlebar " +
+                    "press can arrive - leaving the media volume and audio focus alone"
             )
             awaitBluetooth()
             return
@@ -1418,6 +1442,14 @@ class MediaButtonBridge(
         /** Calibration changed — every live bridge re-decides whether to hold the volume pin. */
         fun refreshVolumeGestureUse() {
             bridges.values.forEach { it.refreshVolumeGestureUse() }
+        }
+
+        /**
+         * Called when this app has just been granted BLUETOOTH_CONNECT, so a session already
+         * running picks the handlebar up without being restarted. See [retryAfterBluetoothGrant].
+         */
+        fun bluetoothPermissionGranted() {
+            bridges.values.forEach { it.retryAfterBluetoothGrant() }
         }
 
         /** Music volume from the live bridge or plain AudioManager (for the Controls slider). */

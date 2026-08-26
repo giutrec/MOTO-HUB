@@ -6,6 +6,7 @@
 package io.motohub.android.tbox
 
 import android.content.Context
+import io.motohub.android.session.DashboardDeliveryMonitor
 import io.motohub.android.session.MotorcycleProfile
 
 /** Flavor factory resolved at compile time (a sibling exists in src/pro). */
@@ -16,6 +17,9 @@ class LocalTBoxSessionEstablisher(private val context: Context) : TBoxSessionEst
 
     override val transport: TBoxTransport = SelectingTBoxTransport(context)
     override val networkConnector: TBoxNetworkConnector = TBoxNetworkConnectors.shared(context)
+
+    /** The pipelines run in this process, so there is nothing to ask anybody. */
+    override fun deliveryWarnings() = DashboardDeliveryMonitor.current
     private val capabilityStore = TBoxCapabilityStore(context)
 
     override suspend fun connectAndInstall(

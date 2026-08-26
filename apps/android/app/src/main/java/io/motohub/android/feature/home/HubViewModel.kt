@@ -14,6 +14,8 @@ import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.session.SessionPhase
 import io.motohub.android.session.ProjectionRuntime
 import io.motohub.android.session.ProjectionRuntimeState
+import io.motohub.android.session.DashboardDeliveryMonitor
+import io.motohub.android.tbox.ProfileSuggestions
 import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.session.TBoxConnectionMode
 import io.motohub.android.session.withMotorcycle
@@ -60,7 +62,26 @@ data class HubUiState(
      * Set when the search is stuck because every session so far ran the Ride Dashboard, which
      * sends its own video format and so teaches the search nothing.
      */
-    val wireNeedsAndroidAutoFor: MotorcycleProfile? = null
+    val wireNeedsAndroidAutoFor: MotorcycleProfile? = null,
+    /**
+     * What to offer a rider whose dashboard is connected and refusing the picture, already
+     * ranked. Empty unless [HubSessionState.deliveryWarning] is set.
+     *
+     * Ranked here rather than in the screen because the ranking's best signal after the active
+     * profile is the dashboard's stored CLIENT_INFO capabilities, and the capability store is a
+     * ViewModel dependency. Threading it through the composables would put a store lookup in a
+     * recomposition.
+     */
+    val profileSuggestions: List<ProfileSuggestions.Suggestion> = emptyList(),
+    /** A profile the rider picked and is waiting on. See [PendingProfileTrial]. */
+    val pendingTrial: PendingProfileTrial? = null,
+    /**
+     * A trial the dashboard has now accepted, waiting for the rider to say whether to keep it.
+     *
+     * Kept apart from [pendingTrial] rather than flagged inside it so the two states cannot be
+     * confused at a glance: one means "watching", the other means "a question is on screen".
+     */
+    val trialToConfirm: PendingProfileTrial? = null
 )
 
 class HubViewModel(application: Application) : AndroidViewModel(application) {
@@ -91,6 +112,42 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                 "Saved motorcycle profile restored for SSID ${mutableUiState.value.session.motorcycle?.ssid}."
             }
         )
+        // In this edition the video pipelines run in this very process, so the verdict is simply
+        // observable. The companion app has to ask Core for it over the bridge - see the same
+        // block in the ADVANCED HubViewModel.
+        viewModelScope.launch {
+            DashboardDeliveryMonitor.current.collect { report ->
+                val current = mutableUiState.value
+                val settled = current.pendingTrial?.let { trial ->
+                    ProfileTrialPolicy.outcome(trial, report)
+                }
+                mutableUiState.value = current.copy(
+                    session = current.session.copy(deliveryWarning = report),
+                    profileSuggestions = report?.let { suggestionsFor(it) }.orEmpty(),
+                    // A settled trial stops being pending whichever way it went. A failed one
+                    // simply leaves the warning standing, which puts the rider back in front of
+                    // the list - the honest outcome, and not one to dress up.
+                    pendingTrial = if (settled == ProfileTrialPolicy.Outcome.PENDING) {
+                        current.pendingTrial
+                    } else {
+                        null
+                    },
+                    trialToConfirm = if (settled == ProfileTrialPolicy.Outcome.CONFIRMED) {
+                        current.pendingTrial
+                    } else {
+                        current.trialToConfirm
+                    }
+                )
+                if (settled == ProfileTrialPolicy.Outcome.CONFIRMED) {
+                    ProjectionEventLog.record(
+                        "PROFILE",
+                        "The dashboard accepted the picture on the " +
+                            "${current.pendingTrial?.override?.label} profile; asking the rider " +
+                            "whether to keep it."
+                    )
+                }
+            }
+        }
         viewModelScope.launch {
             networkConnector.events.collect { event ->
                 if (event is TBoxNetworkEvent.Lost) {
@@ -535,8 +592,11 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
                 val host = discovered.getOrThrow()
-                // Record what discovery settled on, so the next ride skips the slow path.
-                transport.activeProtocolProfile?.let { discoveredProfile ->
+                // Record what discovery settled on, so the next ride skips the slow path. Read off
+                // the switch itself and not off activeProtocolProfile, which now also carries a
+                // pin: what is worth remembering is what the DASH answered unasked, never what the
+                // rider tried.
+                transport.discoverySwitchedProfile?.let { discoveredProfile ->
                     protocolMemory.remember(profile.ssid, discoveredProfile.transportFamily)
                 }
                 capabilityStore.recordDiscovery(profile, host)
@@ -610,6 +670,96 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
      * left to cancel, so without this the rider had no way back from "what to show?" except
      * force-stopping the app.
      */
+    /**
+     * The ranked offer for a failing session, with the dashboard's own stored capabilities fed in
+     * so a dash that identifies itself is proposed first.
+     */
+    private fun suggestionsFor(report: io.motohub.android.session.DashboardDeliveryReport):
+        List<ProfileSuggestions.Suggestion> {
+        val motorcycle = mutableUiState.value.session.motorcycle
+        return ProfileSuggestions.forFailingSession(
+            activeProfileKey = report.profileKey,
+            currentKey = motorcycle?.profileOverrideKey,
+            modelId = motorcycle?.modelId,
+            capabilities = motorcycle?.let {
+                runCatching { capabilityStore.load(it)?.capabilities }.getOrNull()
+            }
+        )
+    }
+
+    /**
+     * Applies a profile the rider picked from the trial screen and rebuilds the session on it.
+     *
+     * Saved before reconnecting, not after it works, because the profile is what the connect is
+     * made OF - it selects the transport, the encoder settings and the touch policy, so there is
+     * no way to try one without writing it down first. What that costs is a rider who tries three
+     * profiles and leaves the last one pinned; the confirmation step is what settles that.
+     */
+    fun tryProfile(override: ProfileOverride) {
+        val motorcycle = mutableUiState.value.session.motorcycle ?: return
+        ProjectionEventLog.record(
+            "PROFILE",
+            "Rider is trying the ${override.label} profile for ${motorcycle.ssid} after the " +
+                "dashboard refused most of the picture on the current one."
+        )
+        val previousKey = motorcycle.profileOverrideKey
+        if (!updateMotorcycle(motorcycle.copy(profileOverrideKey = override.key))) return
+        // The stale verdict must go now rather than when the next session raises its own: it is
+        // the thing keeping the offer on screen, and leaving it up while reconnecting would show
+        // the rider a complaint about a session that no longer exists.
+        DashboardDeliveryMonitor.clear()
+        mutableUiState.value = mutableUiState.value.copy(
+            session = mutableUiState.value.session.copy(deliveryWarning = null),
+            profileSuggestions = emptyList(),
+            trialToConfirm = null,
+            pendingTrial = PendingProfileTrial(
+                ssid = motorcycle.ssid,
+                override = override,
+                previousKey = previousKey
+            )
+        )
+        viewModelScope.launch {
+            transport.stop()
+            TBoxSessionRegistry.clear()
+            TBoxNetworkConnectors.release(HUB_UI_NETWORK_OWNER)
+            connectAndDiscover()
+        }
+    }
+
+    /** The rider keeps what they picked. Nothing to write - it is already pinned. */
+    fun keepTrialledProfile() {
+        val trial = mutableUiState.value.trialToConfirm ?: return
+        ProjectionEventLog.record(
+            "PROFILE",
+            "Rider kept the ${trial.override.label} profile for ${trial.ssid} after seeing it work."
+        )
+        mutableUiState.value = mutableUiState.value.copy(trialToConfirm = null)
+    }
+
+    /**
+     * The rider declines, so the pin goes back exactly as it was - including back to Auto when
+     * there was no pin at all, which is the commonest case and the one a naive "restore" would
+     * get wrong by leaving the trial pinned forever.
+     *
+     * The session is NOT rebuilt here. It is working: that is the entire reason this question was
+     * asked. Tearing down a dashboard the rider can see, to apply a profile they have just been
+     * shown is worse, would be the app punishing them for answering honestly - the old profile
+     * comes back on the next connect.
+     */
+    fun discardTrialledProfile() {
+        val trial = mutableUiState.value.trialToConfirm ?: return
+        val motorcycle = mutableUiState.value.session.motorcycle
+        ProjectionEventLog.record(
+            "PROFILE",
+            "Rider declined to keep the ${trial.override.label} profile for ${trial.ssid}; " +
+                "restoring the previous setting from the next connection."
+        )
+        if (motorcycle != null && motorcycle.ssid == trial.ssid) {
+            updateMotorcycle(motorcycle.copy(profileOverrideKey = trial.previousKey))
+        }
+        mutableUiState.value = mutableUiState.value.copy(trialToConfirm = null)
+    }
+
     fun disconnect() {
         ProjectionEventLog.record("CONNECTION", "User disconnected from the T-Box.")
         viewModelScope.launch {
