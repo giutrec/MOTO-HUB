@@ -245,4 +245,21 @@ interface ITBoxTransportService {
      * each. Same tail-position rule as the calls above.
      */
     String scanTBoxPorts();
+
+    /**
+     * The screen margins Core holds for one motorcycle, by SSID, as "top,bottom,left,right" -
+     * or null when the rider never taught them there.
+     *
+     * The teaching already travels the other way, in AndroidAutoSettingsParcel, and only when
+     * this app has one: sending four zeros for a bike nobody calibrated here would erase a
+     * calibration made over there. That leaves the case where only CORE was taught, which is the
+     * common one - Core ships the same ruler and owns Android Auto - and nothing carried it back.
+     * So one dash got two framings from one pair: Android Auto composited into a 680x408 viewport
+     * while the Ride Dashboard used the full 800x480, minutes apart on the same EasyConn panel
+     * (riders 7efdfa33 and 87bc5a7c, 2026-08-25).
+     *
+     * By SSID because that is the string both halves agree on; a profile id belongs to one garage.
+     * Same tail-position rule as the calls above.
+     */
+    String getScreenMargins(String ssid);
 }

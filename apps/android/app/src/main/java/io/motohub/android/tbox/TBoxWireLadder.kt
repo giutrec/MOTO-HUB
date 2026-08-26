@@ -30,6 +30,33 @@ data class TBoxLadderProgress(
     val androidAutoNudgeShown: Boolean = false
 )
 
+/** Which stored record a ladder lookup should use, and whether the old one has to be adopted. */
+internal sealed interface TBoxLadderRecord {
+    data object Fresh : TBoxLadderRecord
+    data class Current(val raw: String) : TBoxLadderRecord
+    data class AdoptLegacy(val raw: String) : TBoxLadderRecord
+}
+
+/**
+ * Picks between the record filed under a motorcycle's current key and the one its profile id
+ * left behind, with no Android in it so the trap can be tested: the legacy record is ADOPTED
+ * (copied), never moved. A companion app older than
+ * IpcBridgeContract.CONTRACT_VERSION_WIRE_LADDER_BY_SSID can still only ask by id, and answering
+ * it "no ladder" for a bike that has one is the bug CONTRACT_VERSION_WIRE_LADDER was added to fix.
+ */
+internal fun wireLadderRecord(
+    underCurrentKey: String?,
+    underLegacyKey: String?,
+    keysDiffer: Boolean
+): TBoxLadderRecord = when {
+    underCurrentKey != null -> TBoxLadderRecord.Current(underCurrentKey)
+    underLegacyKey == null -> TBoxLadderRecord.Fresh
+    // A bike with no SSID is already filed under its id; there is nothing to adopt and writing
+    // the same bytes back over themselves would only log a migration that did not happen.
+    !keysDiffer -> TBoxLadderRecord.Current(underLegacyKey)
+    else -> TBoxLadderRecord.AdoptLegacy(underLegacyKey)
+}
+
 /**
  * Tries wire formats on an unidentified dashboard until one works, then remembers it.
  *
@@ -121,16 +148,63 @@ object TBoxWireLadder {
         return RUNGS.getOrElse(progress.rungIndex) { RUNGS.first() }
     }
 
-    fun load(context: Context, motorcycle: MotorcycleProfile): TBoxLadderProgress =
-        parseProgress(storedProgress(context, motorcycle.id))
+    /**
+     * Which record belongs to this motorcycle.
+     *
+     * The SSID, not the profile id: the id is a UUID minted per garage entry, and MOTO-HUB has
+     * two garages. Core keeps its own, the companion app keeps its own, and a companion-driven
+     * session hands Core the COMPANION's id (MotorcycleConnectRequest.toProfile), so one physical
+     * dashboard had two ladder records that never saw each other's verdict - and re-scanning the
+     * QR code minted a third. Rider 87bc5a7c confirmed rung 0 in Core at 18:27 on 2026-08-25 and
+     * was asked the same question again at 21:41 on the same dash, because by then the session
+     * came in over the bridge under a freshly scanned id.
+     *
+     * Keying on the SSID matches [TBoxScreenMarginsStore], the store next door, and costs nothing
+     * that mattered: what protects the walk from a replaced or re-flashed dashboard is
+     * [fingerprintOf] and the check in [onDashboardIdentified], not the key.
+     *
+     * A profile with no SSID (a dash reached over Wi-Fi Direct or BLE, where the id is the only
+     * handle there is) keeps the old key, so nothing about those bikes changes.
+     */
+    private fun keyFor(motorcycle: MotorcycleProfile): String =
+        motorcycle.ssid.takeIf { it.isNotBlank() }?.let { "ssid:$it" } ?: motorcycle.id
+
+    fun load(context: Context, motorcycle: MotorcycleProfile): TBoxLadderProgress {
+        val preferences = preferences(context)
+        val key = keyFor(motorcycle)
+        val record = wireLadderRecord(
+            underCurrentKey = preferences.getString(key, null),
+            underLegacyKey = preferences.getString(motorcycle.id, null),
+            keysDiffer = key != motorcycle.id
+        )
+        return when (record) {
+            is TBoxLadderRecord.Fresh -> TBoxLadderProgress()
+            is TBoxLadderRecord.Current -> parseProgress(record.raw)
+            is TBoxLadderRecord.AdoptLegacy -> {
+                preferences.edit().putString(key, record.raw).apply()
+                ProjectionEventLog.record(
+                    "WIRE",
+                    "Adopted this motorcycle's existing wire-ladder progress under its network " +
+                        "name so both halves of MOTO-HUB now read the same record."
+                )
+                parseProgress(record.raw)
+            }
+        }
+    }
 
     /**
      * The stored JSON for one motorcycle, verbatim, for the companion app to be told over the
-     * bridge - see IpcBridgeContract.CONTRACT_VERSION_WIRE_LADDER. Null when this bike has no
-     * ladder yet.
+     * bridge - see IpcBridgeContract.CONTRACT_VERSION_WIRE_LADDER_BY_SSID. Null when this bike
+     * has no ladder yet.
+     *
+     * [key] is an SSID as [keyFor] builds it; the raw profile id is still accepted for a
+     * companion app that predates the change and can only ask that way.
      */
-    fun storedProgress(context: Context, motorcycleId: String): String? =
-        preferences(context).getString(motorcycleId, null)
+    fun storedProgress(context: Context, key: String): String? =
+        preferences(context).getString(key, null)
+
+    /** The lookup key a companion app should ask Core for, given the bike it has in hand. */
+    fun storageKey(motorcycle: MotorcycleProfile): String = keyFor(motorcycle)
 
     /**
      * Reads what [save] wrote, wherever it comes from: this process's preferences, or Core's
@@ -163,7 +237,7 @@ object TBoxWireLadder {
         progress.lastOutcome?.let { json.put("outcome", it) }
         json.put("noAaSessions", progress.sessionsWithoutAndroidAuto)
         json.put("nudged", progress.androidAutoNudgeShown)
-        preferences(context).edit().putString(motorcycle.id, json.toString()).apply()
+        preferences(context).edit().putString(keyFor(motorcycle), json.toString()).apply()
     }
 
     /**

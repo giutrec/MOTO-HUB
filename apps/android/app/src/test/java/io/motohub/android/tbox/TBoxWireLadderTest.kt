@@ -3,6 +3,7 @@
 // Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.tbox
 
+import io.motohub.android.session.MotorcycleProfile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -186,5 +187,95 @@ class TBoxWireLadderTest {
     fun aDashboardThatSaysNothingHasNoFingerprint() {
         assertEquals(null, TBoxWireLadder.fingerprintOf(TBoxCapabilities()))
         assertEquals(null, TBoxWireLadder.fingerprintOf(null))
+    }
+
+    /**
+     * The defect this key exists to fix: Core's garage, the companion app's garage and a QR rescan
+     * each mint their own profile id for one physical dashboard, so the rider's "yes, I can see
+     * it" was filed where the next session would not look for it (rider 87bc5a7c, 2026-08-25:
+     * rung 0 confirmed in Core at 18:27, asked again on the same dash at 21:41).
+     */
+    @Test
+    fun `one dashboard is one record however many profile ids it collected`() {
+        val core = MotorcycleProfile(ssid = "EASYCONN_5G-1813BC", password = "x", id = "core-uuid")
+        val companion =
+            MotorcycleProfile(ssid = "EASYCONN_5G-1813BC", password = "x", id = "companion-uuid")
+        val rescanned =
+            MotorcycleProfile(ssid = "EASYCONN_5G-1813BC", password = "x", id = "rescanned-uuid")
+
+        assertEquals(TBoxWireLadder.storageKey(core), TBoxWireLadder.storageKey(companion))
+        assertEquals(TBoxWireLadder.storageKey(core), TBoxWireLadder.storageKey(rescanned))
+    }
+
+    @Test
+    fun `two dashboards stay two records`() {
+        val one = MotorcycleProfile(ssid = "EASYCONN_5G-1813BC", password = "x", id = "shared")
+        val other = MotorcycleProfile(ssid = "EASYCONN_5G-F3116E", password = "x", id = "shared")
+        assertNotEquals(TBoxWireLadder.storageKey(one), TBoxWireLadder.storageKey(other))
+    }
+
+    /**
+     * A dash reached over Wi-Fi Direct or BLE has no SSID, so its id is the only handle there is.
+     * Those bikes must keep the key they already have rather than collide on an empty one.
+     */
+    @Test
+    fun `a motorcycle with no network name keeps its profile id`() {
+        val direct = MotorcycleProfile(ssid = "", password = "", id = "p2p-uuid")
+        val otherDirect = MotorcycleProfile(ssid = "", password = "", id = "ble-uuid")
+        assertEquals("p2p-uuid", TBoxWireLadder.storageKey(direct))
+        assertNotEquals(TBoxWireLadder.storageKey(direct), TBoxWireLadder.storageKey(otherDirect))
+    }
+
+    @Test
+    fun `a bike that already walked the ladder adopts its progress instead of starting over`() {
+        assertEquals(
+            TBoxLadderRecord.AdoptLegacy(STORED),
+            wireLadderRecord(underCurrentKey = null, underLegacyKey = STORED, keysDiffer = true)
+        )
+    }
+
+    /**
+     * Copied, not moved. A companion app older than CONTRACT_VERSION_WIRE_LADDER_BY_SSID can only
+     * ask by profile id, and answering it "no ladder" for a bike that has one is exactly the bug
+     * CONTRACT_VERSION_WIRE_LADDER was added to fix - so the migration must never be a rename.
+     */
+    @Test
+    fun `adopting is a copy so an older companion app can still read the old key`() {
+        val record = wireLadderRecord(
+            underCurrentKey = null,
+            underLegacyKey = STORED,
+            keysDiffer = true
+        )
+        assertTrue(record is TBoxLadderRecord.AdoptLegacy)
+        // The legacy raw is handed back untouched: nothing here can express a delete.
+        assertEquals(STORED, (record as TBoxLadderRecord.AdoptLegacy).raw)
+    }
+
+    @Test
+    fun `the current record wins once it exists and nothing is adopted again`() {
+        assertEquals(
+            TBoxLadderRecord.Current(STORED),
+            wireLadderRecord(underCurrentKey = STORED, underLegacyKey = "stale", keysDiffer = true)
+        )
+    }
+
+    @Test
+    fun `a bike whose key never changed is never migrated onto itself`() {
+        assertEquals(
+            TBoxLadderRecord.Current(STORED),
+            wireLadderRecord(underCurrentKey = null, underLegacyKey = STORED, keysDiffer = false)
+        )
+    }
+
+    @Test
+    fun `a bike that never walked the ladder starts fresh`() {
+        assertEquals(
+            TBoxLadderRecord.Fresh,
+            wireLadderRecord(underCurrentKey = null, underLegacyKey = null, keysDiffer = true)
+        )
+    }
+
+    private companion object {
+        const val STORED = """{"rung":0,"state":"CONFIRMED","outcome":"RIDER_CONFIRMED"}"""
     }
 }

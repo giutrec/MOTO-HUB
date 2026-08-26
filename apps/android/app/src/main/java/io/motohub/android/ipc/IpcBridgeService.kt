@@ -35,6 +35,7 @@ import io.motohub.android.androidauto.AndroidAutoNightModeStore
 import io.motohub.android.androidauto.AndroidAutoSessionService
 import io.motohub.android.androidauto.TBoxScreenMargins
 import io.motohub.android.androidauto.TBoxScreenMarginsStore
+import io.motohub.android.androidauto.encodeScreenMargins
 import io.motohub.android.androidauto.withFullVideoTarget
 import io.motohub.android.encoding.VideoBackpressureGuard
 import io.motohub.android.feature.settings.AndroidAutoAspectMatchingMode
@@ -291,8 +292,14 @@ class IpcBridgeService : Service() {
 
         // Verbatim, not re-encoded: the companion app runs the same TBoxWireLadder parser on the
         // other side, so anything this end can store, that end can read.
-        override fun getWireLadderProgress(motorcycleId: String?): String? =
-            motorcycleId?.takeIf { it.isNotBlank() }
+        //
+        // The argument is a store key, not necessarily an id: since
+        // IpcBridgeContract.CONTRACT_VERSION_WIRE_LADDER_BY_SSID a caller asks by the
+        // motorcycle's network name, because a profile id belongs to one garage and there are
+        // two. An older companion still asks by id and gets the pre-migration record, which
+        // TBoxWireLadder.load copies rather than moves for exactly that reason.
+        override fun getWireLadderProgress(storeKey: String?): String? =
+            storeKey?.takeIf { it.isNotBlank() }
                 ?.let { TBoxWireLadder.storedProgress(this@IpcBridgeService, it) }
 
         // Verbatim for the same reason, and read from the store rather than from the live
@@ -301,6 +308,18 @@ class IpcBridgeService : Service() {
         override fun getCapabilitiesJson(motorcycleId: String?): String? =
             motorcycleId?.takeIf { it.isNotBlank() }
                 ?.let { TBoxCapabilityStore(this@IpcBridgeService).encodedCapabilities(it) }
+
+        // loadStoredBySsid, not load: only what the rider actually taught here may travel. load()
+        // folds "nothing saved" into the model profile's defaults, and a default handed across
+        // this boundary is indistinguishable from a teaching once it lands - which is how a
+        // calibration gets overwritten by a value nobody ever entered.
+        override fun getScreenMargins(ssid: String?): String? =
+            ssid?.takeIf { it.isNotBlank() }
+                ?.let {
+                    encodeScreenMargins(
+                        TBoxScreenMarginsStore(this@IpcBridgeService).loadStoredBySsid(it)
+                    )
+                }
 
         /**
          * Probes the dash's ports over the session's OWN link, which is why this belongs here at

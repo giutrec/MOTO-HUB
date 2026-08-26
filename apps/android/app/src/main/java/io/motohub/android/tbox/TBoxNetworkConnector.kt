@@ -47,6 +47,12 @@ sealed interface TBoxNetworkEvent {
 /** What the T-Box Wi-Fi rejoin ladder does next. */
 internal sealed interface TBoxRejoinStep {
     data class WaitThenRetry(val delayMillis: Long) : TBoxRejoinStep
+
+    /**
+     * Android would drop a specifier request made from where this process currently sits, so the
+     * ladder waits instead of spending an attempt on a refusal that never reaches the radio.
+     */
+    data class WaitForForeground(val delayMillis: Long) : TBoxRejoinStep
     data object GiveUp : TBoxRejoinStep
 }
 
@@ -56,6 +62,15 @@ internal sealed interface TBoxRejoinStep {
  *
  * The budget is what stops a bike that was simply switched off from leaving an exclusive
  * WifiNetworkSpecifier request open for as long as the app lives.
+ *
+ * [submissionWouldBeRefused] is the difference between a rejoin that could work and one that
+ * cannot: `WifiNetworkFactory` drops a specifier request from a process past
+ * `IMPORTANCE_FOREGROUND_SERVICE` without ever looking for the AP. A session teardown destroys
+ * its foreground service *before* the ladder starts (support 87bc5a7c, 2026-08-25: the Android
+ * Auto service's onDestroy at 16:36:03.653, the first rejoin submission 261ms later at 400 =
+ * cached), so all four attempts were refused in 11-28ms each and the ladder surrendered three
+ * minutes later having never once asked the radio. Waiting spends the same budget on the only
+ * thing that can change the answer - the rider opening the app.
  */
 internal fun nextTBoxRejoinStep(
     attempt: Int,
@@ -63,9 +78,15 @@ internal fun nextTBoxRejoinStep(
     budgetMillis: Long,
     firstDelayMillis: Long,
     baseDelayMillis: Long,
-    maxDelayMillis: Long
+    maxDelayMillis: Long,
+    submissionWouldBeRefused: Boolean = false,
+    backgroundPollMillis: Long = 0L
 ): TBoxRejoinStep {
+    // Checked before the background rule on purpose: a phone that stays in the rider's pocket
+    // must still let the ladder go, or the exclusive request outlives every session it could
+    // have served.
     if (elapsedMillis >= budgetMillis) return TBoxRejoinStep.GiveUp
+    if (submissionWouldBeRefused) return TBoxRejoinStep.WaitForForeground(backgroundPollMillis)
     val delay = if (attempt <= 1) {
         firstDelayMillis
     } else {
@@ -1192,17 +1213,49 @@ class TBoxNetworkConnector(context: Context) {
         ladderToken.set(token)
         rejoinJob = reconnectScope.launch {
             var attempt = 0
+            // Logged on entering and leaving the wait rather than per poll: the whole point is
+            // to stop filling a rider's log with refusals that say nothing about the dash.
+            var waitingForForeground = false
             val startedAt = SystemClock.elapsedRealtime()
             try {
                 ladder@ while (activeProfile != null && connectedOnce && activeNetwork == null) {
+                    val importanceNow = processImportance()
                     val step = nextTBoxRejoinStep(
                         attempt = attempt + 1,
                         elapsedMillis = SystemClock.elapsedRealtime() - startedAt,
                         budgetMillis = REJOIN_GIVE_UP_MS,
                         firstDelayMillis = REJOIN_FIRST_DELAY_MS,
                         baseDelayMillis = REJOIN_BASE_DELAY_MS,
-                        maxDelayMillis = REJOIN_MAX_DELAY_MS
+                        maxDelayMillis = REJOIN_MAX_DELAY_MS,
+                        submissionWouldBeRefused = importanceNow > FOREGROUND_SERVICE_IMPORTANCE,
+                        backgroundPollMillis = REJOIN_BACKGROUND_POLL_MS
                     )
+                    if (step is TBoxRejoinStep.WaitForForeground) {
+                        if (!waitingForForeground) {
+                            waitingForForeground = true
+                            ProjectionEventLog.warning(
+                                "NETWORK",
+                                "Not asking Android for ${profile.ssid} yet: MOTO-HUB is in the " +
+                                    "background (importance=$importanceNow), and a request made " +
+                                    "from there is refused without the AP ever being looked " +
+                                    "for. Waiting up to ${REJOIN_GIVE_UP_MS / 1_000L}s for " +
+                                    "MOTO-HUB to come back to the foreground - open it to " +
+                                    "reconnect now."
+                            )
+                        }
+                        delay(step.delayMillis)
+                        continue@ladder
+                    }
+                    // Only on the way to a real attempt: saying "resuming" and then "giving up,
+                    // it was in the background the whole time" in the same breath is two lines
+                    // that contradict each other.
+                    if (waitingForForeground && step is TBoxRejoinStep.WaitThenRetry) {
+                        waitingForForeground = false
+                        ProjectionEventLog.record(
+                            "NETWORK",
+                            "MOTO-HUB is back in the foreground; resuming the T-Box Wi-Fi rejoin."
+                        )
+                    }
                     if (step is TBoxRejoinStep.GiveUp) {
                         // Every downstream recovery budget is shorter than this, so past the
                         // deadline there is no session left for a reacquired AP to serve. Holding
@@ -1211,8 +1264,17 @@ class TBoxNetworkConnector(context: Context) {
                         // reconnecting by hand.
                         ProjectionEventLog.warning(
                             "NETWORK",
-                            "Giving up on the T-Box Wi-Fi after $attempt rejoin attempt(s) over " +
-                                "${REJOIN_GIVE_UP_MS / 1_000L}s; releasing the network request."
+                            if (attempt == 0) {
+                                "Giving up on the T-Box Wi-Fi after " +
+                                    "${REJOIN_GIVE_UP_MS / 1_000L}s without ever being able to " +
+                                    "ask: MOTO-HUB stayed in the background the whole time, " +
+                                    "where Android refuses the request. Releasing the network " +
+                                    "request; open MOTO-HUB and tap Connect."
+                            } else {
+                                "Giving up on the T-Box Wi-Fi after $attempt rejoin attempt(s) " +
+                                    "over ${REJOIN_GIVE_UP_MS / 1_000L}s; releasing the network " +
+                                    "request."
+                            }
                         )
                         clearCurrentNetworkRequest()
                         break@ladder
@@ -1413,6 +1475,13 @@ class TBoxNetworkConnector(context: Context) {
          * that is simply switched off does not leave the radio under an exclusive request.
          */
         const val REJOIN_GIVE_UP_MS = 180_000L
+
+        /**
+         * How often the ladder re-checks process importance while a submission would be refused.
+         * Cheap (`getMyMemoryState` reads this process, no binder call) and short enough that a
+         * rider who opens the app gets their rejoin within a couple of seconds.
+         */
+        const val REJOIN_BACKGROUND_POLL_MS = 2_000L
         /** Enough to show a band twin without turning a busy scan into a wall of text. */
         const val SIBLING_AP_LOG_LIMIT = 4
 

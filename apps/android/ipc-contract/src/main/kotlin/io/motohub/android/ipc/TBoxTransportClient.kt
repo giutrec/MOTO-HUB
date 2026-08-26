@@ -222,6 +222,17 @@ class TBoxTransportClient(
         onCore("capabilitiesJson") { it.getCapabilitiesJson(motorcycleId) }?.takeIf { it.isNotBlank() }
 
     /**
+     * The screen margins Core holds for [ssid] as "top,bottom,left,right", or null when Core was
+     * never taught them, is not bound, or predates
+     * [IpcBridgeContract.CONTRACT_VERSION_SCREEN_MARGINS].
+     *
+     * Every one of those nulls means the same thing - "nothing to adopt, frame it as before" -
+     * which is exactly the behaviour that existed before this call.
+     */
+    fun screenMargins(ssid: String): String? =
+        onCore("screenMargins") { it.getScreenMargins(ssid) }?.takeIf { it.isNotBlank() }
+
+    /**
      * Why Core's last [startVideoSession] answered null, as Core would put it to a rider, or null
      * when Core is not bound, the call succeeded, or Core predates
      * [IpcBridgeContract.CONTRACT_VERSION_VIDEO_FAILURE_REASON].

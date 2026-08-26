@@ -48,10 +48,63 @@ class TBoxRejoinLadderTest {
         }
     }
 
+    private fun backgroundStep(attempt: Int, elapsedMillis: Long): TBoxRejoinStep =
+        nextTBoxRejoinStep(
+            attempt = attempt,
+            elapsedMillis = elapsedMillis,
+            budgetMillis = BUDGET,
+            firstDelayMillis = FIRST,
+            baseDelayMillis = BASE,
+            maxDelayMillis = MAX,
+            submissionWouldBeRefused = true,
+            backgroundPollMillis = POLL
+        )
+
+    /**
+     * Support 87bc5a7c: a session teardown destroys its foreground service 261ms before the
+     * ladder's first submission, so every request was refused by Android in 11-28ms without the
+     * AP ever being looked for - four attempts spent, three minutes burnt, the radio never asked.
+     */
+    @Test
+    fun `a request Android would refuse waits instead of becoming an attempt`() {
+        assertEquals(TBoxRejoinStep.WaitForForeground(POLL), backgroundStep(attempt = 1, elapsedMillis = 0L))
+        assertEquals(TBoxRejoinStep.WaitForForeground(POLL), backgroundStep(attempt = 1, elapsedMillis = 60_000L))
+    }
+
+    /**
+     * The attempt counter is the ladder's memory of what it actually asked. Waiting must not
+     * advance it, or a rider who opens the app after two minutes inherits a backed-off delay
+     * earned by refusals that never left the process.
+     */
+    @Test
+    fun `waiting never advances the backoff`() {
+        assertEquals(TBoxRejoinStep.WaitForForeground(POLL), backgroundStep(attempt = 9, elapsedMillis = 0L))
+        assertEquals(TBoxRejoinStep.WaitThenRetry(FIRST), step(attempt = 1, elapsedMillis = 0L))
+    }
+
+    /**
+     * A phone that stays in the rider's pocket for the whole budget still has to let go: an
+     * exclusive WifiNetworkSpecifier request held past the deadline takes the radio away from
+     * the rider's own reconnect, which is the very thing the wait is trying to enable.
+     */
+    @Test
+    fun `the budget ends the ladder even while it is waiting for the foreground`() {
+        assertEquals(TBoxRejoinStep.GiveUp, backgroundStep(attempt = 1, elapsedMillis = BUDGET))
+        assertEquals(TBoxRejoinStep.GiveUp, backgroundStep(attempt = 1, elapsedMillis = BUDGET * 4))
+    }
+
+    /** A foreground process is unaffected: the ordinary ladder is exactly as it was. */
+    @Test
+    fun `a foreground process still retries on the old schedule`() {
+        assertEquals(TBoxRejoinStep.WaitThenRetry(FIRST), step(attempt = 1, elapsedMillis = 0L))
+        assertEquals(TBoxRejoinStep.WaitThenRetry(5_000L), step(attempt = 3, elapsedMillis = 0L))
+    }
+
     private companion object {
         const val BUDGET = 180_000L
         const val FIRST = 300L
         const val BASE = 2_500L
         const val MAX = 15_000L
+        const val POLL = 2_000L
     }
 }

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.ipc
 
 /** Int constants used by IAndroidAutoStateListener.onStateChanged — shared vocabulary
@@ -38,8 +41,11 @@ object IpcBridgeContract {
      * 7: getWireLadderProgress().
      * 8: getCapabilitiesJson().
      * 9: scanTBoxPorts().
+     * 10: getWireLadderProgress() is keyed by the motorcycle's network name, not its profile id.
+     *     No call appended - the argument's meaning changed, which needs the same gate.
+     * 11: getScreenMargins().
      */
-    const val CONTRACT_VERSION = 9
+    const val CONTRACT_VERSION = 11
 
     /** First [CONTRACT_VERSION] whose Core implements connectOverFormedGroup(). */
     const val CONTRACT_VERSION_FORMED_GROUP = 2
@@ -119,6 +125,43 @@ object IpcBridgeContract {
      * A companion still scans locally when nothing is connected; that path never needed Core.
      */
     const val CONTRACT_VERSION_PORT_SCAN = 9
+
+    /**
+     * First [CONTRACT_VERSION] whose Core files the wire ladder under the motorcycle's network
+     * name instead of its profile id, and therefore expects getWireLadderProgress() to be asked
+     * that way.
+     *
+     * A profile id is a UUID minted per garage entry, and MOTO-HUB has two garages: Core's and
+     * the companion app's. A companion-driven session hands Core the COMPANION's id, a Core-only
+     * session uses Core's own, and re-scanning the dash QR code mints a third - so one physical
+     * dashboard accumulated ladder records that never saw each other's verdict. Rider 87bc5a7c
+     * answered "yes, I can see it" for rung 0 in Core at 18:27 on 2026-08-25 and was asked the
+     * same question again at 21:41 on the same dash, because the second session arrived over the
+     * bridge under a freshly scanned id. The network name is what both halves agree on, and it is
+     * already how the screen-margins store next door is keyed.
+     *
+     * Cross-version pairs degrade to "no ladder in the report", never to another bike's record:
+     * an older Core asked by SSID has nothing under that key, and an older companion asked by id
+     * gets the record Core copied rather than moved when it migrated.
+     */
+    const val CONTRACT_VERSION_WIRE_LADDER_BY_SSID = 10
+
+    /**
+     * First [CONTRACT_VERSION] whose Core hands back the screen margins it holds for a motorcycle,
+     * through getScreenMargins(), so the companion app can adopt a calibration made in Core.
+     *
+     * The teaching already travelled the other way in [AndroidAutoSettingsParcel], gated on this
+     * app actually having one - four zeros for a bike nobody calibrated here would erase a
+     * calibration made over there. What that gate left open is the commoner case: Core ships the
+     * same ruler and owns Android Auto, so Core is usually where a rider measures, and nothing
+     * carried it back. One dash then got two framings from one pair - Android Auto composited
+     * into a 680x408 viewport of an 800x480 panel while the Ride Dashboard used all 800x480,
+     * minutes apart in the same session (riders 7efdfa33 and 87bc5a7c, 2026-08-25).
+     *
+     * Adoption only ever FILLS A GAP: a value taught in this app still wins, so the two do not
+     * ping-pong and the rider's most recent teaching is the one that survives.
+     */
+    const val CONTRACT_VERSION_SCREEN_MARGINS = 11
 
     /**
      * Which half of Core's connect produced the last failure, answered by
