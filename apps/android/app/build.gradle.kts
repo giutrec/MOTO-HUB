@@ -67,6 +67,16 @@ fun asBuildConfigString(value: String): String =
     "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 val coreSentryDsn = sentryDsn("sentryCoreDsn", "SENTRY_CORE_DSN")
+// The diagnostics collector (n8n webhook). Same private file as the DSNs, so a source build
+// without it simply never uploads - which is what every build from this repository does, because
+// the value lives in sentry.properties / an environment variable and never in the tree.
+//
+// The key is a shared secret the webhook checks, so it is readable by anyone who unpacks a
+// published APK. What it protects is the collector's tidiness, not a rider's data: every upload
+// is consent-gated in the app, and abuse of the endpoint is a server-side question (rate
+// limiting, rotation), not one a build flag can answer.
+val diagnosticsEndpoint = sentryDsn("diagnosticsEndpoint", "MOTOHUB_DIAGNOSTICS_ENDPOINT")
+val diagnosticsKey = sentryDsn("diagnosticsKey", "MOTOHUB_DIAGNOSTICS_KEY")
 val sentryDebug = providers.gradleProperty("sentryDebug")
     .map(String::toBoolean)
     .orElse(false)
@@ -85,10 +95,12 @@ android {
         // keep this identical to the PRO worktree's build.gradle.kts. They drifted after v1.1.4
         // (CORE reached 1.1.14/108 while ADVANCED sat at 1.1.6/100), which left a rider's
         // "MOTO-HUB 1.1.x" unable to identify which pair they actually had installed.
-        versionCode = 191
-        versionName = "1.1.97"
+        versionCode = 192
+        versionName = "1.1.98"
         buildConfigField("boolean", "IS_PRO", "false")
         buildConfigField("String", "SENTRY_DSN", asBuildConfigString(coreSentryDsn))
+        buildConfigField("String", "DIAGNOSTICS_ENDPOINT", asBuildConfigString(diagnosticsEndpoint))
+        buildConfigField("String", "DIAGNOSTICS_KEY", asBuildConfigString(diagnosticsKey))
         // -PsentryDebug=true makes the SDK narrate what it is doing to logcat. Telemetry that
         // silently does not arrive is worse than none, and there is no other way to see whether
         // a session was started, dropped or rejected: the SDK says nothing at all by default.
