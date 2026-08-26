@@ -13,31 +13,80 @@ class TBoxWifiDirectConnectorTest {
     @Test
     fun `matches the profile group name ignoring case and quotes`() {
         assertTrue(
-            TBoxWifiDirectConnector.groupNameMatchesProfile("DIRECT-CL-C450-1234", "DIRECT-CL-C450-1234")
+            TBoxWifiDirectConnector.groupBelongsToProfile("DIRECT-CL-C450-1234", null, "DIRECT-CL-C450-1234")
         )
         assertTrue(
-            TBoxWifiDirectConnector.groupNameMatchesProfile("direct-cl-c450-1234", "\"DIRECT-CL-C450-1234\"")
+            TBoxWifiDirectConnector.groupBelongsToProfile("direct-cl-c450-1234", null, "\"DIRECT-CL-C450-1234\"")
         )
         assertTrue(
-            TBoxWifiDirectConnector.groupNameMatchesProfile(" DIRECT-AB12 ", "DIRECT-AB12")
+            TBoxWifiDirectConnector.groupBelongsToProfile(" DIRECT-AB12 ", null, "DIRECT-AB12")
         )
     }
 
     @Test
     fun `rejects a formed group that belongs to another device`() {
         assertFalse(
-            TBoxWifiDirectConnector.groupNameMatchesProfile("DIRECT-tv-LivingRoom", "DIRECT-CL-C450-1234")
+            TBoxWifiDirectConnector.groupBelongsToProfile("DIRECT-tv-LivingRoom", null, "DIRECT-CL-C450-1234")
         )
         assertFalse(
-            TBoxWifiDirectConnector.groupNameMatchesProfile("DIRECT-XY99-otherbike", "DIRECT-CL-C450-1234")
+            TBoxWifiDirectConnector.groupBelongsToProfile("DIRECT-XY99-otherbike", null, "DIRECT-CL-C450-1234")
         )
     }
 
     @Test
     fun `accepts an unverifiable group name rather than breaking working joins`() {
-        assertTrue(TBoxWifiDirectConnector.groupNameMatchesProfile(null, "DIRECT-CL-C450-1234"))
-        assertTrue(TBoxWifiDirectConnector.groupNameMatchesProfile("", "DIRECT-CL-C450-1234"))
-        assertTrue(TBoxWifiDirectConnector.groupNameMatchesProfile("  ", "DIRECT-CL-C450-1234"))
+        assertTrue(TBoxWifiDirectConnector.groupBelongsToProfile(null, null, "DIRECT-CL-C450-1234"))
+        assertTrue(TBoxWifiDirectConnector.groupBelongsToProfile("", null, "DIRECT-CL-C450-1234"))
+        assertTrue(TBoxWifiDirectConnector.groupBelongsToProfile("  ", null, "DIRECT-CL-C450-1234"))
+    }
+
+    /**
+     * Field log 94b0a3da: the rider's dash raises a group called `DIRECT-iY` and his profile is
+     * saved under the dash's P2P device name. Those two strings can never be equal, so the old
+     * name-only check removed a link he had established by hand.
+     */
+    @Test
+    fun `accepts the dash group when the profile holds its device name`() {
+        assertTrue(
+            TBoxWifiDirectConnector.groupBelongsToProfile("DIRECT-iY", "VOGE-5G-9fab", "VOGE-5G-9fab")
+        )
+        // Owner name unreadable: a mismatch here proves nothing, because it could not have matched.
+        assertTrue(TBoxWifiDirectConnector.groupBelongsToProfile("DIRECT-iY", null, "VOGE-5G-9fab"))
+        assertTrue(TBoxWifiDirectConnector.groupBelongsToProfile("DIRECT-iY", "  ", "VOGE-5G-9fab"))
+        // Android's own naming, when the framework does put the peer inside the group name.
+        assertTrue(
+            TBoxWifiDirectConnector.groupBelongsToProfile("DIRECT-xy-VOGE-5G-9fab", null, "VOGE-5G-9fab")
+        )
+    }
+
+    @Test
+    fun `rejects a group whose owner is provably another device`() {
+        // The only rejection a peer-name profile can make: the owner is readable and is someone else.
+        assertFalse(
+            TBoxWifiDirectConnector.groupBelongsToProfile("DIRECT-iY", "LivingRoom TV", "VOGE-5G-9fab")
+        )
+        assertFalse(
+            TBoxWifiDirectConnector.groupBelongsToProfile("DIRECT-tv-LivingRoom", "LivingRoom", "VOGE-5G-9fab")
+        )
+    }
+
+    @Test
+    fun `the group owner identifies the dash for a group-name profile too`() {
+        assertTrue(
+            TBoxWifiDirectConnector.groupBelongsToProfile(
+                "DIRECT-zz-renamed",
+                "CFMOTO-EF7198",
+                "DIRECT-go-CFMOTO-EF7198"
+            )
+        )
+        // A DIRECT- profile keeps its strict rejection: the owner is readable and is not the dash.
+        assertFalse(
+            TBoxWifiDirectConnector.groupBelongsToProfile(
+                "DIRECT-tv-LivingRoom",
+                "LivingRoom",
+                "DIRECT-go-CFMOTO-EF7198"
+            )
+        )
     }
 
     @Test

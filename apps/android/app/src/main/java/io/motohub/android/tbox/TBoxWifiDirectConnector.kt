@@ -183,8 +183,9 @@ class TBoxWifiDirectConnector(
                         lastState = "no Wi-Fi Direct group is formed on this phone any more"
                     info.isGroupOwner ->
                         lastState = "this phone is the Group Owner, so the dash is not"
-                    !groupNameMatchesProfile(group?.networkName, profile.ssid) ->
-                        lastState = "the formed group is '${group?.networkName}', not ${profile.ssid}"
+                    !groupBelongsToProfile(group?.networkName, group?.owner?.deviceName, profile.ssid) ->
+                        lastState = "the formed group is '${group?.networkName}' " +
+                            "(owner '${group?.owner?.deviceName}'), not ${profile.ssid}"
                     else -> {
                         val gateway = info.groupOwnerAddress as? Inet4Address ?: groupOwnerIpv4
                         log(
@@ -292,7 +293,7 @@ class TBoxWifiDirectConnector(
         val group = awaitQuery<WifiP2pGroup> { resume ->
             manager.requestGroupInfo(channel) { resume(it) }
         }
-        if (!groupNameMatchesProfile(group?.networkName, profile.ssid)) return false
+        if (!groupBelongsToProfile(group?.networkName, group?.owner?.deviceName, profile.ssid)) return false
         log(
             "Wi-Fi Direct group ${group?.networkName ?: profile.ssid} is already formed and this " +
                 "phone is a client in it; adopting it instead of joining again."
@@ -353,12 +354,30 @@ class TBoxWifiDirectConnector(
                     "Giving up this Wi-Fi Direct join: $round round(s) refused outright in " +
                         "${elapsedMillis / 1_000}s."
                 )
+                // The toggle advice belongs to a wedged stack, and only to one. A stack that
+                // scanned, found the dash and named it is working; telling that rider to
+                // restart Wi-Fi sends them to do again what they have very likely already done
+                // - 94b0a3da did, between two identical failures - and hides the real answer,
+                // which is that the phone refuses to join this dash by address. Advice that
+                // cannot apply is not neutral: it becomes the thing investigated instead of
+                // the cause.
+                val diagnosis = if (footprint.peerSeen) {
+                    "The phone found ${profile.ssid} but refused every request to join it" +
+                        if (footprint.peerListClearedOnStop) {
+                            ", dropping it from its Wi-Fi Direct peer list each time. Try " +
+                                "joining the dash from the phone's own Wi-Fi Direct screen " +
+                                "first, then reconnect here."
+                        } else {
+                            ". Make sure the dash is showing its connection page, then retry."
+                        }
+                } else {
+                    "The phone's Wi-Fi Direct stack refused every attempt of this join. Turn " +
+                        "Wi-Fi off and on again on the phone, then reconnect."
+                }
                 outcome.complete(
                     Result.failure(
                         IllegalStateException(
-                            "Wi-Fi Direct connect() failed: ${reasonName(reason)}. The phone's " +
-                                "Wi-Fi Direct stack refused every attempt of this join. Turn " +
-                                "Wi-Fi off and on again on the phone, then reconnect.$hint"
+                            "Wi-Fi Direct connect() failed: ${reasonName(reason)}. $diagnosis$hint"
                         )
                     )
                 )
@@ -400,6 +419,24 @@ class TBoxWifiDirectConnector(
         // Discovery and connect() contend for the same radio state machine; leaving the scan
         // running is a known way to get connect() rejected.
         awaitAction { listener -> manager.stopPeerDiscovery(channel, listener) }
+
+        // Read back before connect(), not only after it was refused. Some frameworks empty
+        // their peer list the moment discovery stops (see [connectWithRetry]), which turns the
+        // address just discovered into an address the framework no longer knows - and the only
+        // answer it has for that is a bare ERROR in single-digit milliseconds. The post-mortem
+        // snapshot could never say whether the peer went before the call or because of it; this
+        // one can. Logged only when it happened: a line on every join is noise.
+        if (peer != null &&
+            requestPeers(manager, channel).none { candidate ->
+                candidate.deviceAddress.equals(peer.deviceAddress, ignoreCase = true)
+            }
+        ) {
+            footprint.peerListClearedOnStop = true
+            log(
+                "The dash left the Wi-Fi Direct peer list as soon as discovery stopped, so a " +
+                    "connect() by its address is about to be refused outright on this phone."
+            )
+        }
 
         if (peer?.status == WifiP2pDevice.INVITED || footprint.discoveryRefused) {
             // A half-open invitation keeps failing every new connect() until it is cancelled, and
@@ -450,6 +487,7 @@ class TBoxWifiDirectConnector(
                 peer.deviceName.equals(expectedName, ignoreCase = true)
             }
             if (match != null) {
+                footprint.peerSeen = true
                 log(
                     "Found the dash as Wi-Fi Direct peer '${match.deviceName}' " +
                         "(${match.deviceAddress}), status ${statusName(match.status)}."
@@ -490,23 +528,64 @@ class TBoxWifiDirectConnector(
             val joinPeer = peer?.takeIf { attempt == 0 }
             // buildConfig(profile, null) is the credentials form; it returns null when the SSID
             // or passphrase cannot express one (setNetworkName rejects non-"DIRECT-" names,
-            // build() rejects a bad passphrase length), in which case the peer form is kept.
-            val config = buildConfig(profile, joinPeer) ?: buildConfig(profile, peer) ?: run {
-                outcome.complete(
-                    Result.failure(
-                        IllegalStateException(
-                            "Wi-Fi Direct join is not possible for ${profile.ssid}: the dash did " +
-                                "not answer Wi-Fi Direct discovery, and its name cannot be used " +
-                                "as a group name either. Make sure the dash screen is on and " +
-                                "showing its connection page, then retry."
+            // build() rejects a bad passphrase length).
+            var addressPeer = joinPeer
+            var rediscovered = false
+            var config = buildConfig(profile, joinPeer)
+            if (config == null) {
+                // No credentials form for this profile. Falling back to the address config
+                // unchanged - which is what this code used to do - re-sends the request that
+                // was just refused, and the retry that exists precisely for a flushed peer list
+                // becomes a second copy of the failure. Worse, it was logged as "as a legacy
+                // client": field log 94b0a3da has four rounds of a fallback that never ran.
+                //
+                // Find the dash again instead and connect with the scan STILL RUNNING. That is
+                // the one form that carries an address the framework currently knows, and on a
+                // stack that empties its list when discovery stops it is the only one left.
+                if (peer == null) {
+                    outcome.complete(
+                        Result.failure(
+                            IllegalStateException(
+                                "Wi-Fi Direct join is not possible for ${profile.ssid}: the dash " +
+                                    "did not answer Wi-Fi Direct discovery, and its name cannot " +
+                                    "be used as a group name either. Make sure the dash screen " +
+                                    "is on and showing its connection page, then retry."
+                            )
                         )
                     )
-                )
-                return null
+                    return null
+                }
+                addressPeer = discoverPeer(manager, channel, profile, outcome, footprint) ?: peer
+                if (outcome.isCompleted) return null
+                rediscovered = true
+                // The peer form of buildConfig cannot fail, but a return that settles nothing
+                // would leave the join sitting out the whole 35s budget for a question already
+                // answered - so the impossible branch still publishes a failure.
+                config = buildConfig(profile, addressPeer) ?: run {
+                    outcome.complete(
+                        Result.failure(
+                            IllegalStateException(
+                                "Wi-Fi Direct join is not possible for ${profile.ssid}: its name " +
+                                    "cannot be used as a group name, and no peer address for the " +
+                                    "dash could be built either."
+                            )
+                        )
+                    )
+                    return null
+                }
             }
             log(
-                if (joinPeer != null) "Joining the dash at ${joinPeer.deviceAddress} (attempt ${attempt + 1})."
-                else "Joining Wi-Fi Direct group ${profile.ssid} as a legacy client (attempt ${attempt + 1})."
+                when {
+                    rediscovered ->
+                        "Joining the dash at ${addressPeer?.deviceAddress} with discovery still " +
+                            "running (attempt ${attempt + 1}): ${profile.ssid} is not a group " +
+                            "name, so there is no credentials join to fall back to."
+                    joinPeer != null ->
+                        "Joining the dash at ${joinPeer.deviceAddress} (attempt ${attempt + 1})."
+                    else ->
+                        "Joining Wi-Fi Direct group ${profile.ssid} as a legacy client " +
+                            "(attempt ${attempt + 1})."
+                }
             )
             // Set before the call, not after: a rejected connect() can still have left an
             // invitation behind on some frameworks, and the cleanup must know to cancel it.
@@ -524,11 +603,11 @@ class TBoxWifiDirectConnector(
                 else -> {
                     lastReason = reason
                     if (attempt == CONNECT_ATTEMPTS - 1) {
-                        logConnectRejectionDiagnostics(manager, channel, profile, peer)
+                        logConnectRejectionDiagnostics(manager, channel, profile, addressPeer ?: peer)
                         return reason
                     }
                     log("Wi-Fi Direct connect() failed (${reasonName(reason)}); retrying.")
-                    logConnectRejectionDiagnostics(manager, channel, profile, peer)
+                    logConnectRejectionDiagnostics(manager, channel, profile, addressPeer ?: peer)
                     delay(CONNECT_RETRY_DELAY_MS)
                 }
             }
@@ -564,10 +643,13 @@ class TBoxWifiDirectConnector(
             val group = awaitQuery<WifiP2pGroup> { resume ->
                 manager.requestGroupInfo(channel) { info -> resume(info) }
             }
-            val expectedName = peerNameFromGroupSsid(profile.ssid)
+            // expectedPeerName, not peerNameFromGroupSsid: the latter is null for a profile
+            // saved under the dash's device name, so on exactly the dashes this snapshot was
+            // needed for the name branch never ran and only the address could ever match.
+            val expectedName = expectedPeerName(profile.ssid)
             val dash = requestPeers(manager, channel).firstOrNull { candidate ->
                 (peer != null && candidate.deviceAddress.equals(peer.deviceAddress, ignoreCase = true)) ||
-                    (expectedName != null && candidate.deviceName.equals(expectedName, ignoreCase = true))
+                    candidate.deviceName.equals(expectedName, ignoreCase = true)
             }
             val groupDescription = if (group == null) {
                 "none"
@@ -738,11 +820,18 @@ class TBoxWifiDirectConnector(
                 // toward another DIRECT- device (a different bike, a cast dongle) also reports
                 // groupFormed. Joining it would make discovery fail with a misleading "dash did
                 // not answer". Remove the stale group and keep waiting for the requested one.
+                //
+                // Only on proof that it belongs to someone else, though - see
+                // [groupBelongsToProfile]. This is the branch that removed a rider's working
+                // link because his dash's group is named `DIRECT-iY` and his profile is named
+                // after the dash's P2P device, two strings that can never be equal.
                 val groupName = group?.networkName
-                if (!groupNameMatchesProfile(groupName, profile.ssid)) {
+                val ownerName = group?.owner?.deviceName
+                if (!groupBelongsToProfile(groupName, ownerName, profile.ssid)) {
                     log(
-                        "Ignoring formed Wi-Fi Direct group '$groupName': it is not " +
-                            "${profile.ssid}. Removing the stale group and waiting for the join."
+                        "Ignoring formed Wi-Fi Direct group '$groupName' (owner '$ownerName'): " +
+                            "it is not ${profile.ssid}. Removing the stale group and waiting " +
+                            "for the join."
                     )
                     removeGroup(manager, channel, closeChannelAfter = false)
                     return@requestGroupInfo
@@ -974,6 +1063,19 @@ class TBoxWifiDirectConnector(
         var connectIssued = false
 
         /**
+         * Discovery surfaced the dash at least once during this join.
+         *
+         * Read only to decide what to tell the rider when the join gives up. A stack that ran a
+         * scan and named the dash is not the wedged stack the "turn Wi-Fi off and on" advice was
+         * written for, and rider 94b0a3da had already done exactly that - his 19:10 attempt, on
+         * a Wi-Fi he had just toggled, failed identically to the three before it.
+         */
+        var peerSeen = false
+
+        /** The dash fell out of the peer list when discovery was stopped. See [attemptJoin]. */
+        var peerListClearedOnStop = false
+
+        /**
          * The group was already up and this attempt adopted it instead of forming one.
          *
          * Nothing here may then remove it. Whoever formed it - the companion app, or an earlier
@@ -1073,15 +1175,49 @@ class TBoxWifiDirectConnector(
             peerNameFromGroupSsid(ssid) ?: ssid.trim().removeSurrounding("\"")
 
         /**
-         * Whether a formed group's network name is the profile's dash. A null/blank name cannot
-         * be verified (some frameworks withhold it from legacy clients) and is accepted rather
-         * than breaking joins that used to work.
+         * Whether a formed group is the profile's dash.
+         *
+         * Two shapes of profile reach this, and only one of them can ever match by group name.
+         * A `DIRECT-…` profile IS a group name, so the names are compared directly. A profile
+         * saved under the dash's P2P *device* name - `VOGE-5G-9fab`, the form
+         * [expectedPeerName] exists for - never can be: Android names every group `DIRECT-…`,
+         * so a name comparison against it is guaranteed to fail. Field log 94b0a3da (Voge
+         * Valico 900 DSX, OnePlus CPH2663 / Android 16, 2026-08-26): the rider had joined the
+         * dash by hand and this check called the resulting group `DIRECT-iY` a stale group
+         * toward another device and removed the working link.
+         *
+         * So the group owner's device name is consulted too - the GO *is* the dash, and its
+         * name is the same string the profile holds - as is the `DIRECT-xy-<name>` shape.
+         *
+         * The last rule is the one that matters most: **a group is only ever rejected on
+         * positive proof that it belongs to another device.** When nothing readable can settle
+         * it, the group is accepted. Removing on absence of evidence is what cost 94b0a3da his
+         * link, and the cost of the other mistake is smaller - a foreign group we adopt fails
+         * discovery a few seconds later, which is recoverable, while a removed group is not.
          */
-        internal fun groupNameMatchesProfile(groupName: String?, profileSsid: String): Boolean {
-            val normalizedGroup = groupName?.trim()?.removeSurrounding("\"").orEmpty()
-            if (normalizedGroup.isEmpty()) return true
+        internal fun groupBelongsToProfile(
+            groupName: String?,
+            ownerDeviceName: String?,
+            profileSsid: String
+        ): Boolean {
+            val group = groupName?.trim()?.removeSurrounding("\"").orEmpty()
+            val owner = ownerDeviceName?.trim()?.removeSurrounding("\"").orEmpty()
             val normalizedProfile = profileSsid.trim().removeSurrounding("\"")
-            return normalizedGroup.equals(normalizedProfile, ignoreCase = true)
+            val expected = expectedPeerName(profileSsid)
+            return when {
+                // A DIRECT- profile is a group name: compare them directly.
+                group.equals(normalizedProfile, ignoreCase = true) -> true
+                // The Group Owner is the dash, and a peer-name profile holds exactly its name.
+                owner.isNotEmpty() && owner.equals(expected, ignoreCase = true) -> true
+                // Android's own convention, when the framework does name the group after it.
+                group.endsWith("-$expected", ignoreCase = true) -> true
+                // Nothing readable to judge by - some frameworks withhold both from a client.
+                group.isEmpty() && owner.isEmpty() -> true
+                // A peer-name profile with an unreadable owner: the name mismatch above is not
+                // evidence of anything, because it could not have matched in the first place.
+                owner.isEmpty() && !isWifiDirectSsid(normalizedProfile) -> true
+                else -> false
+            }
         }
     }
 }
