@@ -48,6 +48,69 @@ class TBoxRejoinLadderTest {
         }
     }
 
+    /** A round entered with this attempt's backoff already served. */
+    private fun servedStep(
+        attempt: Int,
+        elapsedMillis: Long,
+        submissionWouldBeRefused: Boolean
+    ): TBoxRejoinStep = nextTBoxRejoinStep(
+        attempt = attempt,
+        elapsedMillis = elapsedMillis,
+        budgetMillis = BUDGET,
+        firstDelayMillis = FIRST,
+        baseDelayMillis = BASE,
+        maxDelayMillis = MAX,
+        submissionWouldBeRefused = submissionWouldBeRefused,
+        backgroundPollMillis = POLL,
+        backoffElapsed = true
+    )
+
+    @Test
+    fun `a served backoff submits instead of waiting again`() {
+        assertEquals(TBoxRejoinStep.SubmitNow, servedStep(1, 0L, submissionWouldBeRefused = false))
+        assertEquals(TBoxRejoinStep.SubmitNow, servedStep(4, 30_000L, submissionWouldBeRefused = false))
+    }
+
+    /**
+     * Rider 4d8a4c5b, 2026-08-26. The ladder read the process importance, found the app in the
+     * foreground, announced "back in the foreground; resuming", slept ten seconds - and submitted
+     * on the far side of that sleep, from the background it had fallen into meanwhile. Android
+     * refused it in 19ms and it counted as the fifth and last attempt.
+     *
+     * The reading that authorises a submission is taken in the round that submits, so the answer
+     * here has to be to wait, however much backoff has already been served.
+     */
+    @Test
+    fun `a process that fell to the background during its backoff does not submit anyway`() {
+        assertEquals(
+            TBoxRejoinStep.WaitForForeground(POLL),
+            servedStep(5, 150_000L, submissionWouldBeRefused = true)
+        )
+    }
+
+    /**
+     * ...and the backoff it already served is not served again once the rider does open the app:
+     * making them sit through it a second time would punish the one action being waited for.
+     */
+    @Test
+    fun `coming back to the foreground submits without redoing the backoff`() {
+        assertEquals(
+            TBoxRejoinStep.WaitForForeground(POLL),
+            servedStep(5, 150_000L, submissionWouldBeRefused = true)
+        )
+        assertEquals(
+            TBoxRejoinStep.SubmitNow,
+            servedStep(5, 152_000L, submissionWouldBeRefused = false)
+        )
+    }
+
+    /** The budget still ends the ladder, whatever has been served. */
+    @Test
+    fun `a served backoff does not outlast the budget`() {
+        assertEquals(TBoxRejoinStep.GiveUp, servedStep(2, BUDGET, submissionWouldBeRefused = false))
+        assertEquals(TBoxRejoinStep.GiveUp, servedStep(2, BUDGET, submissionWouldBeRefused = true))
+    }
+
     private fun backgroundStep(attempt: Int, elapsedMillis: Long): TBoxRejoinStep =
         nextTBoxRejoinStep(
             attempt = attempt,

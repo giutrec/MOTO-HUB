@@ -383,7 +383,8 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                     }
                 },
                 mapTouchToSource = activeCompositor::mapCanvasToUi,
-                capabilityProfile = capabilityProfile
+                capabilityProfile = capabilityProfile,
+                downstreamBlockedMillis = activeCompositor::downstreamBlockedMillis
             )
             if (!SingleKeyKeyManager.isAvailable(applicationContext)) {
                 error(

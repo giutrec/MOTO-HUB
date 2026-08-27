@@ -47,6 +47,14 @@ sealed interface TBoxNetworkEvent {
 
 /** What the T-Box Wi-Fi rejoin ladder does next. */
 internal sealed interface TBoxRejoinStep {
+    /**
+     * Serve this attempt's backoff, then come back here and decide again.
+     *
+     * Deciding again is the point, and it is not free bookkeeping: the wait is a suspension of up
+     * to [TBoxNetworkConnector.REJOIN_MAX_DELAY_MS], and the process can leave the foreground
+     * inside it. This step used to mean "wait, then submit", so the submission was authorised by
+     * an importance reading up to fifteen seconds stale - see [nextTBoxRejoinStep].
+     */
     data class WaitThenRetry(val delayMillis: Long) : TBoxRejoinStep
 
     /**
@@ -54,6 +62,9 @@ internal sealed interface TBoxRejoinStep {
      * ladder waits instead of spending an attempt on a refusal that never reaches the radio.
      */
     data class WaitForForeground(val delayMillis: Long) : TBoxRejoinStep
+
+    /** The backoff is served and this process may ask: submit, and spend the attempt. */
+    data object SubmitNow : TBoxRejoinStep
     data object GiveUp : TBoxRejoinStep
 }
 
@@ -72,6 +83,18 @@ internal sealed interface TBoxRejoinStep {
  * cached), so all four attempts were refused in 11-28ms each and the ladder surrendered three
  * minutes later having never once asked the radio. Waiting spends the same budget on the only
  * thing that can change the answer - the rider opening the app.
+ *
+ * [backoffElapsed] is why a submission is a step of its own rather than something the caller does
+ * after sleeping on [TBoxRejoinStep.WaitThenRetry]. The caller sleeps and comes back, so the
+ * background rule above is re-applied to a *fresh* reading immediately before the submission it
+ * governs. When it was applied once and then slept on, the ladder could - and for rider 4d8a4c5b
+ * on 2026-08-26 did - announce "back in the foreground; resuming", wait ten seconds, drop to the
+ * background inside them, and submit anyway, logging "Android will refuse this request" as it did
+ * so. That refusal came back in 19ms and was counted as the fifth and last attempt.
+ *
+ * A backoff already served is not served again: it is spent, and any foreground wait stacks on
+ * top of it. Making the rider who has just opened the app sit through the backoff a second time
+ * would punish exactly the action being waited for.
  */
 internal fun nextTBoxRejoinStep(
     attempt: Int,
@@ -81,13 +104,17 @@ internal fun nextTBoxRejoinStep(
     baseDelayMillis: Long,
     maxDelayMillis: Long,
     submissionWouldBeRefused: Boolean = false,
-    backgroundPollMillis: Long = 0L
+    backgroundPollMillis: Long = 0L,
+    backoffElapsed: Boolean = false
 ): TBoxRejoinStep {
     // Checked before the background rule on purpose: a phone that stays in the rider's pocket
     // must still let the ladder go, or the exclusive request outlives every session it could
     // have served.
     if (elapsedMillis >= budgetMillis) return TBoxRejoinStep.GiveUp
+    // Above the submission on purpose: this is the reading that authorises it, and it is only
+    // worth anything because nothing suspends between here and the submission itself.
     if (submissionWouldBeRefused) return TBoxRejoinStep.WaitForForeground(backgroundPollMillis)
+    if (backoffElapsed) return TBoxRejoinStep.SubmitNow
     val delay = if (attempt <= 1) {
         firstDelayMillis
     } else {
@@ -1244,6 +1271,9 @@ class TBoxNetworkConnector(context: Context) {
             // Logged on entering and leaving the wait rather than per poll: the whole point is
             // to stop filling a rider's log with refusals that say nothing about the dash.
             var waitingForForeground = false
+            // This attempt's backoff has been served. Survives a foreground wait on purpose - see
+            // nextTBoxRejoinStep - and is cleared once the attempt it belongs to has been spent.
+            var backoffElapsed = false
             val startedAt = SystemClock.elapsedRealtime()
             try {
                 ladder@ while (activeProfile != null && connectedOnce && activeNetwork == null) {
@@ -1256,7 +1286,8 @@ class TBoxNetworkConnector(context: Context) {
                         baseDelayMillis = REJOIN_BASE_DELAY_MS,
                         maxDelayMillis = REJOIN_MAX_DELAY_MS,
                         submissionWouldBeRefused = importanceNow > FOREGROUND_SERVICE_IMPORTANCE,
-                        backgroundPollMillis = REJOIN_BACKGROUND_POLL_MS
+                        backgroundPollMillis = REJOIN_BACKGROUND_POLL_MS,
+                        backoffElapsed = backoffElapsed
                     )
                     if (step is TBoxRejoinStep.WaitForForeground) {
                         if (!waitingForForeground) {
@@ -1273,16 +1304,6 @@ class TBoxNetworkConnector(context: Context) {
                         }
                         delay(step.delayMillis)
                         continue@ladder
-                    }
-                    // Only on the way to a real attempt: saying "resuming" and then "giving up,
-                    // it was in the background the whole time" in the same breath is two lines
-                    // that contradict each other.
-                    if (waitingForForeground && step is TBoxRejoinStep.WaitThenRetry) {
-                        waitingForForeground = false
-                        ProjectionEventLog.record(
-                            "NETWORK",
-                            "MOTO-HUB is back in the foreground; resuming the T-Box Wi-Fi rejoin."
-                        )
                     }
                     if (step is TBoxRejoinStep.GiveUp) {
                         // Every downstream recovery budget is shorter than this, so past the
@@ -1307,9 +1328,28 @@ class TBoxNetworkConnector(context: Context) {
                         clearCurrentNetworkRequest()
                         break@ladder
                     }
+                    if (step is TBoxRejoinStep.WaitThenRetry) {
+                        delay(step.delayMillis)
+                        // Nothing is submitted on the way out of this branch. The loop reads the
+                        // process importance again at the top, so the rule that authorises a
+                        // submission is always applied to a reading taken after the last thing
+                        // that could suspend - which a delay of up to REJOIN_MAX_DELAY_MS very
+                        // much is. The while condition catches an AP reacquired during it too.
+                        backoffElapsed = true
+                        continue@ladder
+                    }
+                    // Said here rather than before the wait: "resuming" belongs next to the
+                    // submission it announces, or it can be followed by "giving up, it was in the
+                    // background the whole time" - two lines that contradict each other.
+                    if (waitingForForeground) {
+                        waitingForForeground = false
+                        ProjectionEventLog.record(
+                            "NETWORK",
+                            "MOTO-HUB is back in the foreground; resuming the T-Box Wi-Fi rejoin."
+                        )
+                    }
                     attempt++
-                    delay((step as TBoxRejoinStep.WaitThenRetry).delayMillis)
-                    if (activeNetwork != null) break@ladder
+                    backoffElapsed = false
                     // A fresh submission per attempt: the ladder exists for devices whose stale
                     // specifier registration never reconnects on its own, so unlike the connect()
                     // retry path it deliberately does NOT join the previous pending request.

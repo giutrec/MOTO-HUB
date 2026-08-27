@@ -168,4 +168,51 @@ class ProjectionEventLogRedactionTest {
         assertEquals(LogLevel.INFO, classifyExternalMessage("[AA] WirelessServer listening on :5288"))
         assertEquals(LogLevel.INFO, classifyExternalMessage("[AA] first decoded video frame received"))
     }
+
+    /**
+     * AaLog writes every level through Log.i and carries the real one as a `W: `/`E: ` marker.
+     * Reading it is the difference between the console showing rider 4d8a4c5b's 2fps collapse and
+     * showing him a clean bill of health: not one of these lines contains a fault keyword.
+     */
+    @Test
+    fun aDeclaredLevelIsUsedInsteadOfGuessing() {
+        assertEquals(
+            LogLevel.WARNING,
+            classifyExternalMessage(
+                "[AA] W: Decoder stall detected (no output for 9201ms, input 6ms ago). Forcing restart."
+            )
+        )
+        assertEquals(LogLevel.WARNING, classifyExternalMessage("[AA] W: Decoder restart requested: sync_stall"))
+        assertEquals(
+            LogLevel.WARNING,
+            classifyExternalMessage("[AA] W: AapTransport: Requesting recovery keyframe via focus cycle.")
+        )
+        assertEquals(LogLevel.ERROR, classifyExternalMessage("[AA] E: Decrypted payload too short: 3"))
+        assertEquals(LogLevel.ERROR, classifyExternalMessage("[AA] E: No connection."))
+    }
+
+    @Test
+    fun aDeclaredLevelStillLosesToTheTwoDemotions() {
+        // A counter at rest stays a non-event however loudly it is announced...
+        assertEquals(LogLevel.INFO, classifyExternalMessage("[AA] E: frames dropped: 0"))
+        // ...and an ordinary teardown is not an ERROR just because the writer said so.
+        assertEquals(LogLevel.WARNING, classifyExternalMessage("[AA] E: AapRead: read failed: socket closed"))
+        // A teardown a writer already called a warning is not promoted by the demotion either.
+        assertEquals(LogLevel.WARNING, classifyExternalMessage("[AA] W: accept ended: Socket closed"))
+    }
+
+    /**
+     * The marker is a prefix, not a substring: AAP messages carry protobuf and buffer dumps, and
+     * `... lim=25] w: 3` inside one of those declares nothing.
+     */
+    @Test
+    fun onlyAnAnchoredMarkerCounts() {
+        assertEquals(
+            LogLevel.INFO,
+            classifyExternalMessage("Config response: status: HEADUNIT [max_unacked: 12] w: 800")
+        )
+        assertEquals(LogLevel.INFO, classifyExternalMessage("[AA] Output Format Changed: {crop-right=799, w: 800}"))
+        // A tag is stripped, but only one, and only when the message opens with it.
+        assertEquals(LogLevel.WARNING, classifyExternalMessage("[AA] W: AapRead: FIFO overflow! Size: 4096"))
+    }
 }

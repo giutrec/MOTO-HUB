@@ -31,6 +31,20 @@ enum class LogLevel {
  * merely counts faults, so anything reporting a zero count, or an ordinary socket teardown,
  * stays below ERROR. Callers must not report the result to telemetry either way - see
  * [ProjectionEventLog.external].
+ *
+ * Guessing is the fallback, not the first move. [io.motohub.android.aa.AaLog] routes every level
+ * through `Log.i` and carries the author's own level as a `W: `/`E: ` text marker instead
+ * ([io.motohub.android.aa.AaLog.w]) - so the whole ported AA receiver, the largest subsystem in
+ * the app, could not produce a single WARNING or ERROR record while this function classified by
+ * keyword alone. `W: AapVideo: Dropped Flag 11` came out WARNING by luck (it says "dropped");
+ * `W: Decoder stall detected` came out INFO. Rider 4d8a4c5b's log (2026-08-26) has the video path
+ * collapsing to 2fps with seven forced decoder restarts, and the console read it as zero errors,
+ * zero warnings - invisible to the badges, the needs-attention filter and the cross-rider
+ * grouping that exist to surface exactly that.
+ *
+ * The marker wins over the keywords, but the two rules below can still demote it: they encode
+ * faults that were observed to be false, and an author's `E:` on a socket the rider just closed
+ * is as wrong as a word matcher's.
  */
 internal fun classifyExternalMessage(message: String): LogLevel {
     val text = message.lowercase()
@@ -39,8 +53,11 @@ internal fun classifyExternalMessage(message: String): LogLevel {
     val countsNothing = ZERO_COUNT_PATTERN.containsMatchIn(text)
     val teardown = text.contains("socket closed") || text.contains("stream closed") ||
         text.contains("ended: socket") || text.contains("interrupted")
+    val declared = declaredLevelOf(text)
     return when {
         countsNothing -> LogLevel.INFO
+        // A declared level answers every keyword rule below; only the demotions outrank it.
+        declared != null -> if (teardown) minOf(declared, LogLevel.WARNING) else declared
         text.contains("timed out") || text.contains("timeout") -> LogLevel.ERROR
         // A teardown mentioning "failed"/"closed" during a normal stop is not a fault.
         teardown -> LogLevel.WARNING
@@ -49,6 +66,27 @@ internal fun classifyExternalMessage(message: String): LogLevel {
         text.contains("warning") || text.contains("dropped") || text.contains("retry") ||
             text.contains("retrying") -> LogLevel.WARNING
         else -> LogLevel.INFO
+    }
+}
+
+/**
+ * The level the writer declared, if any: `W: `/`E: ` at the head of the message, after the
+ * optional `[STAGE]` tag the log convention puts in front of it (`[AA] W: ...`).
+ *
+ * Anchored on purpose - a bare "e: " deep inside a stack trace or a hex dump declares nothing.
+ */
+private fun declaredLevelOf(lowercaseText: String): LogLevel? {
+    // Only a leading tag is stripped: the first "] " of a message that does not open with one
+    // belongs to its payload (a buffer dump, a protobuf), and nothing after it declares anything.
+    val body = if (lowercaseText.startsWith("[")) {
+        lowercaseText.substringAfter("] ", lowercaseText)
+    } else {
+        lowercaseText
+    }
+    return when {
+        body.startsWith("w: ") -> LogLevel.WARNING
+        body.startsWith("e: ") -> LogLevel.ERROR
+        else -> null
     }
 }
 
