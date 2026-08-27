@@ -648,7 +648,14 @@ class AaCompositor(
             GLES20.glEnable(GLES20.GL_SCISSOR_TEST)
             GLES20.glScissor(clipX, framebufferHeight - clipY - clipHeight, clipWidth, clipHeight)
         }
-       GLES20.glViewport(viewportX, viewportY, viewportWidth, viewportHeight)
+        // Viewports are top-left like the touch path that shares them (mapCanvasToSource), but GL
+        // window coordinates grow upward - flip y exactly as the scissor above does. Centred
+        // viewports hid this: the flip is a no-op there, and asymmetric vertical screen margins
+        // were the first placement where the two conventions disagree (top margin moved the
+        // picture up, into the bezel, instead of down).
+        val glViewportY =
+            if (framebufferHeight > 0) framebufferHeight - viewportY - viewportHeight else viewportY
+        GLES20.glViewport(viewportX, glViewportY, viewportWidth, viewportHeight)
         GLES20.glUseProgram(program)
 
         quad.position(0)
