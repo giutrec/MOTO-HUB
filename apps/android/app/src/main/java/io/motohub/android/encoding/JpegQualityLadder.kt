@@ -13,7 +13,8 @@ package io.motohub.android.encoding
  *
  * The dash this exists for budgets **bytes**, not frames - the X-Cape 1200 takes roughly the same
  * kilobytes a second however they are divided up - so quality is the only lever that buys frames.
- * Two rules follow, and the second one is the fix for a defect the first one caused:
+ * Three rules follow; the second fixes a defect the first one caused, and the third guards the
+ * whole premise:
  *
  *  - **A window that offered nothing decides nothing.** Zero stills a second because the phone
  *    drew nothing is not the dashboard refusing them, but it used to read as maximum congestion.
@@ -27,6 +28,13 @@ package io.motohub.android.encoding
  *    [PROBE_WINDOWS] windows and lets the next window answer; a refused probe
  *    doubles the wait, capped, so a dash with no headroom pays two seconds for asking and then
  *    asks very rarely.
+ *  - **A descent must pay its way.** Quality is only ever traded for frames, so a coarser rung
+ *    that does not raise the accepted rate bought nothing and is taken back the next measured
+ *    window. On a byte-budgeted dash like the X-Cape every descent pays and this rule never
+ *    fires; a dash that paces stills by cadence would otherwise ride one congestion dip to the
+ *    coarsest rung and spend the ride there, blocky for free. After a revert the ladder waits
+ *    [DESCENT_RETRY_WINDOWS] windows before trading quality again, doubling up to a cap while
+ *    descents keep failing to pay.
  */
 class JpegQualityLadder(
     private val ladder: IntArray = QUALITY_LADDER,
@@ -34,7 +42,10 @@ class JpegQualityLadder(
     private val targetFpsHigh: Double = TARGET_FPS_HIGH,
     private val windowsBeforeClimbing: Int = WINDOWS_BEFORE_CLIMBING,
     private val probeWindows: Int = PROBE_WINDOWS,
-    private val probeBackoffMaxWindows: Int = PROBE_BACKOFF_MAX_WINDOWS
+    private val probeBackoffMaxWindows: Int = PROBE_BACKOFF_MAX_WINDOWS,
+    private val descentMinGain: Double = DESCENT_MIN_GAIN,
+    private val descentRetryWindows: Int = DESCENT_RETRY_WINDOWS,
+    private val descentBackoffMaxWindows: Int = DESCENT_BACKOFF_MAX_WINDOWS
 ) {
     private var step = 0
     private var goodWindows = 0
@@ -42,6 +53,9 @@ class JpegQualityLadder(
     private var idleWindows = 0
     private var probing = false
     private var waitBeforeProbe = probeWindows
+    private var fpsBeforeDescent = -1.0
+    private var descentHoldWindows = 0
+    private var waitBeforeDescent = descentRetryWindows
 
     /** The quality the next still should be compressed at. */
     var quality: Int = ladder.first()
@@ -57,6 +71,9 @@ class JpegQualityLadder(
 
         /** New quality. [probe] marks the speculative step up, which reads differently in a log. */
         data class Changed(val quality: Int, val probe: Boolean) : Outcome
+
+        /** Last window's descent bought no frames, so the rung is given back. */
+        data class Reverted(val quality: Int) : Outcome
     }
 
     /**
@@ -69,11 +86,27 @@ class JpegQualityLadder(
         idleWindows = 0
 
         val fps = if (elapsedMillis > 0L) accepted * 1000.0 / elapsedMillis else 0.0
+
+        if (fpsBeforeDescent >= 0.0) {
+            val paid = fps > 0.0 && fps >= fpsBeforeDescent * descentMinGain
+            fpsBeforeDescent = -1.0
+            if (!paid) {
+                step--
+                quality = ladder[step]
+                descentHoldWindows = waitBeforeDescent
+                waitBeforeDescent = (waitBeforeDescent * 2).coerceAtMost(descentBackoffMaxWindows)
+                return Outcome.Reverted(quality)
+            }
+            waitBeforeDescent = descentRetryWindows
+        }
+        if (descentHoldWindows > 0) descentHoldWindows--
+
         val previous = step
         var probeStep = false
         when {
-            fps < targetFpsLow && step < ladder.lastIndex -> {
+            fps < targetFpsLow && step < ladder.lastIndex && descentHoldWindows == 0 -> {
                 step++
+                fpsBeforeDescent = fps
                 goodWindows = 0
                 steadyWindows = 0
                 if (probing) {
@@ -161,5 +194,21 @@ class JpegQualityLadder(
         /** Ceiling for the doubling backoff - four minutes between probes on a dash that keeps
          *  refusing them. */
         const val PROBE_BACKOFF_MAX_WINDOWS = 120
+
+        /**
+         * How much a descent must raise the accepted rate to keep its rung. On the X-Cape a rung
+         * is worth 15-25% in bytes and the dash converts bytes to frames, so a real descent
+         * clears this; a cadence-paced dash lands at exactly 1.0x and gives the rung back. Judged
+         * one window later, so a single noisy window can fake a payment - the next descent is
+         * judged too, so a wrong call costs one window at the coarser rung, not the ride.
+         */
+        const val DESCENT_MIN_GAIN = 1.15
+
+        /** Windows before quality is traded away again after a descent that bought nothing -
+         *  thirty seconds, mirroring [PROBE_WINDOWS] in the other direction. */
+        const val DESCENT_RETRY_WINDOWS = 15
+
+        /** Ceiling for the doubling descent backoff - four minutes, like the probes'. */
+        const val DESCENT_BACKOFF_MAX_WINDOWS = 120
     }
 }

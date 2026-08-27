@@ -48,18 +48,20 @@ class JpegQualityLadderTest {
     }
 
     @Test
-    fun `a dash that cannot keep up still walks down`() {
+    fun `a dash that converts bytes to frames still walks down`() {
+        // Every rung pays: the accepted rate climbs with each descent, the way a byte-budgeted
+        // dash actually behaves (the X-Cape took 2.2 stills a second at quality 20 and 4.4 at 12).
         val ladder = JpegQualityLadder()
-        assertEquals(50, (ladder.window(2.0) as JpegQualityLadder.Outcome.Changed).quality)
-        assertEquals(40, (ladder.window(2.0) as JpegQualityLadder.Outcome.Changed).quality)
-        repeat(10) { ladder.window(2.0) }
+        assertEquals(50, (ladder.window(1.0) as JpegQualityLadder.Outcome.Changed).quality)
+        assertEquals(40, (ladder.window(1.5) as JpegQualityLadder.Outcome.Changed).quality)
+        for (fps in listOf(2.0, 2.5, 3.0, 3.5, 4.5)) ladder.window(fps)
         assertEquals("the floor is the last rung", 12, ladder.quality)
     }
 
     @Test
     fun `a ceiling inside the deadband is no longer a one-way trip`() {
         val ladder = JpegQualityLadder()
-        repeat(4) { ladder.window(2.0) }
+        for (fps in listOf(2.0, 2.5, 3.0, 3.5)) ladder.window(fps)
         assertEquals(25, ladder.quality)
         // 6.6 a second is this dash keeping up, and is below the fast climb's threshold of 7 -
         // which is why the quality used to be stuck at 25 for the rest of the ride.
@@ -74,7 +76,8 @@ class JpegQualityLadderTest {
     @Test
     fun `a probe the dash refuses is taken back and asked again later`() {
         val ladder = JpegQualityLadder(probeWindows = 3, probeBackoffMaxWindows = 12)
-        repeat(2) { ladder.window(2.0) }
+        ladder.window(2.0)
+        ladder.window(2.5)
         assertEquals(40, ladder.quality)
 
         repeat(2) { ladder.window(6.0) }
@@ -89,7 +92,7 @@ class JpegQualityLadderTest {
     @Test
     fun `a probe that holds keeps climbing a rung at a time`() {
         val ladder = JpegQualityLadder(probeWindows = 2)
-        repeat(3) { ladder.window(2.0) }
+        for (fps in listOf(2.0, 2.5, 3.0)) ladder.window(fps)
         assertEquals(32, ladder.quality)
 
         ladder.window(6.0)
@@ -105,7 +108,8 @@ class JpegQualityLadderTest {
     @Test
     fun `a dash with real headroom still climbs the fast way`() {
         val ladder = JpegQualityLadder()
-        repeat(2) { ladder.window(2.0) }
+        ladder.window(2.0)
+        ladder.window(2.5)
         assertEquals(40, ladder.quality)
         repeat(JpegQualityLadder.WINDOWS_BEFORE_CLIMBING - 1) {
             assertTrue(ladder.window(9.0) is JpegQualityLadder.Outcome.Unchanged)
@@ -119,6 +123,42 @@ class JpegQualityLadderTest {
     fun `the top rung is never probed past`() {
         val ladder = JpegQualityLadder(probeWindows = 1)
         repeat(20) { ladder.window(6.5) }
+        assertEquals(60, ladder.quality)
+    }
+
+    @Test
+    fun `a descent that buys no frames is taken back`() {
+        // A dash that paces stills by cadence: 4.5 a second whatever it is sent. Trading quality
+        // away moved nothing, so the rung comes straight back.
+        val ladder = JpegQualityLadder()
+        assertEquals(50, (ladder.window(4.5) as JpegQualityLadder.Outcome.Changed).quality)
+        val back = ladder.window(4.5) as JpegQualityLadder.Outcome.Reverted
+        assertEquals(60, back.quality)
+        assertEquals(60, ladder.quality)
+    }
+
+    @Test
+    fun `a futile descent is retried after the wait, and the wait doubles`() {
+        val ladder = JpegQualityLadder(descentRetryWindows = 3, descentBackoffMaxWindows = 12)
+        ladder.window(4.5)
+        assertTrue(ladder.window(4.5) is JpegQualityLadder.Outcome.Reverted)
+
+        repeat(2) { assertTrue(ladder.window(4.5) is JpegQualityLadder.Outcome.Unchanged) }
+        assertEquals(50, (ladder.window(4.5) as JpegQualityLadder.Outcome.Changed).quality)
+        assertTrue("still buys nothing", ladder.window(4.5) is JpegQualityLadder.Outcome.Reverted)
+
+        repeat(5) { assertTrue(ladder.window(4.5) is JpegQualityLadder.Outcome.Unchanged) }
+        assertEquals(50, (ladder.window(4.5) as JpegQualityLadder.Outcome.Changed).quality)
+    }
+
+    @Test
+    fun `a dash accepting nothing does not ride the ladder to the floor`() {
+        // Offers made, none taken: no quality can buy frames from a dash that refuses them all,
+        // and the stall used to end at the coarsest rung anyway.
+        val ladder = JpegQualityLadder()
+        ladder.onWindow(offered = 20, accepted = 0, elapsedMillis = windowMillis)
+        val outcome = ladder.onWindow(offered = 20, accepted = 0, elapsedMillis = windowMillis)
+        assertTrue(outcome is JpegQualityLadder.Outcome.Reverted)
         assertEquals(60, ladder.quality)
     }
 }

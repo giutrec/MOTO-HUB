@@ -302,6 +302,16 @@ class JpegDisplaySource(
                 )
             }
 
+            is JpegQualityLadder.Outcome.Reverted -> {
+                quality = outcome.quality
+                ProjectionEventLog.record(
+                    "JPEG",
+                    ("Still quality back to $quality: the coarser rung bought no frames " +
+                        "(still %.1f stills a second), so this dashboard is pacing frames, " +
+                        "not bytes; holding the quality instead.").format(fps)
+                )
+            }
+
             JpegQualityLadder.Outcome.Unchanged -> Unit
         }
     }

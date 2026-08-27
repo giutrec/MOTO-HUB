@@ -639,6 +639,20 @@ class TBoxNetworkConnector(context: Context) {
             return
         }
         val age = SystemClock.elapsedRealtime() - lastSampleTakenAtMs
+        if (age > LINK_SAMPLE_STALE_AGE_MS) {
+            // Rider dc735158 lost a session with a 39-minute-old -39dBm sample on the books:
+            // Android delivers capability callbacks only when the signal moves, so a rock-steady
+            // link goes unmeasured for as long as it stays put. An old sample cannot separate a
+            // fade from a vanish, but the silence itself can - a fade would have produced
+            // callbacks, so a long-unmeasured link was steady until it went.
+            ProjectionEventLog.warning(
+                "NETWORK",
+                "The T-Box link went unmeasured for the ${age}ms before the loss - Android " +
+                    "samples only on change, so the link held steady ($description) until it " +
+                    "vanished outright."
+            )
+            return
+        }
         ProjectionEventLog.warning(
             "NETWORK",
             "Last T-Box link measurement before the loss: $description, taken ${age}ms earlier."
@@ -1555,6 +1569,13 @@ class TBoxNetworkConnector(context: Context) {
 
         /** Steady-link cadence for the radio trail; a moving link logs sooner (sampleLinkQuality). */
         const val LINK_SAMPLE_INTERVAL_MS = 15_000L
+
+        /**
+         * Older than this and the loss-time sample stops being quoted as a measurement: a fading
+         * link produces callbacks well inside a minute, so a sample this old means the link never
+         * moved, not that it looked like the sample says when it died.
+         */
+        const val LINK_SAMPLE_STALE_AGE_MS = 60_000L
 
         /**
          * RSSI change that logs a sample regardless of the cadence. 6dB is a quarter of the
