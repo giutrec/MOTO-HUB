@@ -429,7 +429,7 @@
     <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
     <string name="legacy_needs_notification_access_44d40c16">Benötigt Benachrichtigungszugriff</string>
     <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
-    <string name="legacy_reset_defaults_6000a23">Standard wiederherstellen</string>
+    <string name="legacy_reset_defaults_6000a23">Zurücksetzen</string>
     <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
     <string name="legacy_swap_2785b3">Tauschen</string>
     <!-- Source: feature/ridedashboard/widget/DashboardWidgetPickerScreen.kt -->
@@ -467,17 +467,17 @@
     <!-- Speed-unit label when the rider selects miles in Settings. -->
     <string name="legacy_mph_12b05">MPH</string>
     <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
-    <string name="legacy_average_km_h_d2517b1e">DURCHSCHNITT KM/H</string>
+    <string name="legacy_average_km_h_d2517b1e">Ø KM/H</string>
     <!-- Trip-metrics average-speed label when the rider selects miles. -->
-    <string name="legacy_average_mph_6c8da62">DURCHSCHNITT MPH</string>
+    <string name="legacy_average_mph_6c8da62">Ø MPH</string>
     <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
     <string name="legacy_recent_8fd93a5b">ZULETZT</string>
     <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
-    <string name="legacy_speed_profile_2c1ba290">GESCHWINDIGKEITSPROFIL</string>
+    <string name="legacy_speed_profile_2c1ba290">TEMPOPROFIL</string>
     <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
     <string name="legacy_trip_performance_8c26f32b">TOUR // LEISTUNG</string>
     <!-- Source: feature/ridedashboard/widget/TripMetricsWidget.kt -->
-    <string name="legacy_waiting_for_speed_data_91032a2d">WARTE AUF GESCHWINDIGKEITSDATEN</string>
+    <string name="legacy_waiting_for_speed_data_91032a2d">WARTE AUF TEMPODATEN</string>
     <!-- Source: feature/ridedashboard/widget/WeatherWidget.kt -->
     <string name="legacy_check_cellular_data_b94ccb68">MOBILE DATEN PRÜFEN</string>
     <!-- Source: feature/ridedashboard/widget/WeatherWidget.kt -->
@@ -862,7 +862,7 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_car_service_917649">Autowerkstatt</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_charging_5973c691">Lädt</string>
+    <string name="legacy_charging_5973c691">Ladestation</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_choose_a_widget_for_1_s_26345a66">Wähle ein Widget für %1$s</string>
     <!-- Source: localized UI literal / enum label -->
@@ -1022,7 +1022,7 @@
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_pad_fullscreen_screen_stays_on_tap_exit_to_leave_fed4fb3e">Pad-Vollbild — der Bildschirm bleibt an. Tippe auf Beenden zum Verlassen.</string>
     <!-- Source: localized UI literal / enum label -->
-    <string name="legacy_parking_33f14b98">Parken</string>
+    <string name="legacy_parking_33f14b98">Parkplätze</string>
     <!-- Source: localized UI literal / enum label -->
     <string name="legacy_pharmacies_3d1e90b1">Apotheken</string>
     <!-- Source: localized UI literal / enum label -->
@@ -1392,7 +1392,7 @@
     <string name="legacy_buttons_control_android_auto_3dc44642">Tasten steuern Android Auto</string>
     <string name="legacy_drive_android_auto_with_the_motorcycle_s_buttons_ec16509d">Android Auto mit den Tasten des Motorrads bedienen</string>
     <string name="legacy_handlebar_buttons_47b4fd2c">Lenkertasten</string>
-    <string name="legacy_managed_by_the_companion_app_its_controls_screen_9ad80a75">Wird von der Begleit-App verwaltet: Ihr Bedienungsbildschirm setzt bei jedem Sitzungsstart die eigene Lenkerkonfiguration erneut durch und überschreibt, was hier eingestellt ist. Konfiguriere den Lenker dort.</string>
+    <string name="legacy_managed_by_the_companion_app_its_controls_screen_9ad80a75">Wird von der Begleit-App verwaltet: ihr Bedienungsbildschirm setzt bei jedem Sitzungsstart die eigene Lenkerkonfiguration erneut durch und überschreibt, was hier eingestellt ist. Konfiguriere den Lenker dort.</string>
     <string name="legacy_music_volume_9fa56d95">MUSIKLAUTSTÄRKE</string>
     <string name="legacy_off_means_the_mode_picker_stays_exactly_as_befor_c93efb5c">Aus bedeutet, dass die Modusauswahl bleibt, genau wie zuvor.</string>
     <string name="legacy_on_9ff">Ein</string>
@@ -1479,14 +1479,14 @@
     <string name="legacy_gnss_live_7bc47fe5">GNSS LIVE</string>
     <string name="legacy_level_44fa364">EBEN</string>
     <string name="legacy_no_fix_8982dd16">KEIN FIX</string>
-    <string name="legacy_vertical_speed_427682fd">VERTIKALGESCHWINDIGKEIT</string>
+    <string name="legacy_vertical_speed_427682fd">STEIGRATE</string>
 
     <!-- Source: feature/ridedashboard/widget/BatteryWidget.kt -->
     <string name="legacy_battery_level_508e0b71">AKKUSTAND</string>
     <string name="legacy_charging_843f5271">LÄDT</string>
     <string name="legacy_external_power_41cdb450">EXTERNE STROMVERSORGUNG</string>
     <string name="legacy_hot_1182d">HEISS</string>
-    <string name="legacy_low_power_483394f9">ENERGIESPARMODUS</string>
+    <string name="legacy_low_power_483394f9">SCHWACHER AKKU</string>
     <string name="legacy_no_sensor_69b15af9">KEIN SENSOR</string>
     <string name="legacy_normal_8999b0e7">NORMAL</string>
     <string name="legacy_off_1314f">AUS</string>
