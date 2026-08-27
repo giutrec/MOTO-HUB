@@ -523,7 +523,7 @@ private fun DiagnosticsDetail(
     var verboseLogging by remember { mutableStateOf(MotoHubSettings.verboseTBoxLogging(context)) }
 
     MotoHubDetailScreen(title = motoHubText("Diagnostics"), backLabel = motoHubText("‹ Settings"), onBack = onBack) {
-        SupportIdSection()
+        SupportIdSection(loggingEnabled = loggingEnabled)
         MotoHubCardGroup {
             MotoHubActionRow(
                 title = motoHubText("Network diagnostics"),

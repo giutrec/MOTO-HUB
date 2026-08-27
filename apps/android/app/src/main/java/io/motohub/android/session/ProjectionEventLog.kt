@@ -279,6 +279,19 @@ object ProjectionEventLog {
     fun isLoggingEnabled(): Boolean =
         appContext?.let(MotoHubSettings::loggingEnabled) ?: true
 
+    /**
+     * When the newest entry in the ring was recorded, or null when the log is empty.
+     *
+     * Only interesting while logging is OFF, where it is the moment the log stopped being an
+     * account of what the app is doing. Turning the switch off stops new entries and deliberately
+     * keeps the old ones - a rider who wanted the history gone would clear it, and losing a
+     * week of evidence to a switch flipped for a minute would be the worse mistake - so what is
+     * left still reads like a complete log while being a fossil. Rider 94c456e9 sent a report
+     * whose ADVANCED half ended 21 days and 61 builds before the report itself, with nothing in
+     * the file saying so; this is what lets the app say it out loud before the report goes.
+     */
+    fun lastEntryAtMillis(): Long? = synchronized(lock) { ring.lastOrNull()?.timestampMillis }
+
     fun record(
         source: String,
         message: String,
