@@ -504,14 +504,8 @@ Maintainers can find the complete release process and required GitHub secret nam
 - [Dynamic Android Auto profile](documentation/DYNAMIC_ANDROID_AUTO_PROFILE.md)
 - [Security, privacy, and licensing](documentation/SECURITY_AND_PRIVACY.md)
 - [Test strategy](documentation/TEST_STRATEGY.md)
-- [Roadmap](documentation/ROADMAP.md)
-- [Risk register](documentation/RISK_REGISTER.md)
-- [OpenCfMoto comparative audit](documentation/OPEN_CFMOTO_COMPARATIVE_AUDIT.md)
 - [Projection settings](documentation/PROJECTION_SETTINGS.md)
 - [Public release process](documentation/PUBLIC_RELEASE.md)
-- [Architecture decisions](documentation/decisions/README.md)
-
-The [Ride Dashboard](documentation/RIDE_DASHBOARD.md), [Navigation](documentation/NAVIGATION.md) and [Trip recording](documentation/TRIP_RECORDING.md) documents describe features that now ship in MOTO-HUB ADVANCED. They are kept here because they were written against this repository's history.
 
 </details>
 
