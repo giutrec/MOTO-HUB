@@ -103,6 +103,25 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
     private val capabilityStore = TBoxCapabilityStore(application)
     private var connectJob: Job? = null
 
+    /**
+     * The rider's own "no", remembered until a connection genuinely starts again.
+     *
+     * [cancelConnection] leaves the phase at NETWORK_SETUP_REQUIRED, which is exactly the phase
+     * auto-connect waits for, so a cancel used to be answered by a fresh automatic attempt one
+     * 5s cooldown later - see [autoConnectDecision], which reads this. Not saved state on
+     * purpose: it dies with the ViewModel, so a relaunch starts willing to try again.
+     */
+    var riderCancelledConnect: Boolean = false
+        private set
+
+    /**
+     * Whether the active motorcycle is visibly on the air - tri-state, see
+     * [TBoxNetworkConnector.isDashBroadcasting]. Null when no profile is selected, too, since
+     * that is equally "cannot be said".
+     */
+    fun isDashBroadcasting(): Boolean? =
+        mutableUiState.value.session.motorcycle?.let(networkConnector::isDashBroadcasting)
+
     init {
         ProjectionEventLog.record(
             "STATE",
@@ -425,6 +444,10 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
             )
             return
         }
+        // A connection is genuinely starting - manual Connect, the permission-grant retry, the
+        // reconnect after a mode stops, or an auto-connect the policy did let through. Whichever
+        // it was, the earlier cancel has been answered and must not keep suppressing anything.
+        riderCancelledConnect = false
         // "Is Wi-Fi on" is the wrong question for a dash that joins a network the phone hosts:
         // tethering turns the station radio off, so that check reports false for the whole life
         // of a working PHONE_HOTSPOT session and used to block every connect through here -
@@ -649,6 +672,7 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         ProjectionEventLog.record("CONNECTION", "User cancelled the connection attempt.")
+        riderCancelledConnect = true
         viewModelScope.launch {
             activeJob.cancelAndJoin()
             transport.stop()

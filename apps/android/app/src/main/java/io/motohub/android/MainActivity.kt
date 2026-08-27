@@ -63,6 +63,8 @@ import io.motohub.android.androidauto.TBoxScreenMargins
 import io.motohub.android.androidauto.TBoxScreenMarginsStore
 import io.motohub.android.data.MotorcyclePhotoStore
 import io.motohub.android.data.MotorcycleProfileStore
+import io.motohub.android.session.AutoConnectDecision
+import io.motohub.android.session.autoConnectDecision
 import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.tbox.ThinkerRideGate
 import io.motohub.android.feature.about.AboutScreen
@@ -299,6 +301,7 @@ class MainActivity : ComponentActivity() {
                 var qrPhotoProgress by remember { mutableStateOf(0 to 0) }
                 var pendingUnverifiedQr by remember { mutableStateOf<TBoxQrPayload?>(null) }
                 var lastAutoConnectAttemptAt by remember { mutableStateOf(0L) }
+                var autoConnectAttempts by remember { mutableStateOf(0) }
                 var editorProfileId by rememberSaveable { mutableStateOf<String?>(null) }
                 var capabilityProfileId by rememberSaveable { mutableStateOf<String?>(null) }
                 var photoTargetProfileId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -838,7 +841,20 @@ class MainActivity : ComponentActivity() {
                     }
                     val now = SystemClock.elapsedRealtime()
                     if (now - lastAutoConnectAttemptAt < AUTO_CONNECT_RETRY_COOLDOWN_MS) return
+                    // Deliberately before the timestamp is stamped: a skip must not push the
+                    // cooldown out, so the resume that finally finds the dash on the air is not
+                    // made to wait for a decision that cost nothing.
+                    val decision = autoConnectDecision(
+                        riderCancelled = viewModel.riderCancelledConnect,
+                        previousAttempts = autoConnectAttempts,
+                        dashBroadcasting = viewModel.isDashBroadcasting()
+                    )
+                    if (decision is AutoConnectDecision.Skip) {
+                        ProjectionEventLog.debug("AUTO_CONNECT", "Auto-connect skipped; ${decision.reason}")
+                        return
+                    }
                     lastAutoConnectAttemptAt = now
+                    autoConnectAttempts++
                     delay(AUTO_CONNECT_START_DELAY_MS)
                     ProjectionEventLog.record(
                         "AUTO_CONNECT",
