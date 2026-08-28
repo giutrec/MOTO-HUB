@@ -82,6 +82,8 @@ import io.motohub.android.feature.androidauto.AndroidAutoHelpScreen
 import io.motohub.android.feature.androidauto.AndroidAutoPreviewScreen
 import io.motohub.android.feature.androidauto.CompanionAppWarningDialog
 import io.motohub.android.feature.controls.HandlebarTeachPrerequisiteRequest
+import io.motohub.android.feature.diagnostics.ClockLabScreen
+import io.motohub.android.feature.diagnostics.ClockLabViewModel
 import io.motohub.android.feature.diagnostics.NetworkDiagnosticsScreen
 import io.motohub.android.feature.diagnostics.NetworkDiagnosticsViewModel
 import io.motohub.android.feature.diagnostics.ApplicationLogScreen
@@ -167,6 +169,7 @@ private fun applyPhoneOnlyAndroidAutoDisplayMode(context: Context, displayMode: 
 class MainActivity : ComponentActivity() {
     private val viewModel: HubViewModel by viewModels()
     private val diagnosticsViewModel: NetworkDiagnosticsViewModel by viewModels()
+    private val clockLabViewModel: ClockLabViewModel by viewModels()
    private val androidAutoLaunchPending = AtomicBoolean(false)
     private val androidAutoPhoneOnlyBridge by lazy {
         io.motohub.android.androidauto.createAndroidAutoPhoneOnlyBridge(applicationContext)
@@ -266,6 +269,7 @@ class MainActivity : ComponentActivity() {
             MotoHubTheme {
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 val diagnosticsState by diagnosticsViewModel.uiState.collectAsStateWithLifecycle()
+                val clockLabState by clockLabViewModel.uiState.collectAsStateWithLifecycle()
                 val projectionEvents by ProjectionEventLog.events.collectAsStateWithLifecycle()
                 val androidAutoState by AndroidAutoRuntime.state.collectAsStateWithLifecycle()
                 val androidAutoActive = androidAutoState is AndroidAutoRuntimeState.Preparing ||
@@ -280,6 +284,7 @@ class MainActivity : ComponentActivity() {
                 var showQrScanner by rememberSaveable { mutableStateOf(false) }
                 var showManualPairing by rememberSaveable { mutableStateOf(false) }
                 var showNetworkDiagnostics by rememberSaveable { mutableStateOf(false) }
+                var showClockLab by rememberSaveable { mutableStateOf(false) }
                 var showApplicationLogs by rememberSaveable { mutableStateOf(false) }
                 var showAbout by rememberSaveable { mutableStateOf(false) }
                 var showAndroidAutoHelp by rememberSaveable { mutableStateOf(false) }
@@ -1004,6 +1009,7 @@ class MainActivity : ComponentActivity() {
                     capabilityProfileId != null -> HubScreenKey.CAPABILITIES
                     editorProfileId != null -> HubScreenKey.MOTORCYCLE_DETAILS
                     showNetworkDiagnostics -> HubScreenKey.NETWORK_DIAGNOSTICS
+                    showClockLab -> HubScreenKey.CLOCK_LAB
                     showQrScanner -> HubScreenKey.QR_SCANNER
                     showManualPairing -> HubScreenKey.MANUAL_PAIRING
                     else -> HubScreenKey.HOME
@@ -1225,6 +1231,16 @@ class MainActivity : ComponentActivity() {
                         onBack = {
                             ProjectionEventLog.record("UI", "Network diagnostics screen closed.")
                             showNetworkDiagnostics = false
+                        }
+                    )
+                        HubScreenKey.CLOCK_LAB ->
+                    ClockLabScreen(
+                        state = clockLabState,
+                        onRun = clockLabViewModel::run,
+                        onStop = clockLabViewModel::stop,
+                        onBack = {
+                            ProjectionEventLog.record("UI", "Dash clock lab screen closed.")
+                            showClockLab = false
                         }
                     )
                         HubScreenKey.QR_SCANNER ->
@@ -1491,6 +1507,10 @@ class MainActivity : ComponentActivity() {
                                 onOpenNetworkDiagnostics = {
                                     ProjectionEventLog.record("UI", "Network diagnostics screen opened.")
                                     showNetworkDiagnostics = true
+                                },
+                                onOpenClockLab = {
+                                    ProjectionEventLog.record("UI", "Dash clock lab screen opened.")
+                                    showClockLab = true
                                 },
                                 onOpenApplicationLogs = {
                                     ProjectionEventLog.record("UI", "Application log screen opened.")

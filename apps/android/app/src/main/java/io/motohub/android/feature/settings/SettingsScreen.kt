@@ -71,6 +71,7 @@ private enum class SettingsDetail {
 @Composable
 fun SettingsTabContent(
     onOpenNetworkDiagnostics: () -> Unit,
+    onOpenClockLab: () -> Unit,
     onOpenApplicationLogs: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenAndroidAutoHelp: () -> Unit,
@@ -136,6 +137,7 @@ fun SettingsTabContent(
             SettingsDetail.DIAGNOSTICS -> DiagnosticsDetail(
                 onBack = { detail = null },
                 onOpenNetworkDiagnostics = onOpenNetworkDiagnostics,
+                onOpenClockLab = onOpenClockLab,
                 onOpenApplicationLogs = onOpenApplicationLogs
             )
         }
@@ -516,6 +518,7 @@ private fun AutomationDetail(onBack: () -> Unit) {
 private fun DiagnosticsDetail(
     onBack: () -> Unit,
     onOpenNetworkDiagnostics: () -> Unit,
+    onOpenClockLab: () -> Unit,
     onOpenApplicationLogs: () -> Unit
 ) {
     val context = LocalContext.current
@@ -529,6 +532,11 @@ private fun DiagnosticsDetail(
                 title = motoHubText("Network diagnostics"),
                 description = motoHubText("T-Box discovery, Wi-Fi binding, cellular routes"),
                 onClick = onOpenNetworkDiagnostics
+            )
+            MotoHubActionRow(
+                title = motoHubText("Dash clock lab"),
+                description = motoHubText("Experiments for dashes that reset the clock (Zontes)"),
+                onClick = onOpenClockLab
             )
             MotoHubActionRow(
                 title = motoHubText("Application logs"),

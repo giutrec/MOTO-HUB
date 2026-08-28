@@ -361,7 +361,9 @@ internal class EcBtpTimeLink(
         runCatching { gatt.close() }
     }
 
-    private companion object {
+    // Not private: EcBtpClockLab experiments on the same UUID lists, and two copies of Carbit's
+    // service table would drift apart the first time a new dash adds a row.
+    companion object {
         /**
          * How long to scan for an unbonded dashboard.
          *
