@@ -230,7 +230,9 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
             return false
         }
 
-        val profile = current.motorcycles.firstOrNull { it.ssid == normalizedSsid }
+        // Keeps the stored spelling rather than the typed one: this name has been connected with,
+        // and a rider retyping it in another case is correcting nothing.
+        val profile = current.motorcycles.bySsidIgnoringCase(normalizedSsid)
             ?.copy(password = current.password, connectionMode = current.connectionMode)
             ?: MotorcycleProfile(
                 ssid = normalizedSsid,
@@ -315,8 +317,10 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                 "advertises=${payload.topology.describe()}, " +
                 "dashMac=${payload.dashMacAddress ?: "not provided"}."
         )
-        val existing = mutableUiState.value.motorcycles.firstOrNull { it.ssid == payload.ssid }
+        val existing = mutableUiState.value.motorcycles.bySsidIgnoringCase(payload.ssid)
         val profile = existing?.copy(
+            // Unlike the typed path, the spelling here comes from the dash's own QR, so it wins.
+            ssid = payload.ssid,
             password = payload.password,
             modelId = payload.modelId ?: existing.modelId,
             displayName = payload.displayName ?: existing.displayName,
@@ -981,6 +985,20 @@ private fun restoredUiState(
 
 private fun List<MotorcycleProfile>.replaceProfile(profile: MotorcycleProfile): List<MotorcycleProfile> =
     filterNot { it.id == profile.id } + profile
+
+/**
+ * The saved motorcycle for a network name, ignoring case - because the half of the app that
+ * actually joins the network already does.
+ *
+ * TBoxNetworkConnector matches a scan result with `equalsIgnoreCase`, so `cqky_1234` and
+ * `CQKY_1234` are one network to everything below the garage. Matching them exactly here made
+ * them two motorcycles, and the second one is worse than a duplicate: it is created with no
+ * modelId and no override, so it resolves to the GENERIC EasyConn profile, which on a ThinkerRide
+ * or Yunmo dash is not a milder answer but a broken one. Rider 2e3b10d2 has both entries for one
+ * KOVE, the second sitting on GENERIC, waiting to be tapped.
+ */
+internal fun List<MotorcycleProfile>.bySsidIgnoringCase(ssid: String): MotorcycleProfile? =
+    firstOrNull { it.ssid.equals(ssid, ignoreCase = true) }
 
 private fun ProjectionRuntimeState.restoredSessionPhase(): SessionPhase = when (this) {
     ProjectionRuntimeState.Starting -> SessionPhase.REQUESTING_PROJECTION
