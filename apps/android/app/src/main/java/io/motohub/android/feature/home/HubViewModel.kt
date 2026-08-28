@@ -535,8 +535,16 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                         // client there is no access point to join, so this is the only failure it
                         // can ever produce - and it is indistinguishable from a dash that is off.
                         // Offer the other mode instead of leaving the rider to find it.
-                        offerPhoneHotspotRetry =
-                            profile.connectionMode != TBoxConnectionMode.PHONE_HOTSPOT
+                        //
+                        // Not on Wi-Fi Direct, though. A P2P Group Owner hosts the network; a
+                        // phone-hotspot dash joins one. They are opposite topologies, and this
+                        // mode is now set by a code that said so ([TBoxQrTopology]), so the offer
+                        // would contradict the dash's own claim. The QJ rider of field log
+                        // 6b345de4 said exactly that back to us: "non e' il modo in cui posso
+                        // connettere la moto".
+                        offerPhoneHotspotRetry = profile.connectionMode !=
+                            TBoxConnectionMode.PHONE_HOTSPOT &&
+                            profile.connectionMode != TBoxConnectionMode.WIFI_DIRECT
                     )
                     return@launch
                 }

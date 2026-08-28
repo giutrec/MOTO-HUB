@@ -67,12 +67,26 @@ value class TBoxQrTopology(val bits: Int) {
     val neverOffersAccessPoint: Boolean get() = bits != 0 && !accessPoint
 
     /**
-     * The transport this code implies, or null to leave the rider's saved choice alone. Only the
-     * phone-hotspot bit is decisive: a dash advertising an access point, Wi-Fi Direct, or both is
-     * exactly what [TBoxConnectionMode.AUTO] already resolves correctly from the SSID.
+     * The transport this code implies, or null to leave the rider's saved choice alone. A code
+     * that claims exactly one topology is decisive; one that claims several is not, because only
+     * the dash knows which it will actually be on, and [TBoxConnectionMode.AUTO] picks between
+     * them from the SSID at connect time.
+     *
+     * The Wi-Fi Direct case is not the same as an access point and AUTO cannot stand in for it.
+     * AUTO infers P2P from a `DIRECT-` SSID prefix ([io.motohub.android.tbox.TBoxLinkResolver]),
+     * but a P2P code does not carry the group name: `ssid=` is the dash's P2P *device* name, and
+     * the group Android will see is `DIRECT-xy-<that name>`. A QJ SRK921 RR (field log
+     * 6b345de4, 2026-08-28) scanned `ssid=qj5inch-0758 action=8` - Wi-Fi Direct and nothing else
+     * - fell to AUTO, failed the prefix test, and spent every attempt asking
+     * `WifiNetworkSpecifier` for an access point that does not exist and never appeared in a
+     * single scan. Three joins, three 30s timeouts, and the rider was then offered the phone
+     * hotspot - the one topology the code had explicitly ruled out.
      */
-    fun suggestedConnectionMode(): TBoxConnectionMode? =
-        if (phoneHostsHotspot && !accessPoint && !wifiDirect) TBoxConnectionMode.PHONE_HOTSPOT else null
+    fun suggestedConnectionMode(): TBoxConnectionMode? = when {
+        phoneHostsHotspot && !accessPoint && !wifiDirect -> TBoxConnectionMode.PHONE_HOTSPOT
+        wifiDirect && !accessPoint && !phoneHostsHotspot -> TBoxConnectionMode.WIFI_DIRECT
+        else -> null
+    }
 
     companion object {
         const val BIT_AP = 1

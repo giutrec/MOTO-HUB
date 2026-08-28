@@ -297,8 +297,36 @@ class TBoxQrParserTest {
         assertTrue(p2pOnly.topology.wifiDirect)
         assertFalse(p2pOnly.topology.accessPoint)
         assertTrue(p2pOnly.topology.neverOffersAccessPoint)
-        // AUTO already resolves an advertised network correctly, so no mode is forced here.
-        assertNull(p2pOnly.suggestedConnectionMode)
+        assertEquals(TBoxConnectionMode.WIFI_DIRECT, p2pOnly.suggestedConnectionMode)
+    }
+
+    @Test
+    fun aWifiDirectOnlyCodeForcesP2pEvenWhenTheSsidIsNotDirectShaped() {
+        // The QJ SRK921 RR of field log 6b345de4 (2026-08-28). AUTO would test the SSID for a
+        // "DIRECT-" prefix, not find one, and spend every attempt on an access point that is not
+        // in a single Wi-Fi scan - which is exactly what happened to that rider three times.
+        // A P2P code carries the dash's peer name in ssid=, never the group name, so the prefix
+        // test can never pass here and the mask has to decide.
+        val payload = TBoxQrParser.parse(
+            "http://www.carbit.com.cn/x?ssid=qj5inch-0758&pwd=12345678&auth=WPA2&action=8&modelid=37303"
+        ).getOrThrow()
+
+        assertEquals("qj5inch-0758", payload.ssid)
+        assertEquals(TBoxConnectionMode.WIFI_DIRECT, payload.suggestedConnectionMode)
+    }
+
+    @Test
+    fun aCodeClaimingBothAnAccessPointAndP2pLeavesTheChoiceToAuto() {
+        // action=9 advertises both. Only the dash knows which it will be on when the rider taps
+        // Connect, and AUTO picks from the SSID at that moment - forcing either one here would
+        // be a guess made minutes too early.
+        val both = TBoxQrParser.parse(
+            "http://www.carbit.com.cn/x?ssid=ZT_e0082100e5ff_3&pwd=12345678&action=9"
+        ).getOrThrow()
+
+        assertTrue(both.topology.accessPoint)
+        assertTrue(both.topology.wifiDirect)
+        assertNull(both.suggestedConnectionMode)
     }
 
     @Test
