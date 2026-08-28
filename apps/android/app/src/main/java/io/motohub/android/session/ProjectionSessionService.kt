@@ -177,7 +177,9 @@ class ProjectionSessionService : Service() {
     private suspend fun startCapture(resultCode: Int, resultData: Intent) {
         if (stopping || !capturing.compareAndSet(false, true)) return
         ProjectionRuntime.publish(ProjectionRuntimeState.Starting)
-        ProjectionEventLog.record("SERVICE", "Starting EasyConn handshake.")
+        // Deliberately not named after a family: this runs before the session handle is in hand,
+        // so the only honest word here is the neutral one. "EasyConn" was wrong on every KOVE.
+        ProjectionEventLog.record("SERVICE", "Starting the dashboard handshake.")
 
         val handle = TBoxSessionRegistry.current()
             ?: return fail("No T-Box session is ready. Reconnect the motorcycle before sharing.")

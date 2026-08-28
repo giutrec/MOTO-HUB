@@ -600,14 +600,18 @@ class HubViewModel(application: Application) : AndroidViewModel(application) {
                             "straight to that transport instead of letting EasyConn time out first."
                     )
                 }
-                transport.configureProtocolProfile(
-                    learnedProfile ?: TBoxModelProfile.resolve(profile.modelId, null, requestedOverride),
-                    profile
-                )
+                val resolvedProfile =
+                    learnedProfile ?: TBoxModelProfile.resolve(profile.modelId, null, requestedOverride)
+                transport.configureProtocolProfile(resolvedProfile, profile)
                 val discovered = transport.discover(establishedLink, profile.modelId)
                 val discoveryFailure = discovered.exceptionOrNull()
                 if (discoveryFailure != null) {
-                    ProjectionEventLog.error("DISCOVERY", "EasyConn service discovery failed.", discoveryFailure)
+                    // The family that actually ran, not always EasyConn - see CoreTBoxConnector.
+                    ProjectionEventLog.error(
+                        "DISCOVERY",
+                        "${resolvedProfile.transportFamily} service discovery failed.",
+                        discoveryFailure
+                    )
                     // The link was up and the dash did not answer on it. Another EasyConn app
                     // holding the session is a real explanation here, and only here.
                     val routingDiagnosis = networkConnector.vpnRoutingDiagnosis()

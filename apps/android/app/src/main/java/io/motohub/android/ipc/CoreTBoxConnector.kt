@@ -147,7 +147,15 @@ class CoreTBoxConnector(private val context: Context) {
         transport.configureProtocolProfile(resolvedProfile, profile)
         val discovered = transport.discover(link, profile.modelId)
         val host = discovered.getOrElse {
-            ProjectionEventLog.error("IPC_TBOX", "AIDL connect: EasyConn discovery failed.", it)
+            // Named after the transport that actually ran. Saying "EasyConn" whatever the family
+            // was is not cosmetic: it is the first line a reader meets in a failing log, and on a
+            // ThinkerRide or Yunmo bike it sends them looking for a fault in a stack that never
+            // executed. Two of us lost the opening minutes of case 2e3b10d2 to exactly that.
+            ProjectionEventLog.error(
+                "IPC_TBOX",
+                "AIDL connect: ${resolvedProfile.transportFamily} discovery failed.",
+                it
+            )
             // A dash that never answers because the packets never left the phone is not a
             // discovery problem, and saying "the dash did not answer" sends the rider to the
             // bike. When the process binding was refused with a VPN demonstrably holding the

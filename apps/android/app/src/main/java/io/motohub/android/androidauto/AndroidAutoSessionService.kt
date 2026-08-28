@@ -501,7 +501,10 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                 "Android Auto video is ready; using the existing Wi-Fi Direct P2P route for T-Box hand-off."
             )
         }
-        ProjectionEventLog.record("ANDROID AUTO", "First AAP video frame received. Starting EasyConn session.")
+        ProjectionEventLog.record(
+            "ANDROID AUTO",
+            "First AAP video frame received. Starting the dashboard session."
+        )
 
         val savedArea = displayGeometryStore.load(handle.motorcycle.ssid)?.let { geometry ->
             TBoxEvent.VideoArea(geometry.width, geometry.height)
