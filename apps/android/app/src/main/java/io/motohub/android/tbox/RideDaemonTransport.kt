@@ -163,6 +163,8 @@ class RideDaemonTransport(
     /** Distinct (source, command) pairs already dumped this session for opcode identification. */
     private val unknownCommandsLogged =
         java.util.concurrent.ConcurrentHashMap.newKeySet<Pair<Long, Long>>()
+    /** Keeps a dash's keepalive traffic from spending the whole log ring on itself. */
+    private val beatCollapser = ProtocolBeatCollapser()
 
     override fun configureProtocolProfile(profile: TBoxModelProfile, motorcycle: MotorcycleProfile?) {
         protocolProfile = profile
@@ -1332,13 +1334,20 @@ class RideDaemonTransport(
             }
             if (type == PXC_EVENT_SOURCE || type == MEDIA_CONTROL_EVENT_SOURCE) {
                 val commandName = protocolCommandName(type, command)
+                // A dash's keepalive beats are folded into one line a minute (see
+                // ProtocolBeatCollapser); everything else is written as it arrives, after any
+                // open run of beats has been reported.
+                val decision = beatCollapser.onEvent(type, commandName, payload?.size ?: 0, now)
+                decision.rollup?.let { ProjectionEventLog.debug("TBOX", it) }
                 // Lambda form: this is the single highest-volume log line in the app (one per
                 // protocol event, and a drag on the TFT is a stream of them), so the string is
                 // not built at all when logging is off.
-                ProjectionEventLog.debug("TBOX") {
-                    "${protocolSourceName(type)} RX #$sequence command=" +
-                        "0x${command.toString(16)} ($commandName) " +
-                        "bytes=${payload?.size ?: 0}."
+                if (decision is BeatDecision.Write) {
+                    ProjectionEventLog.debug("TBOX") {
+                        "${protocolSourceName(type)} RX #$sequence command=" +
+                            "0x${command.toString(16)} ($commandName) " +
+                            "bytes=${payload?.size ?: 0}."
+                    }
                 }
                 // Any control message that carries a body is worth dumping, named or not.
                 // This used to fire only on UNKNOWN opcodes, which tied the evidence to the
@@ -1371,11 +1380,6 @@ class RideDaemonTransport(
                                 "($commandName) first seen; payload=${preview.toDiagnosticHex()}$truncated."
                         )
                     }
-                }
-            }
-            if (type == PXC_EVENT_SOURCE) {
-                ProjectionEventLog.debug("TBOX") {
-                    "PXC event received: command=$command, bytes=${payload?.size ?: 0}."
                 }
             }
             if (type == PXC_EVENT_SOURCE && command == PXC_HUD_CONFIG_COMMAND) {
@@ -1633,6 +1637,13 @@ class RideDaemonTransport(
         pxcStallReported.set(false)
         pxcQuietDashReported.set(false)
         unknownCommandsLogged.clear()
+        // The tally belongs to the session that produced it: reported before it is dropped, so a
+        // log does not end on beats that were counted and never mentioned, and so the next
+        // session writes each beat command's first occurrence again rather than folding it into
+        // a run the previous dash opened.
+        beatCollapser.close(SystemClock.elapsedRealtime())
+            ?.let { ProjectionEventLog.debug("TBOX", it) }
+        beatCollapser.reset()
     }
 
     /**
@@ -1818,6 +1829,103 @@ internal fun isStreamingPxcBeat(
     lastFrameOfferedElapsed > 0L &&
         previousPxcEventElapsed > 0L &&
         now - previousPxcEventElapsed >= PXC_STREAMING_BEAT_MIN_GAP_MS
+
+/**
+ * The empty control-plane messages a dash repeats for as long as the link is up: its heartbeat
+ * and whichever keepalive dialect it speaks (see the opcode names in PXC_COMMAND_NAMES). Matched
+ * by name so this list stays readable, and so an opcode nobody has named yet is never folded -
+ * an UNKNOWN arriving every two seconds is a finding, not noise.
+ *
+ * Commands that carry a body are absent on purpose, touch included: a drag is bounded by the
+ * rider's finger, while these run for the whole ride.
+ */
+internal val PROTOCOL_BEAT_COMMAND_NAMES = setOf(
+    "HEARTBEAT",
+    "HEARTBEAT_ACK",
+    "CLOCK_KEEPALIVE",
+    "CLOCK_KEEPALIVE_ACK",
+    "PERIODIC_NOTIFY",
+    "PERIODIC_NOTIFY_ALT",
+    "PING"
+)
+
+/** How long a run of folded beats may stay unreported. */
+internal const val PROTOCOL_BEAT_ROLLUP_INTERVAL_MS = 60_000L
+
+internal sealed interface BeatDecision {
+    /** The line that reports a run of beats ending here, if one did; written before the event. */
+    val rollup: String?
+
+    /** Write this event's own line. */
+    data class Write(override val rollup: String?) : BeatDecision
+
+    /** Counted into the open run instead of written. */
+    data class Fold(override val rollup: String?) : BeatDecision
+}
+
+/**
+ * Folds a dash's repeating keepalive traffic into one line a minute.
+ *
+ * [RepeatCollapser] already folds consecutive identical lines, and cannot help here: these beats
+ * interleave (HEARTBEAT_ACK, PERIODIC_NOTIFY, PERIODIC_NOTIFY_ALT, round again) and each line
+ * carries its own sequence number, so no two in a row are ever equal. The result is a log that
+ * holds only its last few minutes - a VOGE rider's report (support 0df154af, 2026-08-27) spent
+ * all 1500 CORE entries on 8 minutes of beats, and the handlebar presses he was reporting had
+ * long since fallen out of the ring. Every rider with logging on has this, verbose or not: these
+ * lines are gated on the master switch alone.
+ *
+ * The first occurrence of each beat command is always written, so "did this dash ever send X"
+ * stays answerable from the log; the rest become a tally. A run is closed - and its line
+ * emitted - either when the interval elapses or when any other event arrives, so a rollup never
+ * separates an event from the traffic that preceded it.
+ *
+ * Free of Android types so the rule can be unit tested, and synchronized because the transport
+ * callback that drives it is not documented to be single-threaded (a field log shows PXC events
+ * arriving out of sequence order).
+ */
+internal class ProtocolBeatCollapser(
+    private val rollupIntervalMillis: Long = PROTOCOL_BEAT_ROLLUP_INTERVAL_MS
+) {
+    private val lock = Any()
+    private val writtenOnce = mutableSetOf<Pair<Long, String>>()
+    private val folded = LinkedHashMap<String, Int>()
+    private var runStartedAt = 0L
+
+    fun onEvent(type: Long, commandName: String, payloadSize: Int, now: Long): BeatDecision =
+        synchronized(lock) {
+            val isBeat = payloadSize == 0 && commandName in PROTOCOL_BEAT_COMMAND_NAMES
+            if (!isBeat || writtenOnce.add(type to commandName)) {
+                return BeatDecision.Write(closeRun(now))
+            }
+            if (runStartedAt == 0L) runStartedAt = now
+            folded[commandName] = (folded[commandName] ?: 0) + 1
+            val elapsed = now - runStartedAt
+            return BeatDecision.Fold(if (elapsed >= rollupIntervalMillis) closeRun(now) else null)
+        }
+
+    /** Ends the open run, for a teardown that would otherwise drop its tally unreported. */
+    fun close(now: Long): String? = synchronized(lock) { closeRun(now) }
+
+    fun reset() = synchronized(lock) {
+        writtenOnce.clear()
+        folded.clear()
+        runStartedAt = 0L
+    }
+
+    private fun closeRun(now: Long): String? {
+        if (folded.isEmpty()) {
+            runStartedAt = 0L
+            return null
+        }
+        val seconds = ((now - runStartedAt).coerceAtLeast(0L) + 500L) / 1000L
+        val total = folded.values.sum()
+        val breakdown = folded.entries.joinToString(", ") { "${it.key} ×${it.value}" }
+        folded.clear()
+        runStartedAt = 0L
+        return "$total keepalive beat${if (total == 1) "" else "s"} folded over ${seconds}s: " +
+            "$breakdown. Each was empty and identical to the first of its kind, logged above."
+    }
+}
 
 internal fun decodeEasyConnPackage(value: ByteArray?): String? = value
     ?.toString(Charsets.UTF_8)

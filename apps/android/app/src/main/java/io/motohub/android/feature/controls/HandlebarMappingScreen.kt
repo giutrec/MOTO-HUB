@@ -731,11 +731,25 @@ private fun HandlebarCalibrationScreen(onDone: () -> Unit) {
             OutlinedButton(
                 onClick = {
                     HandlebarCalibration.recordMissing(context, press)
+                    ProjectionEventLog.record(
+                        "CONTROLS",
+                        "Marked ${press.id} as absent from this handlebar."
+                    )
                     step++
                 },
                 modifier = Modifier.weight(1f)
             ) { Text(motoHubText("Not on my bike")) }
-            OutlinedButton(onClick = { step++ }, modifier = Modifier.weight(1f)) {
+            OutlinedButton(
+                onClick = {
+                    // Logged for the same reason the automatic skip above is: a wizard run to the
+                    // end teaches nothing if every step was skipped, and a support case cannot
+                    // tell that from a wizard whose presses never arrived. Support 0df154af read
+                    // as the second and may well have been the first.
+                    ProjectionEventLog.record("CONTROLS", "Skipped ${press.id}; rider tapped Skip.")
+                    step++
+                },
+                modifier = Modifier.weight(1f)
+            ) {
                 Text(motoHubText("Skip"))
             }
         }

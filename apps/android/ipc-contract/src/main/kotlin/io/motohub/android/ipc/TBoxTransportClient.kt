@@ -307,6 +307,22 @@ class TBoxTransportClient(
         return onCore("holdsHandlebarBluetoothPermission") { it.holdsHandlebarBluetoothPermission() }
     }
 
+    /**
+     * How Core's own handlebar is configured - null for "cannot be known", never for "nothing".
+     *
+     * Three-valued for the same reason as [coreHoldsHandlebarBluetoothPermission], and parsed
+     * here so the wire format stays this file's business. A malformed answer is no answer: this
+     * ends up in a diagnostics report as a statement about the rider's phone, and a field that
+     * defaulted rather than failed would send an investigation somewhere the rider never was.
+     */
+    fun coreHandlebarState(): HandlebarState? {
+        if (service == null) return null
+        if (contractVersion() < IpcBridgeContract.CONTRACT_VERSION_HANDLEBAR_STATE) return null
+        return onCore("getHandlebarState") { it.getHandlebarState() }
+            ?.takeIf { it.isNotBlank() }
+            ?.let(HandlebarState::parse)
+    }
+
     /** True when the clear reached Core; false when unbound or Core predates the method. */
     fun clearDiagnosticLog(): Boolean =
         runCatching { service?.also { it.clearDiagnosticLog() } != null }.getOrDefault(false)

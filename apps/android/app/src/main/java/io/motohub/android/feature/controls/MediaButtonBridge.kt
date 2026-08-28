@@ -285,6 +285,40 @@ class MediaButtonBridge(
         }
     }
 
+    /**
+     * Re-applies the input protocol to a session already running.
+     *
+     * The mode is read at [enableCapture] and nowhere else, so a rider who switched protocol
+     * mid-session changed a preference and nothing else: the bridge kept decoding the old one
+     * until the next session start, with no way to tell from the outside. Support 0df154af
+     * switched AVRCP → HID → AVRCP inside eleven minutes while an Android Auto session ran, and
+     * the log shows all three switches and no consequence of any of them.
+     *
+     * The un-blocking case is the one that matters most. AVRCP capture with no Bluetooth grant
+     * ends in [awaitBluetooth], waiting for an adapter event that HID does not need and will
+     * never produce - so switching to HID has to retry the capture itself, or the rider's fix for
+     * the exact problem they were told about does nothing until they restart the session.
+     */
+    private fun inputModeChanged() {
+        handler.post {
+            val mode = HandlebarControlStore.inputMode(context)
+            if (!captureActive) {
+                if (!pendingCapture) return@post
+                // Skipped earlier for want of Bluetooth: only HID can proceed without it, and
+                // enableCapture re-checks the rest for itself.
+                if (mode != HandlebarInputMode.HID) return@post
+                log("[BTN] input protocol is HID now, which needs no Bluetooth grant; starting handlebar capture")
+                enableCapture()
+                return@post
+            }
+            log("[BTN] input protocol changed to ${mode.id} mid-session; re-applying it")
+            // HID takes its volume keys as ordinary key events, so the pin that AVRCP needs is
+            // wrong for it (and vice versa). This is the same live re-decision the calibration
+            // wizard triggers, for the same reason.
+            refreshVolumeGestureUse()
+        }
+    }
+
     private fun awaitBluetooth() {
         if (bluetoothWaitReceiver != null) return
         val receiver = object : BroadcastReceiver() {
@@ -1450,6 +1484,14 @@ class MediaButtonBridge(
          */
         fun bluetoothPermissionGranted() {
             bridges.values.forEach { it.retryAfterBluetoothGrant() }
+        }
+
+        /**
+         * The input protocol changed - here or pushed over the bridge by a companion app - and
+         * every live bridge re-applies it instead of running the old one until the next session.
+         */
+        fun inputModeChanged() {
+            bridges.values.forEach { it.inputModeChanged() }
         }
 
         /** Music volume from the live bridge or plain AudioManager (for the Controls slider). */

@@ -5,6 +5,7 @@ package io.motohub.android.feature.diagnostics.report
 
 import android.content.Context
 import io.motohub.android.feature.controls.BluetoothStatus
+import io.motohub.android.feature.controls.currentHandlebarState
 import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.tbox.TBoxWireLadder
@@ -54,5 +55,11 @@ private class CoreDiagnosticsCompanion(private val appContext: Context) : Diagno
     override suspend fun handlebarBluetoothGrants(context: Context) = HandlebarBluetoothGrants(
         advanced = null,
         core = BluetoothStatus.hasConnectPermission(appContext)
+    )
+
+    /** Same one-process answer, from the stores an Android Auto session actually reads. */
+    override suspend fun handlebarStates(context: Context) = HandlebarStates(
+        advanced = null,
+        core = runCatching { currentHandlebarState(appContext) }.getOrNull()
     )
 }

@@ -330,6 +330,18 @@ class IpcBridgeService : Service() {
                 this@IpcBridgeService
             )
 
+        /**
+         * What this app would do with a press that arrives - the other half of the permission
+         * above, and just as invisible from the companion app.
+         *
+         * Read live, and for the motorcycle that is active HERE: the settings parcel the
+         * companion pushes is applied to these same stores, so a mismatch between what it sent
+         * and what this returns is itself the finding.
+         */
+        override fun getHandlebarState(): String =
+            io.motohub.android.feature.controls.currentHandlebarState(this@IpcBridgeService)
+                .encode()
+
         // Read after a false connect(), so the caller can put Core's own reason in front of its
         // rider instead of "Core failed to connect to the T-Box" plus whichever help it happens
         // to have. Not cleared here: the caller may ask more than once (log it, then show it).
@@ -1086,8 +1098,23 @@ class IpcBridgeService : Service() {
                     io.motohub.android.feature.controls.HandlebarInputMode.entries
                         .firstOrNull { it.id == settings.handlebarInputMode }
                         ?.let {
+                            val previous = io.motohub.android.feature.controls.HandlebarControlStore
+                                .inputMode(ctx)
                             io.motohub.android.feature.controls.HandlebarControlStore
                                 .setInputMode(ctx, it)
+                            // The companion pushes this parcel mid-session too - its picker sends
+                            // one on every change. Storing the choice without applying it is what
+                            // made those switches invisible: the bridge reads the mode when it
+                            // takes the handlebar and never again.
+                            if (it != previous) {
+                                ProjectionEventLog.record(
+                                    "IPC_AA",
+                                    "Handlebar input mode mirrored from companion: " +
+                                        "${previous.id} -> ${it.id}."
+                                )
+                                io.motohub.android.feature.controls.MediaButtonBridge
+                                    .inputModeChanged()
+                            }
                         }
                 }
             }

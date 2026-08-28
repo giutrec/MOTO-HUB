@@ -323,4 +323,25 @@ interface ITBoxTransportService {
      * "unknown", never as "missing". Same tail-position rule as the calls above.
      */
     boolean holdsHandlebarBluetoothPermission();
+
+    /**
+     * How THIS package's handlebar is configured right now, in HandlebarState's wire format
+     * (io.motohub.android.ipc.HandlebarState). Null when it cannot be read at all.
+     *
+     * The permission above answers whether a press can arrive; this answers what happens to one
+     * that does, and it is invisible from the companion app for the same reason: an Android Auto
+     * session's handlebar is decoded here, and the screens that configure it are over there. A
+     * diagnostics report that printed the companion's own copy would state the input protocol,
+     * the mapping and the teaching status of the half that decodes nothing - which is how support
+     * 0df154af could show a rider switching protocols and running the wizard while nothing in the
+     * process that reads his presses changed at all.
+     *
+     * Deliberately not the radio: an adapter is one radio, and the caller reads that for itself.
+     *
+     * A CORE that predates this call leaves the reply parcel empty, which reads as null - the
+     * caller must check getContractVersion() against
+     * IpcBridgeContract.CONTRACT_VERSION_HANDLEBAR_STATE and treat anything older as "unknown".
+     * Same tail-position rule as the calls above.
+     */
+    String getHandlebarState();
 }

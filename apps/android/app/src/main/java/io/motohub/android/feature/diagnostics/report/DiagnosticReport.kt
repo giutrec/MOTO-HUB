@@ -9,7 +9,9 @@ import android.os.Build
 import io.motohub.android.BuildConfig
 import io.motohub.android.androidauto.AndroidAutoDisplayModeStore
 import io.motohub.android.data.MotorcycleProfileStore
+import io.motohub.android.feature.controls.BluetoothStatus
 import io.motohub.android.feature.settings.MotoHubSettings
+import io.motohub.android.ipc.HandlebarState
 import io.motohub.android.session.InstallationId
 import io.motohub.android.ipc.IpcBridgeContract
 import io.motohub.android.session.MotorcycleProfile
@@ -24,6 +26,9 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
+import kotlin.coroutines.resume
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -56,6 +61,8 @@ class DiagnosticReport(
 object DiagnosticReportBuilder {
     private const val GEARHEAD_PACKAGE = "com.google.android.projection.gearhead"
     private const val CORE_PACKAGE = "io.motohub.android"
+    /** Generous: BluetoothStatus.query gives up on its own well inside this. */
+    private const val RADIO_QUERY_TIMEOUT_MS = 3_000L
 
     /** Same vocabulary the Sentry integration next door uses, so the two can be joined up. */
     private val EDITION: String get() = if (BuildConfig.IS_PRO) "advanced" else "core"
@@ -72,6 +79,8 @@ object DiagnosticReportBuilder {
         val logText = companion.exportLog(appContext)
         val ladders = companion.wireLadders(appContext, profiles)
         val bluetooth = companion.handlebarBluetoothGrants(appContext)
+        val handlebarStates = companion.handlebarStates(appContext)
+        val radio = bluetoothRadio(appContext)
 
         val metadata = JSONObject().apply {
             // 2: every motorcycle now carries a "wireLadder" object. Bumped rather than added
@@ -80,7 +89,11 @@ object DiagnosticReportBuilder {
             // 3: "permissions", with the Bluetooth grant of each half. Same reason: a missing
             // field and a denied permission must not read the same, and the difference is the
             // whole diagnosis of a handlebar that never worked.
-            put("schema", 3)
+            // 4: "handlebar" - each half's configuration, plus the radio. The grant said a press
+            // could arrive; nothing said what the half that decodes it would do with one, and a
+            // rider's log cannot answer that either (support 0df154af: three protocol switches
+            // and a full teaching wizard, with no trace of any of it in what he sent).
+            put("schema", 4)
             put("reportId", reportId)
             put("supportId", supportId)
             put("deviceId", deviceId)
@@ -99,6 +112,7 @@ object DiagnosticReportBuilder {
                 profiles.forEach { put(motorcycle(appContext, it, isActive = it.id == active?.id, ladders = ladders)) }
             })
             put("permissions", permissions(bluetooth))
+            put("handlebar", handlebar(handlebarStates, radio))
             put("settings", settings(appContext))
             put("log", JSONObject().apply {
                 put("chars", logText.length)
@@ -123,6 +137,58 @@ object DiagnosticReportBuilder {
             put("core", bluetooth.core ?: JSONObject.NULL)
         })
     }
+
+    /**
+     * How each half's handlebar is configured, and whether the radio could deliver a press at all.
+     *
+     * The two halves are separate objects, never merged: an Android Auto session's presses are
+     * decoded in CORE, the Ride Dashboard's in ADVANCED, and one summary covering both would be
+     * wrong for whichever the rider was actually using. JSONObject.NULL for a half that could not
+     * be asked, on the same rule as [permissions] - absent is not "nothing configured".
+     *
+     * The radio is a count, not a device list: whether anything is connected is the diagnostic
+     * question, and the names of a rider's other Bluetooth devices are none of this document's
+     * business.
+     */
+    private fun handlebar(states: HandlebarStates, radio: BluetoothStatus.Status?) = JSONObject().apply {
+        put("advanced", states.advanced?.let(::handlebarState) ?: JSONObject.NULL)
+        put("core", states.core?.let(::handlebarState) ?: JSONObject.NULL)
+        put("bluetooth", radio?.let {
+            JSONObject().apply {
+                put("supported", it.supported)
+                put("enabled", it.enabled)
+                put("permitted", it.permitted)
+                put("connectedAudioDevices", it.connectedNames.size)
+            }
+        } ?: JSONObject.NULL)
+    }
+
+    private fun handlebarState(state: HandlebarState) = JSONObject().apply {
+        put("inputMode", state.inputMode)
+        put("captureEnabled", state.captureEnabled)
+        put("calibrated", state.calibrated)
+        put("managedByCompanion", state.managedByCompanion)
+        put("hidServiceEnabled", state.hidServiceEnabled)
+    }
+
+    /**
+     * The live radio, or null if it did not answer in time.
+     *
+     * Asked once here rather than per half: the adapter is one radio and both processes read the
+     * same one. Bounded because a profile proxy that never binds must not hold up a report the
+     * rider asked for - BluetoothStatus.query has its own timeout, and this is the backstop for
+     * the case where its callback never runs at all.
+     */
+    private suspend fun bluetoothRadio(context: Context): BluetoothStatus.Status? =
+        withTimeoutOrNull(RADIO_QUERY_TIMEOUT_MS) {
+            suspendCancellableCoroutine { continuation ->
+                runCatching {
+                    BluetoothStatus.query(context) { status ->
+                        if (continuation.isActive) continuation.resume(status)
+                    }
+                }.onFailure { if (continuation.isActive) continuation.resume(null) }
+            }
+        }
 
     private fun phone() = JSONObject().apply {
         put("manufacturer", Build.MANUFACTURER)

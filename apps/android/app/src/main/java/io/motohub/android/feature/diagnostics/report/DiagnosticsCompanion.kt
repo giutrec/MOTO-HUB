@@ -4,6 +4,7 @@
 package io.motohub.android.feature.diagnostics.report
 
 import android.content.Context
+import io.motohub.android.ipc.HandlebarState
 import io.motohub.android.session.MotorcycleProfile
 
 /**
@@ -33,6 +34,12 @@ import io.motohub.android.session.MotorcycleProfile
  * every CORE-only rider a warning about an app they do not have.
  */
 data class HandlebarBluetoothGrants(val advanced: Boolean?, val core: Boolean?)
+
+/**
+ * How each half's handlebar is configured, which is a per-package answer for the same reason the
+ * grant above is. Null means "not this edition's to say", never "nothing configured".
+ */
+data class HandlebarStates(val advanced: HandlebarState?, val core: HandlebarState?)
 
 interface DiagnosticsCompanion {
 
@@ -66,6 +73,18 @@ interface DiagnosticsCompanion {
      * line and none of them containing the fact that explains it.
      */
     suspend fun handlebarBluetoothGrants(context: Context): HandlebarBluetoothGrants
+
+    /**
+     * The handlebar configuration of each half - input protocol, capture, teaching, and whether
+     * the Accessibility service HID needs is granted.
+     *
+     * The grant above says a press can arrive; this says what happens to it. Both had to cross
+     * for the same reason: support 0df154af sent a report from ADVANCED, mid Android Auto
+     * session, after switching input protocol three times - and everything under "handlebar"
+     * would have described ADVANCED's own stores, while the presses were being decoded in CORE
+     * against CORE's.
+     */
+    suspend fun handlebarStates(context: Context): HandlebarStates
 }
 
 // createDiagnosticsCompanion(context) is defined once per flavour - src/core and src/pro - the

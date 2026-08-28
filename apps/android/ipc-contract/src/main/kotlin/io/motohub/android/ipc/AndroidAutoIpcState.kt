@@ -53,8 +53,10 @@ object IpcBridgeContract {
      * 14: the auto-recovery field in [AndroidAutoSettingsParcel]. No call appended - the parcel
      *     grew, and a caller has to be able to ask whether Core reads the new field before it can
      *     tell "recovery is off" from "this Core never heard the question".
+     * 15: getHandlebarState(). The other half of 13: that one says whether a press can reach Core,
+     *     this one says what Core would do with it.
      */
-    const val CONTRACT_VERSION = 14
+    const val CONTRACT_VERSION = 15
 
     /** First [CONTRACT_VERSION] whose Core implements connectOverFormedGroup(). */
     const val CONTRACT_VERSION_FORMED_GROUP = 2
@@ -225,6 +227,21 @@ object IpcBridgeContract {
      * own settings screen.
      */
     const val CONTRACT_VERSION_AUTO_RECOVERY = 14
+
+    /**
+     * First [CONTRACT_VERSION] whose Core answers getHandlebarState(), so a diagnostics report can
+     * state how the half that decodes the presses is actually configured.
+     *
+     * [CONTRACT_VERSION_CORE_BLUETOOTH] closed the question of whether a press can arrive; this
+     * closes what happens to one that does, and until it existed a report answered that question
+     * with the companion app's own settings. Support 0df154af (2026-08-27) shows the gap from the
+     * outside: the rider switched input protocol three times mid-session and ran the wizard, and
+     * neither his log nor his report could say what the process reading his presses believed.
+     *
+     * Below this the companion must report Core's handlebar as unknown - the dead transaction's
+     * empty reply parcel is indistinguishable from a Core that answered "nothing configured".
+     */
+    const val CONTRACT_VERSION_HANDLEBAR_STATE = 15
 
     /**
      * Which half of Core's connect produced the last failure, answered by

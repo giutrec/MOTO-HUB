@@ -641,6 +641,10 @@ private fun HandlebarControlsDetail(onBack: () -> Unit, onOpenMapping: () -> Uni
                 onClick = {
                     inputMode = candidate
                     HandlebarControlStore.setInputMode(context, candidate)
+                    // A session may well be running while the rider is in here - that is when
+                    // they discover the protocol is wrong. Without this the switch takes effect
+                    // only at the next session start.
+                    MediaButtonBridge.inputModeChanged()
                     ProjectionEventLog.record(
                         "SETTINGS",
                         "Handlebar input mode changed to ${candidate.name}."
