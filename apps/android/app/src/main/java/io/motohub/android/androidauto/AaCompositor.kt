@@ -4,6 +4,7 @@
 package io.motohub.android.androidauto
 
 import android.graphics.SurfaceTexture
+import io.motohub.android.feature.controls.HandlebarPressHud
 import android.opengl.EGL14
 import android.opengl.EGLConfig
 import android.opengl.EGLContext
@@ -76,6 +77,17 @@ class AaCompositor(
     private var uTexMatrix = 0
     private var uCropMatrix = 0
     private var textureId = 0
+
+    // The press banner: a second, much simpler program - a plain 2D texture with alpha, over the
+    // video. Separate from the one above because that one samples an external OES texture and
+    // carries the crop matrices; nothing here wants either.
+    private var bannerProgram = 0
+    private var bannerPosition = 0
+    private var bannerTexCoord = 0
+    private var bannerSampler = 0
+    private var bannerTextureId = 0
+    /** The press currently uploaded, so a second on screen costs one upload rather than thirty. */
+    private var bannerUploaded: HandlebarPressHud.Press? = null
     private lateinit var surfaceTexture: SurfaceTexture
 
     @Volatile
@@ -671,6 +683,9 @@ class AaCompositor(
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
        GLES20.glDisableVertexAttribArray(aPosition)
        GLES20.glDisableVertexAttribArray(aTexCoord)
+        // Inside the scissor on purpose: the banner belongs on the picture, never in the bezel
+        // margins the motorcycle's furniture covers.
+        drawPressBanner(viewportWidth, viewportHeight)
         if (clipWidth > 0 && clipHeight > 0 && framebufferHeight > 0) {
             GLES20.glDisable(GLES20.GL_SCISSOR_TEST)
         }
@@ -871,6 +886,77 @@ class AaCompositor(
         )
     }
 
+    /**
+     * Paints what the rider just pressed over the Android Auto picture, for one second.
+     *
+     * Android Auto composites in GL, so the banner cannot be drawn with a Canvas the way the Ride
+     * Dashboard draws its own: it is rendered to a bitmap once per press by [HandlebarPressHud] -
+     * the same bitmap both screens use, so the rider recognises the same thing on either - and put
+     * on screen here as a textured quad.
+     */
+    private fun drawPressBanner(viewportWidth: Int, viewportHeight: Int) {
+        val press = HandlebarPressHud.current()
+        if (press == null) {
+            bannerUploaded = null
+            return
+        }
+        if (viewportWidth <= 0 || viewportHeight <= 0) return
+        val bitmap = HandlebarPressHud.banner(press, viewportWidth) ?: return
+        if (bannerProgram == 0) {
+            bannerProgram = linkProgram(BANNER_VERTEX_SHADER, BANNER_FRAGMENT_SHADER)
+            bannerPosition = GLES20.glGetAttribLocation(bannerProgram, "aPosition")
+            bannerTexCoord = GLES20.glGetAttribLocation(bannerProgram, "aTexCoord")
+            bannerSampler = GLES20.glGetUniformLocation(bannerProgram, "uTexture")
+            val ids = IntArray(1)
+            GLES20.glGenTextures(1, ids, 0)
+            bannerTextureId = ids[0]
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, bannerTextureId)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+        }
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, bannerTextureId)
+        if (bannerUploaded != press) {
+            android.opengl.GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0)
+            bannerUploaded = press
+        }
+
+        // Top centre, in the viewport's own normalised coordinates. The bitmap is already sized
+        // against the viewport width, so its height only has to be turned into the same units.
+        val halfWidth = HandlebarPressHud.bannerWidth(viewportWidth).toFloat() / viewportWidth
+        val height = 2f * bitmap.height / viewportHeight
+        val top = 0.90f
+        val bottom = top - height
+        val quad = floatArrayOf(
+            -halfWidth, bottom, 0f, 1f,
+            halfWidth, bottom, 1f, 1f,
+            -halfWidth, top, 0f, 0f,
+            halfWidth, top, 1f, 0f
+        )
+        val buffer = ByteBuffer.allocateDirect(quad.size * 4)
+            .order(ByteOrder.nativeOrder())
+            .asFloatBuffer()
+            .put(quad)
+
+        GLES20.glUseProgram(bannerProgram)
+        GLES20.glEnable(GLES20.GL_BLEND)
+        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+        buffer.position(0)
+        GLES20.glVertexAttribPointer(bannerPosition, 2, GLES20.GL_FLOAT, false, 16, buffer)
+        GLES20.glEnableVertexAttribArray(bannerPosition)
+        buffer.position(2)
+        GLES20.glVertexAttribPointer(bannerTexCoord, 2, GLES20.GL_FLOAT, false, 16, buffer)
+        GLES20.glEnableVertexAttribArray(bannerTexCoord)
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, bannerTextureId)
+        GLES20.glUniform1i(bannerSampler, 0)
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
+        GLES20.glDisableVertexAttribArray(bannerPosition)
+        GLES20.glDisableVertexAttribArray(bannerTexCoord)
+        GLES20.glDisable(GLES20.GL_BLEND)
+    }
+
     private fun linkProgram(vertexSource: String, fragmentSource: String): Int {
         val vertex = compileShader(GLES20.GL_VERTEX_SHADER, vertexSource)
         val fragment = compileShader(GLES20.GL_FRAGMENT_SHADER, fragmentSource)
@@ -894,5 +980,24 @@ class AaCompositor(
 
     private companion object {
         const val DEFAULT_FRAME_CAP = 30
+
+        const val BANNER_VERTEX_SHADER = """
+            attribute vec2 aPosition;
+            attribute vec2 aTexCoord;
+            varying vec2 vTexCoord;
+            void main() {
+                vTexCoord = aTexCoord;
+                gl_Position = vec4(aPosition, 0.0, 1.0);
+            }
+        """
+
+        const val BANNER_FRAGMENT_SHADER = """
+            precision mediump float;
+            varying vec2 vTexCoord;
+            uniform sampler2D uTexture;
+            void main() {
+                gl_FragColor = texture2D(uTexture, vTexCoord);
+            }
+        """
     }
 }

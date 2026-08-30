@@ -216,6 +216,38 @@ class TBoxQrParserTest {
     }
 
     @Test
+    fun pointsAtTheIphoneCodeWheneverTheRemedyIsScanningAnotherCode() {
+        // The single most common support thread across Benelli, CFMOTO, QJ-Motor and Voge: the
+        // dash prints two codes and only the one labelled for iPhone pairs. Riders never guess it,
+        // so every failure whose remedy is "scan the other code" has to say it.
+        val remediable = listOf(
+            "https://example.com/some/page",
+            "just some scanned text",
+            "code:8A1&engine:CF400&vin:LCEPRJ&color:Fuji White",
+            "WIFI:T:WPA;P:secret;;"
+        )
+        for (raw in remediable) {
+            val message = TBoxQrParser.parse(raw).exceptionOrNull()?.message.orEmpty()
+            assertTrue(raw, message.contains("iPhone / CarPlay"))
+        }
+    }
+
+    @Test
+    fun keepsTheIphoneHintAwayFromFailuresItWouldMisdirect() {
+        // Two codes are complete as they are, and their remedy is not another code: the Moto
+        // Morini screen carries only the one, and the phone-hotspot dash prints none at all.
+        // Telling either rider to hunt for an iPhone code sends them looking for nothing.
+        val misdirected = listOf(
+            "http://admin.motomorini.com/app.html?MachineID=dc0d30da",
+            "https://www.carbit.com.cn/app/download.html"
+        )
+        for (raw in misdirected) {
+            val message = TBoxQrParser.parse(raw).exceptionOrNull()?.message.orEmpty()
+            assertFalse(raw, message.contains("iPhone / CarPlay"))
+        }
+    }
+
+    @Test
     fun aPhoneHotspotCodeCarriesNoNetworkAndStillPairs() {
         // Carbit's dash-as-client dialect: action bit7, a `bm=` MAC, and deliberately no ssid/pwd
         // because the dash has no access point to name. This used to be rejected outright.

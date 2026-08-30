@@ -41,6 +41,7 @@ import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxNetworkEvent
 import io.motohub.android.tbox.SelectingTBoxTransport
 import io.motohub.android.tbox.TBoxSessionHandle
+import io.motohub.android.tbox.tBoxFailureOwnedByHandshake
 import io.motohub.android.tbox.TBoxSessionRegistry
 import io.motohub.android.tbox.TBoxStreamingLocks
 import io.motohub.android.tbox.TBoxVideoAreaSource
@@ -75,6 +76,17 @@ class ProjectionSessionService : Service() {
     private var handleCleanupJob: Job? = null
     private var recoveryJob: Job? = null
     private val recoveryRequested = AtomicBoolean(false)
+    /**
+     * True while the EasyConn handshake below is running.
+     *
+     * Same window as Android Auto's and the Ride Dashboard's: observeActiveSession() installs the
+     * transport-event collector before the first handshake and the encoder is built after it, so a
+     * Stopped/FatalError produced BY that handshake reached handleRecoverableFailure - which with
+     * auto-recovery off calls fail() and beats this mode's own, far more useful diagnosis to the
+     * log, and with it on starts a whole recovery loop against a session that never opened.
+     * See [tBoxFailureOwnedByHandshake].
+     */
+    private val handshakeInFlight = AtomicBoolean(false)
     private val transportUnavailable = AtomicBoolean(false)
     /** One place for both verdicts, so the accept and reject arms cannot drift apart. */
     private fun publishDeliveryVerdict(
@@ -96,7 +108,7 @@ class ProjectionSessionService : Service() {
     /**
      * Guards [startCapture] against duplicate concurrent starts. [mediaProjection] is
      * only assigned near the end of [startCapture] (after the T-Box handshake, which can
-     * take up to [VIDEO_CONFIGURATION_TIMEOUT_MS]), so it cannot be used as the reentrancy
+     * take up to [VIDEO_AREA_TIMEOUT_MS]), so it cannot be used as the reentrancy
      * guard: a second `onStartCommand` before the first finishes would otherwise pass the
      * old "mediaProjection != null" check and race a second encoder/VirtualDisplay into
      * existence, leaking the first one.
@@ -195,12 +207,20 @@ class ProjectionSessionService : Service() {
             capabilityStore.load(handle.motorcycle)?.capabilities,
             ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
         )
-        val configurationResult = handle.transport.negotiateVideoConfiguration(
-            host = handle.host,
-            savedArea = savedArea,
-            fallbackArea = fallbackArea,
-            timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
-        )
+        // The transport reports a failed handshake twice - as the return value here and as a
+        // Stopped/FatalError event - and the event handler must not race this block. See
+        // onTBoxFailureEvent.
+        handshakeInFlight.set(true)
+        val configurationResult = try {
+            handle.transport.negotiateVideoConfiguration(
+                host = handle.host,
+                savedArea = savedArea,
+                fallbackArea = fallbackArea,
+                videoAreaTimeoutMillis = VIDEO_AREA_TIMEOUT_MS
+            )
+        } finally {
+            handshakeInFlight.set(false)
+        }
         configurationResult.exceptionOrNull()?.let {
             return fail("T-Box video negotiation failed: ${it.message}")
         }
@@ -399,6 +419,22 @@ class ProjectionSessionService : Service() {
      * only the T-Box transport needs to reconnect - so a recovered EasyConn session resumes
      * streaming without a new consent prompt.
      */
+    /**
+     * Routes a transport failure event, unless the handshake that produced it is still running and
+     * about to report the same failure itself.
+     */
+    private fun onTBoxFailureEvent(message: String) {
+        val ownedByHandshake =
+            tBoxFailureOwnedByHandshake(handshakeInFlight.get(), "mirroring", message)
+        if (ownedByHandshake != null) {
+            // INFO, not DEBUG: this is the line that says why the session did NOT end here, and
+            // the console hides DEBUG by default.
+            ProjectionEventLog.record("WATCHDOG", ownedByHandshake)
+            return
+        }
+        handleRecoverableFailure(message)
+    }
+
     private fun handleRecoverableFailure(message: String) {
         if (stopping) return
         if (!MotoHubSettings.autoRecovery(this)) {
@@ -507,8 +543,8 @@ class ProjectionSessionService : Service() {
                         encoder?.requestSyncFrame("TFT consumer requested mirroring video")
                     }
                     is TBoxEvent.Warning -> ProjectionEventLog.record("T-BOX", event.message)
-                    is TBoxEvent.FatalError -> handleRecoverableFailure("T-Box error: ${event.message}")
-                    TBoxEvent.Stopped -> handleRecoverableFailure("The T-Box ended the session.")
+                    is TBoxEvent.FatalError -> onTBoxFailureEvent("T-Box error: ${event.message}")
+                    TBoxEvent.Stopped -> onTBoxFailureEvent("The T-Box ended the session.")
                     is TBoxEvent.VideoArea -> Unit
                     is TBoxEvent.Touch -> Unit
                 }
@@ -698,7 +734,7 @@ class ProjectionSessionService : Service() {
         private const val ACTION_RESTORE_DISPLAY = "io.motohub.android.action.RESTORE_DISPLAY"
         private const val EXTRA_RESULT_CODE = "result_code"
         private const val EXTRA_RESULT_DATA = "result_data"
-        private const val VIDEO_CONFIGURATION_TIMEOUT_MS = 10_000L
+        private const val VIDEO_AREA_TIMEOUT_MS = 10_000L
         private const val AUTO_DIM_DELAY_MS = 5_000L
         private const val ADAPTIVE_TICK_MS = 5_000L
         private const val NETWORK_REJOIN_WAIT_MILLIS = 75_000L

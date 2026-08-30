@@ -265,11 +265,16 @@ class RideDaemonTransport(
                 )
             }
             runCatching {
-                ensureReversePortsAvailable()
+                // ensureReversePortsAvailable() is the first thing each attempt does now, inside
+                // startWithNetworkSocket - the ports an attempt needs are the ones the previous
+                // attempt's native session has just released.
                 ProjectionEventLog.record(
                     "TBOX",
                     "Starting EasyConn handshake to ${host.ipAddress}:${host.port}; " +
-                        "waiting for the TFT video area."
+                        "waiting for the TFT video area. This dash has " +
+                        "${RIDE_DAEMON_STARTUP_TIMEOUT_SEC}s to answer before the native session " +
+                        "gives up - the wait a rider sees here is that one, not any shorter " +
+                        "timeout named on the calling side."
                 )
                 startWithNetworkSocket(activeSession, host, activeLink)
                 ProjectionEventLog.record("TBOX", "RideDaemon startSessionWithSocketFd returned successfully.")
@@ -484,14 +489,32 @@ class RideDaemonTransport(
         return refreshed
     }
 
-    /** Opens the EasyConn command socket over the established T-Box link. */
+    /**
+     * Opens the EasyConn command socket over the established T-Box link and hands it to the
+     * native session - both inside the retry, because both are what the retry was written for.
+     *
+     * The native handshake used to sit OUTSIDE this loop, so "EasyConn attempt 1/3" counted TCP
+     * connects and nothing else. [isTransientEasyConnFailure] gives that away: `context deadline
+     * exceeded`, `unsuccessful ec response`, `failed to decode response`, `initialize easyconn
+     * stream` are Go handshake errors, and not one of them could ever reach the classifier -
+     * `socket.connect` only ever throws `IOException`, which the chain check catches on its own.
+     * A handshake that failed fast was therefore never retried, and the log said 1/3 while
+     * promising three of something else.
+     *
+     * A handshake that fails SLOW still must not be retried here, and
+     * [EC_HANDSHAKE_TOTAL_BUDGET_MS] is what stops it: one attempt that burns the entire native
+     * startup budget is a dash that is not answering at all, and re-dialling it on the same
+     * session would only double the rider's wait. That case belongs to the caller's
+     * re-discover-and-retry, which is a genuinely different attempt - fresh discovery, fresh
+     * native session - not a louder version of this one.
+     */
     private suspend fun startWithNetworkSocket(
         activeSession: MobileSession,
         host: TBoxHost,
         link: TBoxLink
     ) {
-        val policy = EasyConnRetryPolicy()
-        val connectedSocket = retryEasyConnStart(
+        val policy = EasyConnRetryPolicy(totalBudgetMillis = EC_HANDSHAKE_TOTAL_BUDGET_MS)
+        val startedOnAttempt = retryEasyConnStart(
             policy = policy,
             shouldRetry = ::isTransientEasyConnFailure,
             onRetry = { failedAttempt, delayMillis, failure ->
@@ -500,9 +523,34 @@ class RideDaemonTransport(
                     "EasyConn attempt $failedAttempt/${policy.maxAttempts} failed: " +
                         "${failure.message.orEmpty()}. Retrying in ${delayMillis}ms."
                 )
-            }
+                // The failed attempt may already have opened 10920/10921/10922. Without this the
+                // next one meets "already running", which this policy reads as permanent - the
+                // retry would end on an error that says nothing about the dash.
+                activeSession.runCatching { stopSession() }
+                    .onFailure { stopFailure ->
+                        ProjectionEventLog.warning(
+                            "TBOX",
+                            "Failed to clean up the native session before the next EasyConn attempt.",
+                            stopFailure
+                        )
+                    }
+            },
+            onBudgetSpent = { failedAttempt, spentMillis, _ ->
+                ProjectionEventLog.warning(
+                    "TBOX",
+                    "EasyConn attempt $failedAttempt/${policy.maxAttempts} used ${spentMillis}ms of " +
+                        "the ${EC_HANDSHAKE_TOTAL_BUDGET_MS}ms this handshake is allowed, so there " +
+                        "is no time for another one here. A dash that stays silent for the whole " +
+                        "${RIDE_DAEMON_STARTUP_TIMEOUT_SEC}s startup budget needs a fresh session, " +
+                        "not another dial on this one."
+                )
+            },
+            elapsedMillis = SystemClock::elapsedRealtime
         ) { attempt ->
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            // Re-checked per attempt now that a whole handshake precedes the next one: the ports
+            // this attempt needs are the ones the previous attempt's native session just gave back.
+            ensureReversePortsAvailable()
             val attemptLink = linkForThisAttempt(link)
             ProjectionEventLog.debug(
                 "TBOX",
@@ -513,26 +561,28 @@ class RideDaemonTransport(
             try {
                 socket.connect(InetSocketAddress(host.ipAddress, host.port), EC_CONNECT_TIMEOUT_MS)
                 ProjectionEventLog.record("TBOX", "EasyConn TCP command socket connected.")
-                socket to attempt
+                socket.use { connected ->
+                    ParcelFileDescriptor.fromSocket(connected).use { descriptor ->
+                        val fd = descriptor.detachFd().toLong()
+                        // ParcelFileDescriptor duplicates the socket descriptor. Go owns and
+                        // closes the detached duplicate; the outer use{} closes the original
+                        // Java socket.
+                        activeSession.startSessionWithSocketFd(fd)
+                    }
+                }
+                attempt
             } catch (failure: Throwable) {
-                socket.close()
+                // Socket.close() is idempotent, so the use{} above having already closed it is fine.
+                runCatching { socket.close() }
                 throw failure
             }
         }
-        if (connectedSocket.second > 1) {
+        if (startedOnAttempt > 1) {
             ProjectionEventLog.record(
                 "TBOX",
-                "EasyConn TCP connection recovered on attempt " +
-                    "${connectedSocket.second}/${policy.maxAttempts}."
+                "EasyConn handshake recovered on attempt " +
+                    "$startedOnAttempt/${policy.maxAttempts}."
             )
-        }
-        connectedSocket.first.use { socket ->
-            ParcelFileDescriptor.fromSocket(socket).use { descriptor ->
-                val fd = descriptor.detachFd().toLong()
-                // ParcelFileDescriptor duplicates the socket descriptor. Go owns and closes the
-                // detached duplicate; the outer use{} closes the original Java socket.
-                activeSession.startSessionWithSocketFd(fd)
-            }
         }
     }
 
@@ -1705,6 +1755,18 @@ class RideDaemonTransport(
         const val DISCOVERY_MAX_ATTEMPTS = 2
         const val DISCOVERY_RETRY_DELAY_MS = 500L
         const val EC_CONNECT_TIMEOUT_MS = 10_000
+
+        /**
+         * Wall clock the whole EasyConn handshake gets, retries included.
+         *
+         * Derived, not picked: one attempt that has already spent the entire native startup
+         * budget leaves, by definition, nothing for a second. That keeps every cheap failure
+         * retried exactly as before - three `connection refused` attempts cost ~2s, three
+         * connect timeouts ~22s, both comfortably inside - while a dash that simply says nothing
+         * fails once here, in the same 25s it always took, and is handed to the caller's
+         * re-discover-and-retry instead of being dialled again on a session it never answered.
+         */
+        const val EC_HANDSHAKE_TOTAL_BUDGET_MS = RIDE_DAEMON_STARTUP_TIMEOUT_SEC * 1_000L
         // Wake-probe fallback (see sendEasyConnWakeProbe): well-known port and frame layout
         // reverse-engineered by OpenCfMoto/OpenMoto, not part of the advertised EasyConn contract.
         const val WAKE_PROBE_PORT = 10930

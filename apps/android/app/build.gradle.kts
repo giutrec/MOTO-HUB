@@ -8,6 +8,10 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Restores the old debug pipeline - R8, resource shrinking and all four ABIs - for the rare
+// occasion something only misbehaves in an obfuscated build or on a non-arm64 emulator.
+val minifyDebug = providers.gradleProperty("minifyDebug").map(String::toBoolean).orElse(false).get()
+
 val noReleaseObfuscation = providers.gradleProperty("noReleaseObfuscation")
     .map(String::toBoolean)
     .orElse(false)
@@ -95,8 +99,8 @@ android {
         // keep this identical to the PRO worktree's build.gradle.kts. They drifted after v1.1.4
         // (CORE reached 1.1.14/108 while ADVANCED sat at 1.1.6/100), which left a rider's
         // "MOTO-HUB 1.1.x" unable to identify which pair they actually had installed.
-        versionCode = 195
-        versionName = "1.1.101"
+        versionCode = 198
+        versionName = "1.1.104"
         buildConfigField("boolean", "IS_PRO", "false")
         buildConfigField("String", "SENTRY_DSN", asBuildConfigString(coreSentryDsn))
         buildConfigField("String", "DIAGNOSTICS_ENDPOINT", asBuildConfigString(diagnosticsEndpoint))
@@ -125,9 +129,30 @@ android {
             // release builds exclusively (exportPublicApk assembles the release variant).
             // Kept minified and non-debuggable so a local install behaves like the shipped
             // artifact; de-obfuscate stack traces with retrace + outputs/mapping/*/mapping.txt.
-            isDebuggable = false
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // R8 and resource shrinking used to run here too, so that a debug install would
+            // behave like the shipped artifact. Measured 2026-08-30, that fidelity cost 69s of
+            // R8 and 39s of lint on a change whose Kotlin compile takes 1.5s - and nothing is
+            // ever installed from debug anyway: device tests and every published APK come from
+            // assembleRelease. -PminifyDebug=true brings the old behaviour back for the rare
+            // check that something only reproduces under R8.
+            //
+            // Debuggable for the same reason, and it buys more than a debugger: AGP treats a
+            // non-debuggable variant as release-grade and runs lintVital on it, which is another
+            // 39s on a build whose Kotlin compile is 1.5s. Lint still gates the release path,
+            // where it belongs and where it has already caught a real one.
+            isDebuggable = !minifyDebug
+            isMinifyEnabled = minifyDebug
+            isShrinkResources = minifyDebug
+            if (!minifyDebug) {
+                // hudlib.aar carries libgojni.so once per ABI (8.5-9.2MB each) and ML Kit adds
+                // another per-ABI library: four ABIs is 127MB of native libraries merged and
+                // stripped on every debug build, for hardware nobody here owns. The release
+                // variant has been arm64-only for the same reason.
+                ndk {
+                    abiFilters.clear()
+                    abiFilters.add("arm64-v8a")
+                }
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -181,6 +206,11 @@ val includeAndroidAutoIdentity = providers.gradleProperty("includeAndroidAutoIde
 
 val cleanAndroidAutoIdentity by tasks.registering(Delete::class) {
     delete(androidAutoIdentityOutputDir)
+    // A Delete with no declared output is never UP-TO-DATE, and this one sits in preBuild and
+    // deletes a res.srcDir - so every build dirtied a resource-merge input and could drag a full
+    // Kotlin recompile behind it with no source change at all. The purge still happens whenever
+    // there is anything to purge, which is all it was ever for.
+    onlyIf { androidAutoIdentityOutputDir.get().asFile.exists() }
 }
 
 val prepareAndroidAutoIdentity by tasks.registering(Copy::class) {

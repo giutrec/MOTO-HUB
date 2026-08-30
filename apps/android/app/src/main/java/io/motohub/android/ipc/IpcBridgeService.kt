@@ -178,7 +178,7 @@ class IpcBridgeService : Service() {
                         host = handle.host,
                         savedArea = null,
                         fallbackArea = fallbackArea,
-                        timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
+                        videoAreaTimeoutMillis = VIDEO_AREA_TIMEOUT_MS
                     )
                     if (result.isFailure) {
                         // NOT a timing issue - RideDaemonTransport.stop() (called whenever ANY mode's
@@ -207,7 +207,7 @@ class IpcBridgeService : Service() {
                                 host = handle.host,
                                 savedArea = null,
                                 fallbackArea = fallbackArea,
-                                timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
+                                videoAreaTimeoutMillis = VIDEO_AREA_TIMEOUT_MS
                             )
                         }
                     }
@@ -1481,7 +1481,7 @@ class IpcBridgeService : Service() {
         const val VIDEO_PIPE_BUFFER_BYTES = 64 * 1024
         const val MAX_VIDEO_ACCESS_UNIT_BYTES = 2 * 1024 * 1024
         const val SESSION_POLL_INTERVAL_MS = 1_000L
-        const val VIDEO_CONFIGURATION_TIMEOUT_MS = 10_000L
+        const val VIDEO_AREA_TIMEOUT_MS = 10_000L
         const val SELF_MODE_READY_TIMEOUT_MS = 10_000L
         const val ANDROID_AUTO_RECEIVER_SETTLE_MS = 900L
         const val CHANNEL_ID = "core_bridge_v1"

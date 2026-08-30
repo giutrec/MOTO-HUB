@@ -1293,7 +1293,7 @@
     <string name="legacy_community_source_fe28bfcc">COMMUNITY &amp; BRONCODE</string>
     <string name="legacy_discord_c6d7d50c">Discord</string>
     <string name="legacy_github_7f258fe3">GitHub</string>
-    <string name="legacy_map_rendering_by_maplibre_native_bsd_2_clause_ve_cb6afe3f">Kaartweergave door MapLibre Native (BSD-2-Clause). Vectortegels van OpenFreeMap, volgens het OpenMapTiles-schema; rastertegels van CARTO. Adreszoeken door Photon. Routering door Valhalla, gehost door Stadia Maps of de FOSSGIS-demoserver. Plaatsen door Overpass. Weer door Open-Meteo. Brandstofprijzen gepubliceerd als open data door het Spaanse Ministerio para la Transición Ecológica, het Portugese DGEG, het Franse Ministère de l\'Économie en het Italiaanse MIMIT. De gegevens van DGEG mogen niet commercieel worden gebruikt.</string>
+    <string name="legacy_map_rendering_by_maplibre_native_bsd_2_clause_ve_1f7cda7f">Kaartweergave door MapLibre Native (BSD-2-Clause). Vectortegels van OpenFreeMap, volgens het OpenMapTiles-schema; rastertegels van de OpenStreetMap Foundation. Adreszoeken door Photon. Routering door Valhalla, gehost door Stadia Maps of de FOSSGIS-demoserver. Plaatsen door Overpass. Weer door Open-Meteo. Brandstofprijzen gepubliceerd als open data door het Spaanse Ministerio para la Transición Ecológica, het Portugese DGEG, het Franse Ministère de l\'Économie en het Italiaanse MIMIT. De gegevens van DGEG mogen niet commercieel worden gebruikt.</string>
     <string name="legacy_maps_data_b256210d">KAARTEN &amp; GEGEVENS</string>
     <string name="legacy_maps_addresses_and_routes_are_built_on_data_by_o_f0b02b91">Kaarten, adressen en routes zijn gebaseerd op gegevens van © OpenStreetMap-bijdragers, gelicentieerd onder de ODbL.</string>
     <string name="legacy_prototype_unlocked_856a4841">Prototype ontgrendeld</string>
@@ -1489,7 +1489,6 @@
     <string name="legacy_low_power_483394f9">ENERGIEBESPARING</string>
     <string name="legacy_no_sensor_69b15af9">GEEN SENSOR</string>
     <string name="legacy_normal_8999b0e7">NORMAAL</string>
-    <string name="legacy_off_1314f">UIT</string>
     <string name="legacy_warm_288a85">WARM</string>
 
     <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
@@ -1536,7 +1535,6 @@
     <!-- Source: feature/trips/TripLibraryUi.kt -->
     <string name="legacy_enhanced_9c6c8376">VERBETERD</string>
     <string name="legacy_gps_only_e6f03982">ALLEEN GPS</string>
-    <!-- Source: feature/controls/HandlebarHidCaptureService.kt (system Accessibility settings
          description; rendered outside the app's own Compose runtime, so it is a plain string
          resource rather than a motoHubText() call). -->
     <string name="handlebar_hid_capture_description">Laat MOTO-HUB D-pad-drukken lezen van een Bluetooth-HID-stuurafstandsbediening zolang bij de instellingen voor Stuurknoppen de HID-modus is gekozen.</string>
@@ -1744,4 +1742,148 @@
 
     <!-- Source: feature/about/AboutScreen.kt -->
     <string name="legacy_moto_hub_connects_an_android_12_phone_to_a_motor_b791c32e">MOTO-HUB verbindt een telefoon met Android 12+ met een motordisplay dat via EasyConn koppelt — de Carbit-software die meerdere fabrikanten meeleveren, CFMOTO daaronder. Het ondersteunt scherm- en app-mirroring, Android Auto-projectie, opgeslagen motorprofielen en diagnostiek op het apparaat.</string>
+
+    <!-- Source: feature/controls — a controller button stands in for a handlebar press -->
+    <string name="legacy_handlebar_presses_32db65bc">STUURKNOPDRUKKEN</string>
+    <string name="legacy_backward_hold_left_72d8761e">Terug vasthouden - Links</string>
+    <string name="legacy_forward_hold_right_3f058b83">Vooruit vasthouden - Rechts</string>
+
+    <!-- Source: feature/diagnostics/BleExplorerScreen.kt — the Bluetooth LE workbench -->
+    <string name="legacy_bluetooth_le_explorer_2ab1f074">Bluetooth LE-verkenner</string>
+    <string name="legacy_find_any_bluetooth_le_device_open_it_and_see_wha_ff9d191c">Vind elk Bluetooth LE-apparaat, open het en zie waaruit het echt bestaat: zijn services, zijn kenmerken en elke byte die het verstuurt. Gemaakt voor afstandsbedieningen die niets over zichzelf bekendmaken – druk op hun knoppen terwijl je geabonneerd bent en het protocol schrijft zichzelf in het logboek.</string>
+    <string name="legacy_devices_1_d_c9f468d8">APPARATEN (%1$d)</string>
+    <string name="legacy_filter_by_name_address_or_service_5c4953c4">Filteren op naam, adres of service</string>
+    <string name="legacy_not_connectable_a36d7984">  - niet verbindbaar</string>
+    <string name="legacy_services_99327804">services: </string>
+    <string name="legacy_manufacturer_5ba47ab7">fabrikant: </string>
+    <string name="legacy_service_data_703f501b">servicegegevens: </string>
+    <string name="legacy_connected_839202e9">VERBONDEN</string>
+    <string name="legacy_rediscover_cece7f3c">Opnieuw ontdekken</string>
+    <string name="legacy_mtu_517_7d540d89">MTU 517</string>
+    <string name="legacy_read_rssi_318ccc81">RSSI lezen</string>
+    <string name="legacy_read_26cdb6">Lezen</string>
+    <string name="legacy_write_4ff67bf">Schrijven</string>
+    <string name="legacy_write_to_1_s_716e199f">Schrijven naar %1$s</string>
+    <string name="legacy_bytes_in_hex_01_ff_0a_01ff0a_and_0x01_0xff_all_w_69a0e8b2">Bytes in hex – \"01 FF 0A\", \"01ff0a\" en \"0x01,0xFF\" werken allemaal. Dit schrijft rechtstreeks naar het apparaat: op sommige hardware verandert een verkeerde waarde instellingen die moeilijk terug te draaien zijn.</string>
+    <string name="legacy_hex_11afb">Hex</string>
+    <string name="legacy_not_valid_hex_yet_f28e24dc">Nog geen geldige hex.</string>
+    <string name="legacy_1_d_byte_s_f2d64482">%1$d byte(s)</string>
+    <string name="legacy_no_response_bdcb77a0">Zonder antwoord</string>
+    <string name="legacy_traffic_eb2daddd">VERKEER</string>
+    <string name="legacy_nothing_yet_dc65bed9">Nog niets.</string>
+    <string name="legacy_every_line_here_is_also_in_the_application_log_s_f3e682dd">Elke regel hier staat ook in het applicatielogboek, zodat een sessie in een diagnoserapport kan worden verstuurd.</string>
+    <string name="legacy_dash_clock_lab_a1a0638d">Lab voor de dashboardklok</string>
+    <string name="legacy_experiments_for_dashes_that_reset_the_clock_zont_a4c75a39">Experimenten voor dashboards die de klok resetten (Zontes, Voge)</string>
+    <string name="legacy_scan_connect_and_read_any_ble_device_byte_by_byt_c47fb770">Scan, verbind en lees elk BLE-apparaat byte voor byte</string>
+
+    <!-- Source: strings the extractor used to miss inside if/else expressions -->
+    <string name="legacy_stop_scanning_93cac2ef">Stop met scannen</string>
+    <string name="legacy_scan_for_devices_883edf83">Zoek naar apparaten</string>
+    <string name="legacy_showing_named_devices_only_18320ef1">Alleen apparaten met een naam</string>
+    <string name="legacy_showing_every_device_ab347b96">Alle apparaten</string>
+    <string name="legacy_nothing_yet_a_remote_that_sleeps_only_advertises_231ea04a">Nog niets. Een slapende afstandsbediening zendt maar een paar seconden na een druk op de knop – druk op een knop en houd hem dichtbij.</string>
+    <string name="legacy_start_a_scan_to_see_what_is_around_bd69ed5b">Start een scan om te zien wat er in de buurt is.</string>
+    <string name="legacy_unsubscribe_862dd2b1">Afmelden</string>
+    <string name="legacy_subscribe_9621fd2a">Abonneren</string>
+
+    <!-- Source: feature/controls — actions that drive the Ride Dashboard itself -->
+    <string name="legacy_dashboard_next_panel_8f5432b1">Dashboard: volgend paneel</string>
+    <string name="legacy_dashboard_fullscreen_map_1bd08691">Dashboard: kaart schermvullend</string>
+    <string name="legacy_dashboard_zoom_the_map_on_me_4f78353">Dashboard: kaart op mij inzoomen</string>
+    <string name="legacy_dashboard_change_the_left_widget_2ac18bf8">Dashboard: linker widget wisselen</string>
+    <string name="legacy_dashboard_change_the_right_widget_e40e68ad">Dashboard: rechter widget wisselen</string>
+    <string name="legacy_panel_33b634ef">Paneel +</string>
+    <string name="legacy_map_full_b08caf3">Kaart vol</string>
+    <string name="legacy_zoom_me_5ca904e5">Op mij</string>
+    <string name="legacy_widget_l_b0744190">Widget L</string>
+    <string name="legacy_widget_r_b0744196">Widget R</string>
+
+    <!-- Source: feature/controls — actions that drive the rider's music -->
+    <string name="legacy_music_464f605">MUZIEK</string>
+    <string name="legacy_music_play_pause_f246dd44">Muziek: afspelen / pauze</string>
+    <string name="legacy_music_next_track_516d3c09">Muziek: volgend nummer</string>
+    <string name="legacy_music_previous_track_dab94b8d">Muziek: vorig nummer</string>
+    <string name="legacy_music_volume_up_f45c31d6">Muziek: volume omhoog</string>
+    <string name="legacy_music_volume_down_4e0f651d">Muziek: volume omlaag</string>
+    <string name="legacy_play_25ff54">Afspelen</string>
+    <string name="legacy_next_24ff13">Volgende</string>
+    <string name="legacy_previous_b7ee1f17">Vorige</string>
+    <string name="legacy_vol_4eff3fe">Vol +</string>
+    <string name="legacy_vol_4f015e5">Vol −</string>
+
+    <!-- Source: feature/controls — the three input sources, and which one is live -->
+    <string name="legacy_motorcycle_handlebar_dc90fcfc">MOTORSTUUR</string>
+    <string name="legacy_android_auto_17_4_removed_the_way_an_app_can_ask_217ec1b2">Android Auto 17.4 heeft de manier verwijderd waarop een app om projectie kan vragen. MOTO-HUB probeert het nog steeds, en op oudere versies werkt het — lukt het niet, dan starten de vier stappen hieronder Android Auto via zijn eigen ontwikkelaarsmenu. Dit is het deel dat werkt als niets anders werkt, en je hoeft niets te installeren.</string>
+    <string name="legacy_start_android_auto_yourself_3b0dffe1">START ANDROID AUTO ZELF</string>
+    <string name="legacy_open_the_android_auto_app_scroll_to_the_bottom_a_c3e99276">Open de Android Auto-app, scroll helemaal naar beneden en tik tien keer op \"Versie\". De ontwikkelaarsinstellingen verschijnen — je hoeft ze maar één keer te ontgrendelen.</string>
+    <string name="legacy_in_developer_settings_open_the_menu_at_the_top_r_bc6818f7">Open in de ontwikkelaarsinstellingen rechtsboven het menu ⋮ en kies \"Head unit-server starten\". Het staat in dat menu, niet in de lijst met instellingen eronder. Dit is de stap die het doet.</string>
+    <string name="legacy_while_you_are_in_there_629f07a5">NU JE TOCH BEZIG BENT</string>
+    <string name="legacy_in_that_same_developer_settings_list_turn_on_add_3c96c7df">Zet in diezelfde lijst met ontwikkelaarsinstellingen \"Nieuwe auto\'s aan Android Auto toevoegen\" aan (oudere versies noemen het \"Onbekende bronnen\"). Op Android Auto 17.2 en ouder is die schakelaar op zichzelf vaak genoeg. Vanaf 17.3 niet meer — dan is het stap 2 — dus stop hier niet als Android Auto nog steeds niet start.</string>
+    <string name="legacy_action_needed_a446e8df">ACTIE NODIG</string>
+    <string name="legacy_do_this_in_android_auto_9a49aaee">DOE DIT IN ANDROID AUTO</string>
+    <string name="legacy_show_me_how_73baf02b">Laat me zien hoe</string>
+    <string name="legacy_for_dashes_that_reset_their_clock_at_every_ignit_64c2ff15">Voor dashboards die hun klok bij elke contactcyclus resetten (vooral Zontes en Voge). Met het dashboard aan maakt het lab verbinding via Bluetooth, luistert mee, stuurt de tijd vervolgens in vijf verschillende vormen en registreert elke byte. Ga rijden, zet het contact uit en weer aan en deel het applicatielogboek: daarin staat welke vorm het dashboard heeft geaccepteerd.</string>
+    <string name="legacy_run_clock_experiments_8ad4688f">Klokexperimenten uitvoeren</string>
+    <string name="legacy_live_log_831d05f0">LIVE LOGBOEK</string>
+    <string name="legacy_nothing_yet_power_the_dash_on_then_run_the_exper_b1ec5c8f">Nog niets. Zet het dashboard aan en voer daarna de experimenten uit.</string>
+    <string name="legacy_moto_hub_closed_unexpectedly_30f439d7">MOTO-HUB is onverwacht afgesloten</string>
+    <string name="legacy_the_last_time_you_used_moto_hub_it_stopped_becau_8448d27c">De vorige keer dat je MOTO-HUB gebruikte, stopte het door een fout. Alleen met het diagnoserapport kan de ontwikkelaar uitzoeken waarom.</string>
+    <string name="legacy_the_report_contains_your_motorcycle_s_dashboard__f4208b9f">Het rapport bevat het dashboardmodel van je motor, je telefoonmodel, de Android- en Android Auto-versies, de geïnstalleerde MOTO-HUB-versies en het applicatielogboek inclusief de fout. Wachtwoorden, posities en hardware-adressen worden nooit meegestuurd.</string>
+    <string name="legacy_send_reports_automatically_from_now_on_7cdd2209">Rapporten voortaan automatisch versturen</string>
+    <string name="legacy_send_report_55908cac">Rapport versturen</string>
+    <string name="legacy_how_your_data_is_handled_ff77c87f">Hoe je gegevens worden verwerkt</string>
+    <string name="legacy_not_now_e202d7e9">Niet nu</string>
+    <string name="legacy_help_improve_moto_hub_9bf5292c">Help MOTO-HUB verbeteren</string>
+    <string name="legacy_moto_hub_can_send_a_diagnostics_report_to_the_de_36cc6ba6">MOTO-HUB kan een diagnoserapport naar de ontwikkelaar sturen: het dashboardmodel van je motor, je telefoonmodel, de geïnstalleerde Android-, Android Auto- en MOTO-HUB-versies en het applicatielogboek. Wachtwoorden, posities en hardware-adressen worden nooit meegestuurd.</string>
+    <string name="legacy_reports_go_out_at_most_once_a_day_after_an_updat_6fc12b8d">Rapporten gaan hooguit eenmaal per dag uit, na een update of na een crash, en alleen via een verbinding met internettoegang. Je Support ID staat onder Instellingen ▸ Diagnose, waar je dit altijd aan of uit kunt zetten.</string>
+    <string name="legacy_send_reports_5c810947">Rapporten versturen</string>
+    <string name="legacy_diagnostics_privacy_notice_1f708f84">Privacyverklaring diagnose</string>
+    <string name="legacy_support_id_5239972c">Support ID</string>
+    <string name="legacy_moto_hub_support_id_7149b87">MOTO-HUB Support ID</string>
+    <string name="legacy_tap_to_copy_quote_it_when_asking_for_help_it_ide_edc7231">Tik om te kopiëren. Vermeld het als je om hulp vraagt: het identificeert deze telefoon en deze motor.</string>
+    <string name="legacy_support_id_copied_63da1e38">Support ID gekopieerd</string>
+    <string name="legacy_what_gets_sent_f4a13bbf">Wat er wordt verstuurd</string>
+    <string name="legacy_read_what_a_report_contains_then_choose_whether__e679dae">Lees wat een rapport bevat en kies daarna of je ze wilt versturen</string>
+    <string name="legacy_who_holds_your_reports_how_long_they_are_kept_an_ea54a6b7">Wie je rapporten bewaart, hoe lang ze worden bewaard en hoe je ze laat verwijderen</string>
+    <string name="legacy_send_diagnostics_now_9368c9ea">Diagnose nu versturen</string>
+    <string name="legacy_this_build_has_no_collector_configured_e224996">In deze build is geen collector geconfigureerd</string>
+    <string name="legacy_logging_is_off_the_log_would_end_at_1_s_c9d7198e">Registratie staat uit; het logboek zou eindigen op %1$s</string>
+    <string name="legacy_logging_is_off_there_is_no_log_to_send_eca8d32d">Registratie staat uit; er is geen logboek om te versturen</string>
+    <string name="legacy_send_diagnostics_automatically_880f35b7">Diagnose automatisch versturen</string>
+    <string name="legacy_sends_the_report_above_to_the_developer_at_most__8689def0">Stuurt het bovenstaande rapport hooguit eenmaal per dag naar de ontwikkelaar, na een update of na een crash - alleen via een verbinding met internettoegang. Dashboard- en telefoonmodel, app-versies en het applicatielogboek; nooit wachtwoorden, posities of hardware-adressen.</string>
+    <string name="legacy_logging_is_off_d9325d5a">REGISTRATIE STAAT UIT</string>
+    <string name="legacy_nothing_has_been_recorded_since_1_s_what_was_log_1be484ac">Sinds %1$s is er niets meer vastgelegd. Wat daarvoor is gelogd, blijft bewaard - registratie uitzetten stopt nieuwe regels, het verwijdert nooit de oude.</string>
+    <string name="legacy_nothing_has_been_recorded_and_there_is_no_earlie_dd873fa0">Er is niets vastgelegd, en er is ook geen eerder logboek.</string>
+    <string name="legacy_a_report_sent_now_carries_that_log_so_it_says_no_cb65d9dc">Een rapport dat je nu verstuurt bevat dat logboek en zegt dus niets over wat de app vandaag doet. Om een probleem te melden zet je Registratie inschakelen weer aan, laat je het opnieuw gebeuren en verstuur je dan.</string>
+    <string name="legacy_that_worked_keep_it_b0100883">Dat werkte - zo houden?</string>
+    <string name="legacy_your_dashboard_is_now_accepting_the_picture_on_t_a2e41389">Je dashboard accepteert het beeld nu met het profiel %1$s. Dit blijven gebruiken voor deze motor?</string>
+    <string name="legacy_you_have_just_found_out_something_moto_hub_could_5d173f67">Je hebt net iets ontdekt wat MOTO-HUB zelf niet kon uitzoeken: welk profiel dit dashboard echt accepteert. Door je logboek te versturen deel je dat, zodat de volgende rijder met jouw motor het meteen goed heeft.</string>
+    <string name="legacy_send_my_log_now_80f590fe">Mijn logboek nu versturen</string>
+    <string name="legacy_send_logs_automatically_from_now_on_1efdfbe9">Logboeken voortaan automatisch versturen</string>
+    <string name="legacy_keep_it_318f8786">Houden</string>
+    <string name="legacy_undo_284d04">Ongedaan maken</string>
+    <string name="legacy_try_another_profile_2632e907">Een ander profiel proberen</string>
+    <string name="legacy_the_connection_to_your_motorcycle_is_fine_the_da_6a78bba4">De verbinding met je motor is in orde - het dashboard weigert het beeld gewoon in de vorm waarin het wordt verstuurd. Een ander profiel verandert die vorm. Zodra je er een kiest, wordt meteen opnieuw verbonden, en als het dashboard het gaat tonen, vraagt MOTO-HUB of je het wilt houden.</string>
+    <string name="legacy_your_dashboard_is_not_showing_this_9765fbe3">JE DASHBOARD TOONT DIT NIET</string>
+    <string name="legacy_connected_but_the_picture_is_being_refused_tap_t_b17b1097">Verbonden, maar het beeld wordt geweigerd. Tik om een ander profiel te proberen.</string>
+    <string name="legacy_connected_not_displaying_53b322ca">VERBONDEN, GEEN BEELD</string>
+    <string name="legacy_your_dashboard_refused_1_d_of_the_picture_it_was_beaebc06">Je dashboard heeft %1$d%% van het verzonden beeld geweigerd (%2$d van %3$d frames).</string>
+    <string name="legacy_this_is_what_your_dashboard_reports_itself_to_be_8dfdffdd">Dit is wat je dashboard zelf zegt te zijn.</string>
+    <string name="legacy_speaks_the_same_protocol_your_motorcycle_is_alre_7a13c9ca">Spreekt hetzelfde protocol dat je motor al gebruikt.</string>
+    <string name="legacy_plain_settings_no_assumptions_a_good_thing_to_fa_3d3a2213">Eenvoudige instellingen, geen aannames - een goede terugvaloptie.</string>
+    <string name="legacy_an_experiment_for_one_dashboard_s_open_question__1eafa773">Een experiment voor de open vraag van één dashboard. Het doet mogelijk niets.</string>
+    <string name="legacy_navigation_active_on_tft_b6221bcf">Navigatie actief op het TFT</string>
+    <string name="legacy_tft_is_receiving_your_screen_56fd381">Het TFT ontvangt je scherm</string>
+    <string name="legacy_android_auto_is_waiting_for_one_step_from_you_31eacac3">Android Auto wacht op één stap van jou</string>
+    <string name="legacy_session_is_being_prepared_742c490a">Sessie wordt voorbereid</string>
+    <string name="legacy_button_presses_are_off_2952e766">KNOPDRUKKEN STAAN UIT</string>
+    <string name="legacy_moto_hub_advanced_owns_this_setting_and_writes_i_b8e328f7">Deze instelling hoort bij MOTO-HUB ADVANCED, dat de zijne hier overheen schrijft - zet hem daar aan, niet hier.</string>
+    <string name="legacy_turn_presses_back_on_9d506146">Knopdrukken weer aanzetten</string>
+    <string name="legacy_these_drive_the_ride_dashboard_so_they_do_nothin_d4d30d86">Deze bedienen het Ride Dashboard en doen dus niets zolang dat niet draait - een Android Auto-sessie alleen is niet genoeg.</string>
+    <string name="legacy_show_button_presses_on_the_dashboard_4ed2cd5e">Knopdrukken op het dashboard tonen</string>
+
+    <!-- Source: feature/controls — the handlebar page after the Bluetooth controller was removed -->
+    <string name="legacy_your_motorcycle_s_own_handlebar_drives_moto_hub__f19519f3">Het stuur van je motor bedient MOTO-HUB. Leer het één keer aan en geef daarna elke knop de actie die je wilt.</string>
+    <string name="legacy_presses_still_arrive_and_still_show_up_on_this_p_62dfa27d">Drukken komen nog steeds binnen en verschijnen nog steeds op deze pagina - er wordt alleen niets mee gedaan.</string>
+    <string name="legacy_every_handlebar_press_432fb397">Elke druk op het stuur </string>
 </resources>

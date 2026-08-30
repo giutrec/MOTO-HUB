@@ -3,7 +3,9 @@
 // Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.androidauto
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -28,16 +30,85 @@ class AndroidAutoSelfModeHelpTest {
     }
 
     @Test
-    fun `both self-mode failures open the setup help`() {
-        // The two failures have different remedies but the same help screen, and the screen is
-        // what carries the "Add new cars" step - a message that stopped matching here would take
-        // the rider's only route to it away.
+    fun `every self-mode failure opens the setup help`() {
+        // The failures have different remedies but the same help screen, and the screen is what
+        // carries the full sequence - a message that stopped matching here would take the rider's
+        // only route to it away.
         assertTrue(AndroidAutoSelfModeHelp.isMessageAboutSelfMode(AndroidAutoSelfModeHelp.NEVER_CONNECTED_MESSAGE))
         assertTrue(
             AndroidAutoSelfModeHelp.isMessageAboutSelfMode(AndroidAutoSelfModeHelp.ACCEPTED_BUT_SILENT_MESSAGE)
         )
+        assertTrue(
+            AndroidAutoSelfModeHelp.isMessageAboutSelfMode(
+                AndroidAutoSelfModeHelp.ACCEPTED_BUT_SILENT_ON_CLOSED_RELEASE_MESSAGE
+            )
+        )
         assertFalse(AndroidAutoSelfModeHelp.isMessageAboutSelfMode("Android Auto connected without delivering video."))
         assertFalse(AndroidAutoSelfModeHelp.isMessageAboutSelfMode(null))
+    }
+
+    @Test
+    fun `a release that closed self-mode is sent to the head unit server, not the switch`() {
+        // Field case FF3D-A418: 17.4.663054, "Add new cars" already on, ten failures in an hour,
+        // :5277 never started. Naming the switch first is what cost that rider the hour.
+        assertEquals(
+            AndroidAutoSelfModeHelp.ACCEPTED_BUT_SILENT_ON_CLOSED_RELEASE_MESSAGE,
+            AndroidAutoSelfModeHelp.acceptedButSilentMessage("17.4.663054-release")
+        )
+        assertTrue(
+            AndroidAutoSelfModeHelp.ACCEPTED_BUT_SILENT_ON_CLOSED_RELEASE_MESSAGE
+                .substringBefore("Add new cars")
+                .contains("Start head unit server")
+        )
+    }
+
+    @Test
+    fun `a release that still has self-mode keeps the switch as its remedy`() {
+        // On 17.2 the acceptance really is a trust decision, and the head unit server does not
+        // fix that one - so this must not become "head unit server for everybody".
+        assertEquals(
+            AndroidAutoSelfModeHelp.ACCEPTED_BUT_SILENT_MESSAGE,
+            AndroidAutoSelfModeHelp.acceptedButSilentMessage("17.2.662634-release")
+        )
+        // An unreadable version is not evidence the release closed anything, so it keeps the
+        // older remedy rather than being promoted into the newer one.
+        assertEquals(
+            AndroidAutoSelfModeHelp.ACCEPTED_BUT_SILENT_MESSAGE,
+            AndroidAutoSelfModeHelp.acceptedButSilentMessage(null)
+        )
+    }
+
+    @Test
+    fun `a rider step is told apart from the narration around it`() {
+        // The home screen decides between a caption and a card on this, so narration must never
+        // match: promoting "Asking Android Auto to project…" to an ACTION NEEDED card would tell
+        // the rider to go do something while the app is still trying.
+        assertEquals(
+            AndroidAutoSelfModeHelp.HEAD_UNIT_SERVER_STEP,
+            AndroidAutoSelfModeHelp.riderStepOf(AndroidAutoSelfModeHelp.HEAD_UNIT_SERVER_STEP.flat)
+        )
+        assertEquals(
+            AndroidAutoSelfModeHelp.ADD_NEW_CARS_STEP,
+            AndroidAutoSelfModeHelp.riderStepOf(AndroidAutoSelfModeHelp.ADD_NEW_CARS_STEP.flat)
+        )
+        assertNull(AndroidAutoSelfModeHelp.riderStepOf("Asking Android Auto to project…"))
+        assertNull(AndroidAutoSelfModeHelp.riderStepOf("Android Auto is starting up…"))
+        assertNull(AndroidAutoSelfModeHelp.riderStepOf(null))
+    }
+
+    @Test
+    fun `the flattened step is the exact line AaSelfMode publishes`() {
+        // riderStepOf matches on this text, and a companion app forwards it over AIDL as a plain
+        // string with no way back to the object - so rewording either half here silently drops
+        // the card and leaves the rider staring at the grey caption again.
+        assertEquals(
+            "Start \"head unit server\" in Android Auto ▸ Developer settings ▸ ⋮ menu…",
+            AndroidAutoSelfModeHelp.HEAD_UNIT_SERVER_STEP.flat
+        )
+        assertEquals(
+            "Enable \"Add new cars to Android Auto\" in Android Auto ▸ Developer settings…",
+            AndroidAutoSelfModeHelp.ADD_NEW_CARS_STEP.flat
+        )
     }
 
     @Test

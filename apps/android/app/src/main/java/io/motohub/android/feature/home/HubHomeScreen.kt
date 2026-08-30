@@ -80,6 +80,7 @@ import io.motohub.android.ui.components.LivePill
 import io.motohub.android.ui.components.MonoLabel
 import io.motohub.android.ui.components.MotoHubBackground
 import io.motohub.android.ui.components.ScreenSlideTransition
+import io.motohub.android.ui.components.StatusPill
 import io.motohub.android.ui.theme.MotoHubAndroidAuto
 import io.motohub.android.ui.theme.MotoHubMirror
 import io.motohub.android.tbox.TBoxConflictDiagnostics
@@ -318,6 +319,7 @@ private fun HomeTabContent(
                 dimDisplayEnabled = dimDisplayEnabled,
                 onDimDisplayChanged = onDimDisplayChanged,
                 onOpenAndroidAutoPreview = onOpenAndroidAutoPreview,
+                onOpenAndroidAutoHelp = onOpenAndroidAutoSettings,
                 externalDisplayActive = externalDisplayActive,
                 externalDisplayStreaming = externalDisplayStreaming,
                 onStopExternalDisplay = onStopExternalDisplay,
@@ -865,6 +867,10 @@ private fun ActiveSessionContent(
     dimDisplayEnabled: Boolean,
     onDimDisplayChanged: (Boolean) -> Unit,
     onOpenAndroidAutoPreview: () -> Unit,
+    // Nullable rather than defaulted: the guide is a CORE-flavour screen, so the ADVANCED build
+    // genuinely has nowhere to send the rider, and a silently-defaulted no-op lambda would draw
+    // a button that does nothing instead of not drawing one.
+    onOpenAndroidAutoHelp: (() -> Unit)?,
     externalDisplayActive: Boolean = false,
     externalDisplayStreaming: Boolean = false,
     onStopExternalDisplay: () -> Unit = {},
@@ -888,16 +894,32 @@ private fun ActiveSessionContent(
     // Starting Google Android Auto can take several seconds and several attempts; the detail
     // says which one is running so the card is not a motionless "being prepared".
     val androidAutoStartupDetail by AndroidAutoRuntime.startupDetail.collectAsStateWithLifecycle()
-    val statusText = when {
-        androidAutoActive && ready -> "Navigation active on TFT"
-        externalDisplayActive && ready -> "Streaming to external display via USB"
-        ready -> "TFT is receiving your screen"
-        androidAutoActive -> androidAutoStartupDetail ?: "Session is being prepared"
-        else -> "Session is being prepared"
-    }
+    // A step the rider has to carry out by hand is not a status line, and the caption slot it
+    // used to share with "Asking Android Auto to project…" made it unreadable: small, grey, two
+    // wrapped lines under a title that reports nothing is wrong. Lift it into a card of its own.
+    val riderStep = androidAutoStartupDetail
+        ?.takeIf { androidAutoActive && !ready }
+        ?.let(AndroidAutoSelfModeHelp::riderStepOf)
+    // Through the catalogue, not around it: every branch here is a literal the rider reads, and
+    // tools/i18n/extract.py walks the whole when-expression inside a motoHubText() call. Left
+    // bare, these were the one part of this card that stayed English in seven languages. The
+    // startup-detail branch is a runtime string with no entry, and falls back to itself.
+    val statusText = motoHubText(
+        when {
+            androidAutoActive && ready -> "Navigation active on TFT"
+            externalDisplayActive && ready -> "Streaming to external display via USB"
+            ready -> "TFT is receiving your screen"
+            riderStep != null -> "Android Auto is waiting for one step from you"
+            androidAutoActive -> androidAutoStartupDetail ?: "Session is being prepared"
+            else -> "Session is being prepared"
+        }
+    )
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        ActiveSessionHero(ready, modeName, statusText, modeColor)
+        ActiveSessionHero(ready, modeName, statusText, modeColor, actionRequired = riderStep != null)
+        if (riderStep != null) {
+            RiderStepCard(riderStep, modeColor, onOpenAndroidAutoHelp)
+        }
         MonoLabel(motoHubText("SESSION ACTIONS"))
 
         if (androidAutoActive) {
@@ -925,7 +947,13 @@ private fun ActiveSessionContent(
 }
 
 @Composable
-private fun ActiveSessionHero(ready: Boolean, modeName: String, statusText: String, accentColor: Color) {
+private fun ActiveSessionHero(
+    ready: Boolean,
+    modeName: String,
+    statusText: String,
+    accentColor: Color,
+    actionRequired: Boolean = false
+) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = MaterialTheme.shapes.large
@@ -951,13 +979,71 @@ private fun ActiveSessionHero(ready: Boolean, modeName: String, statusText: Stri
                 )
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                LivePill(if (ready) "LIVE ON TFT" else "PREPARING")
+                // "PREPARING" over a session that is in fact waiting on the rider reads as
+                // "sit still, it is working on it" - the exact wrong instruction.
+                if (actionRequired) {
+                    StatusPill(motoHubText("ACTION NEEDED"), accentColor)
+                } else {
+                    LivePill(if (ready) "LIVE ON TFT" else "PREPARING")
+                }
                 Text(modeName, style = MaterialTheme.typography.titleLarge)
                 Text(
                     statusText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (actionRequired) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
                 )
+            }
+        }
+    }
+}
+
+/**
+ * The one thing Android Auto needs from the rider, set to be read at arm's length on a bike.
+ *
+ * Deliberately not the hero's caption style: this is the only text on the screen that is an
+ * instruction rather than a report, so it gets the accent panel, full onSurface contrast, the
+ * thing to tap on its own line above the menu path it is buried in, and the way into the full
+ * guide for the rider who has never opened Android Auto's developer settings.
+ */
+@Composable
+private fun RiderStepCard(
+    step: AndroidAutoSelfModeHelp.RiderStep,
+    accentColor: Color,
+    onOpenHelp: (() -> Unit)?
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = accentColor.copy(alpha = 0.10f)),
+        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.45f)),
+        shape = MaterialTheme.shapes.large
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                motoHubText("DO THIS IN ANDROID AUTO"),
+                style = MaterialTheme.typography.labelMedium,
+                color = accentColor,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                step.action,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                step.where,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (onOpenHelp != null) {
+                SecondaryAction(motoHubText("Show me how"), onOpenHelp)
             }
         }
     }

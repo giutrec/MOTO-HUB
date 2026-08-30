@@ -4,6 +4,8 @@
 package io.motohub.android.feature.diagnostics
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -26,10 +28,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.motohub.android.i18n.motoHubText
+import io.motohub.android.session.ProjectionEventLog
+import io.motohub.android.tbox.ThinkerRideGate
 import io.motohub.android.ui.components.MonoLabel
 import io.motohub.android.ui.components.MotoHubBackground
 import io.motohub.android.ui.components.MotoHubHeader
@@ -46,6 +51,27 @@ fun ClockLabScreen(
     onBack: () -> Unit
 ) {
     BackHandler(onBack = onBack)
+
+    // The first field run burned three attempts on the missing "Nearby devices" grant: the lab
+    // only logged where to find it and the rider spent minutes in system settings. Ask in place.
+    val context = LocalContext.current
+    val blePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        ProjectionEventLog.record(
+            "CLOCKLAB",
+            "Bluetooth permission results: " +
+                grants.entries.joinToString { "${it.key.substringAfterLast('.')}=${it.value}" } + "."
+        )
+        if (grants.values.all { it }) onRun()
+    }
+    val runWithPermissions: () -> Unit = {
+        if (ThinkerRideGate.hasBlePermissions(context)) {
+            onRun()
+        } else {
+            blePermissionLauncher.launch(ThinkerRideGate.blePermissions)
+        }
+    }
 
     MotoHubBackground(Modifier.fillMaxSize()) {
         Column(
@@ -66,8 +92,8 @@ fun ClockLabScreen(
                 Text(motoHubText("Dash clock lab"), style = MaterialTheme.typography.headlineMedium)
                 Text(
                     motoHubText(
-                        "For dashes that reset their clock at every ignition cycle (Zontes above " +
-                            "all). With the dash powered on, the lab connects over Bluetooth, " +
+                        "For dashes that reset their clock at every ignition cycle (Zontes and " +
+                            "Voge above all). With the dash powered on, the lab connects over Bluetooth, " +
                             "listens, then pushes the time in five different shapes and records " +
                             "every byte. Ride, cycle the ignition, and share the application log: " +
                             "it will say which shape the dash accepted."
@@ -78,7 +104,7 @@ fun ClockLabScreen(
             }
 
             Button(
-                onClick = if (state.running) onStop else onRun,
+                onClick = if (state.running) onStop else runWithPermissions,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),

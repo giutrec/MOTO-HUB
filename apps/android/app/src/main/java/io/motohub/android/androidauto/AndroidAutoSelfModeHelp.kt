@@ -57,7 +57,7 @@ object AndroidAutoSelfModeHelp {
 
     /**
      * Shown instead of [NEVER_CONNECTED_MESSAGE] when Android Auto *took* the request and then did
-     * nothing.
+     * nothing, on a release that still has self-mode.
      *
      * The two failures look identical to the rider and have different remedies. A refusal at the
      * intent ("not exported") is the release having closed self-mode, and only the head unit server
@@ -66,6 +66,10 @@ object AndroidAutoSelfModeHelp {
      * rider was being sent to the head unit server for it, which does not fix that. Field log
      * 2026-07-31 (OnePlus CPH2653) on 17.2.662634, a release this file calls verified working:
      * one refusal, three acceptances, total silence.
+     *
+     * That reading only holds while self-mode is open. Once [isKnownBrokenVersion] is true, use
+     * [ACCEPTED_BUT_SILENT_ON_CLOSED_RELEASE_MESSAGE] instead - pick with
+     * [acceptedButSilentMessage] rather than by hand.
      */
     const val ACCEPTED_BUT_SILENT_MESSAGE =
         "Google Android Auto took MOTO-HUB's request and then ignored it. That is what it does " +
@@ -73,6 +77,77 @@ object AndroidAutoSelfModeHelp {
             "times ▸ Developer settings ▸ turn on \"Add new cars to Android Auto\" (older builds " +
             "call it \"Unknown sources\"), then start Android Auto from MOTO-HUB again. If it " +
             "still does nothing, use the ⋮ menu on that same screen ▸ \"Start head unit server\"."
+
+    /**
+     * The same acceptance-then-silence, on a release that has closed self-mode
+     * ([isKnownBrokenVersion]) - where it says nothing at all about the "Add new cars" switch.
+     *
+     * On 17.4 the component that accepts is WirelessSetupSharedService, and it does nothing
+     * without WPP pairing data in its own datastore, which only Google's QR flow writes. So the
+     * acceptance is not a trust decision being made about MOTO-HUB; it is an intent falling into
+     * a component that was never going to act on it. Field case FF3D-A418 (2026-08-29, Android
+     * Auto 17.4.663054 on Android 16): the rider had already turned "Add new cars" on, said so,
+     * and hit this ten times across an hour - and in all ten attempts his log carries "head unit
+     * server is not running on :5277", because the one step that would have worked was the last
+     * sentence of a message whose first sentence sent him somewhere else.
+     */
+    const val ACCEPTED_BUT_SILENT_ON_CLOSED_RELEASE_MESSAGE =
+        "Google Android Auto took MOTO-HUB's request and then ignored it, which is all this " +
+            "release does with it: Android Auto 17.3 and newer removed the way an app can ask it " +
+            "to project. Start it from Android Auto instead: open Android Auto ▸ tap Version ten " +
+            "times ▸ Developer settings ▸ the ⋮ menu at the top right ▸ \"Start head unit " +
+            "server\". Leave MOTO-HUB running: it connects on its own within a couple of seconds. " +
+            "While you are on that screen, \"Add new cars to Android Auto\" should be on too."
+
+    /**
+     * A remedy the rider has to carry out by hand, kept in the two halves it reads best in: the
+     * thing to tap, and the menu path it is buried in.
+     *
+     * [AaSelfMode] publishes it flattened into the one-line startup detail, because that is all
+     * the AIDL state channel and the preview screen's status line can carry. The home screen
+     * recovers the halves with [riderStepOf] and sets them at a size that survives a glance at a
+     * traffic light - which the flattened line, rendered as the session card's grey caption, did
+     * not. Field case FF3D-A418 is what that cost: ten attempts across an hour, by a rider the
+     * one workable step was in front of the whole time.
+     */
+    data class RiderStep(val action: String, val where: String) {
+        /** The single line published as the startup detail. Do not reword without [riderStepOf]. */
+        val flat: String get() = "$action in $where…"
+    }
+
+    /** Wanted while the release still has self-mode and Android Auto simply does not trust us. */
+    val ADD_NEW_CARS_STEP = RiderStep(
+        action = "Enable \"Add new cars to Android Auto\"",
+        where = "Android Auto ▸ Developer settings"
+    )
+
+    /** The path that works on every release, including the ones that closed self-mode. */
+    val HEAD_UNIT_SERVER_STEP = RiderStep(
+        action = "Start \"head unit server\"",
+        where = "Android Auto ▸ Developer settings ▸ ⋮ menu"
+    )
+
+    /**
+     * The rider step a startup detail is, or null when the detail is progress narration - the
+     * "Asking Android Auto to project…" line the rider only has to watch. Matching on the flat
+     * text keeps the companion app's IPC-forwarded detail, which is a plain string by the time it
+     * arrives, on the same footing as Core's own.
+     */
+    fun riderStepOf(detail: String?): RiderStep? =
+        listOf(ADD_NEW_CARS_STEP, HEAD_UNIT_SERVER_STEP).firstOrNull { it.flat == detail }
+
+    /**
+     * Which acceptance-then-silence message the installed Android Auto has earned.
+     *
+     * Both remedies are real and neither is a superset of the other, so this picks by the only
+     * thing that separates them: whether the release still has the entry points an app can use.
+     */
+    fun acceptedButSilentMessage(versionName: String?): String =
+        if (isKnownBrokenVersion(versionName)) {
+            ACCEPTED_BUT_SILENT_ON_CLOSED_RELEASE_MESSAGE
+        } else {
+            ACCEPTED_BUT_SILENT_MESSAGE
+        }
 
     /**
      * Whether the installed Android Auto is new enough to have dropped self-mode. Used to warn
@@ -89,7 +164,9 @@ object AndroidAutoSelfModeHelp {
     }
 
     fun isMessageAboutSelfMode(message: String?): Boolean =
-        message == NEVER_CONNECTED_MESSAGE || message == ACCEPTED_BUT_SILENT_MESSAGE
+        message == NEVER_CONNECTED_MESSAGE ||
+            message == ACCEPTED_BUT_SILENT_MESSAGE ||
+            message == ACCEPTED_BUT_SILENT_ON_CLOSED_RELEASE_MESSAGE
 
     /**
      * Opens Android Auto's settings, falling back to its App info page: the settings activity is

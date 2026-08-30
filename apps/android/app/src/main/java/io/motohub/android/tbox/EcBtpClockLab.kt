@@ -14,11 +14,9 @@ import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
-import android.os.ParcelUuid
 import java.util.Date
 import java.util.TimeZone
 import java.util.concurrent.Executors
@@ -36,12 +34,20 @@ import java.util.concurrent.atomic.AtomicInteger
  * it is an unsolicited BLE push. So the open question is which unsolicited shape this dash
  * actually accepts, and this lab exists to ask it on a real bike.
  *
- * It connects to everything that plausibly is the dash (bonded pass plus a filtered LE scan,
- * the same sources as [EcBtpTimeLink]), dumps the full GATT table, listens for a window, and
- * then pushes the time in every shape worth ruling in or out - epoch with raw offset (the exact
- * Carbit shape), the same frame acked, pure UTC, DST-aware offset, and the formatted-string
- * form - a few seconds apart, logging every byte in both directions. The rider then checks the
- * dash after each ignition cycle and the log says which attempt was on the wire.
+ * It connects to everything that plausibly is the dash, dumps the full GATT table, listens for
+ * a window, and then pushes the time in every shape worth ruling in or out - epoch with raw
+ * offset (the exact Carbit shape), the same frame acked, pure UTC, DST-aware offset, and the
+ * formatted-string form - a few seconds apart, logging every byte in both directions. The rider
+ * then checks the dash after each ignition cycle and the log says which attempt was on the wire.
+ *
+ * Unlike [EcBtpTimeLink], the scan here runs UNFILTERED and the bonded pass opens everything.
+ * The first field run (Voge Valico 900, report 402D-D3F2, 2026-08-28) proved the production
+ * filters blind for a lab: the dash was on and in range - the rider's handlebar was delivering
+ * presses minutes later - yet a scan filtered on the seven known serial-service UUIDs saw
+ * *nothing*, and all six bonded devices were skipped on their cached SDP UUIDs without so much
+ * as their names in the log. So the lab now logs every advertiser it hears (name, address,
+ * RSSI, advertised services) and every bonded device it opens; what the dash actually
+ * advertises is precisely the answer the lab is out to collect.
  *
  * The listen-before-write rule that protects [EcBtpTimeLink] is deliberately relaxed here:
  * a dash that never speaks is the very case under investigation. The blast radius is still
@@ -62,6 +68,8 @@ internal class EcBtpClockLab(
     private val lock = Any()
     private val connections = mutableListOf<BluetoothGatt>()
     private val watched = mutableSetOf<String>()
+    private val advertisersSeen = mutableSetOf<String>()
+    private val scanConnects = AtomicInteger(0)
     private val framesReceived = AtomicInteger(0)
     private val devicesWritten = AtomicInteger(0)
 
@@ -101,8 +109,21 @@ internal class EcBtpClockLab(
         )
 
         val bonded = runCatching { adapter.bondedDevices }.getOrNull().orEmpty()
-        log("${bonded.size} bonded Bluetooth device(s); opening the plausible ones and scanning for unbonded dashes.")
-        bonded.filter { candidateWorthOpening(it) }.forEach { openGatt(it, "bonded") }
+        log("${bonded.size} bonded Bluetooth device(s); opening every one of them and scanning for unbonded dashes.")
+        // No pre-filter: the cached UUIDs are classic SDP records and say nothing reliable about
+        // an LE dash. A headset's GATT dump is a few log lines; a silently skipped dash is a
+        // wasted field run.
+        bonded.take(MAX_BONDED_CONNECTS).forEach { device ->
+            val address = runCatching { device.address }.getOrNull() ?: return@forEach
+            val name = runCatching { device.name }.getOrNull() ?: "?"
+            val cached = runCatching { device.uuids }.getOrNull()
+                ?.joinToString { it.uuid.toString() } ?: "none cached"
+            log("Bonded: $name ($address), SDP UUIDs: $cached.")
+            openGatt(device, "bonded")
+        }
+        if (bonded.size > MAX_BONDED_CONNECTS) {
+            log("Only the first $MAX_BONDED_CONNECTS bonded devices are opened; ${bonded.size - MAX_BONDED_CONNECTS} skipped.")
+        }
         beginScan(adapter.bluetoothLeScanner)
 
         runCatching {
@@ -135,13 +156,6 @@ internal class EcBtpClockLab(
         onFinished()
     }
 
-    /** Same leniency as [EcBtpTimeLink.candidateWorthOpening]: no cached UUIDs is not a no. */
-    private fun candidateWorthOpening(device: BluetoothDevice): Boolean {
-        val cached = runCatching { device.uuids }.getOrNull()
-        if (cached.isNullOrEmpty()) return true
-        return cached.any { EcBtpTimeLink.SERVICE_UUIDS.contains(it.uuid) }
-    }
-
     private fun beginScan(leScanner: BluetoothLeScanner?) {
         if (leScanner == null) {
             log("Bluetooth LE scanning is unavailable on this phone; only bonded devices are tried.")
@@ -151,7 +165,35 @@ internal class EcBtpClockLab(
             override fun onScanResult(callbackType: Int, result: ScanResult) {
                 if (closed.get()) return
                 val device = runCatching { result.device }.getOrNull() ?: return
-                openGatt(device, "scan, rssi ${result.rssi}")
+                val address = runCatching { device.address }.getOrNull() ?: return
+                val record = result.scanRecord
+                val advertised = record?.serviceUuids?.map { it.uuid }.orEmpty()
+                val name = runCatching { device.name }.getOrNull()
+                    ?: record?.deviceName
+                val firstSighting = synchronized(lock) { advertisersSeen.add(address) }
+                val knownService = advertised.any { EcBtpTimeLink.SERVICE_UUIDS.contains(it) }
+                if (firstSighting) {
+                    log(
+                        "Advertiser: ${name ?: "(no name)"} ($address), rssi ${result.rssi}, " +
+                            "services: ${if (advertised.isEmpty()) "none advertised" else advertised.joinToString()}" +
+                            if (knownService) " - KNOWN serial service." else "."
+                    )
+                }
+                when {
+                    // watched-set in openGatt dedupes, so a repeat sighting is harmless.
+                    knownService -> openGatt(device, "scan, advertises a known serial service")
+                    // A nameless advertiser is overwhelmingly a phone/beacon; a named one in
+                    // Bluetooth range of a motorcycle is worth one GATT look, capped so a busy
+                    // car park cannot eat the lab.
+                    firstSighting && !name.isNullOrBlank() -> {
+                        val slot = scanConnects.incrementAndGet()
+                        if (slot <= MAX_SCAN_CONNECTS) {
+                            openGatt(device, "scan, named advertiser")
+                        } else if (slot == MAX_SCAN_CONNECTS + 1) {
+                            log("Named-advertiser cap ($MAX_SCAN_CONNECTS) reached; further ones are logged only.")
+                        }
+                    }
+                }
             }
 
             override fun onScanFailed(errorCode: Int) {
@@ -159,27 +201,27 @@ internal class EcBtpClockLab(
                 endScan()
             }
         }
-        val filters = EcBtpTimeLink.SERVICE_UUIDS.map { uuid ->
-            ScanFilter.Builder().setServiceUuid(ParcelUuid(uuid)).build()
-        }
+        // Unfiltered on purpose: the first Voge field run proved a scan filtered on the known
+        // service UUIDs sees nothing, so what the dash advertises instead IS the experiment.
         val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
-        val started = runCatching { leScanner.startScan(filters, settings, callback) }
+        val started = runCatching { leScanner.startScan(null, settings, callback) }
         if (started.isFailure) {
             log("Could not scan for the dash (${started.exceptionOrNull()?.message ?: "unknown error"}); only bonded devices are tried.")
             return
         }
         scanner = leScanner
         scanCallback = callback
-        log("Scanning ${SCAN_WINDOW_MILLIS / 1000}s for a dash advertising one of ${EcBtpTimeLink.SERVICE_UUIDS.size} serial services.")
+        log("Scanning ${SCAN_WINDOW_MILLIS / 1000}s, unfiltered - every advertiser in range is logged once.")
         runCatching {
             scheduler.schedule({
                 endScan()
-                if (!closed.get() && synchronized(lock) { watched.isEmpty() }) {
-                    log(
-                        "Scan over: nothing in range advertises the known serial services and no " +
-                            "bonded device carries them. Is the dash powered on and its Bluetooth awake?"
-                    )
-                }
+                if (closed.get()) return@schedule
+                val seen = synchronized(lock) { advertisersSeen.size }
+                log(
+                    "Scan over: $seen advertiser(s) heard, " +
+                        "${scanConnects.get().coerceAtMost(MAX_SCAN_CONNECTS)} opened from the scan." +
+                        if (seen == 0) " Nothing at all was advertising - is the dash powered on and its Bluetooth awake?" else ""
+                )
             }, SCAN_WINDOW_MILLIS, TimeUnit.MILLISECONDS)
         }
     }
@@ -421,5 +463,7 @@ internal class EcBtpClockLab(
         const val LISTEN_WINDOW_MILLIS = 5_000L
         const val ATTEMPT_GAP_MILLIS = 4_000L
         const val ATTEMPT_COUNT = 5
+        const val MAX_BONDED_CONNECTS = 10
+        const val MAX_SCAN_CONNECTS = 8
     }
 }

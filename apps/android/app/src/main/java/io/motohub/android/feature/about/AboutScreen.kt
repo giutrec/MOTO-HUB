@@ -266,12 +266,12 @@ private fun MapCreditsCard() {
             Text(
                 text = motoHubText(
                     "Map rendering by MapLibre Native (BSD-2-Clause). Vector tiles by OpenFreeMap, " +
-                        "to the OpenMapTiles schema; raster tiles by CARTO. Address search by " +
-                        "Photon. Routing by Valhalla, hosted by Stadia Maps or the FOSSGIS demo " +
-                        "server. Places by Overpass. Weather by Open-Meteo. Petrol prices " +
-                        "published as open data by Spain's Ministerio para la Transición " +
-                        "Ecológica, Portugal's DGEG, the French Ministère de l'Économie and " +
-                        "Italy's MIMIT. DGEG's data may not be used commercially."
+                        "to the OpenMapTiles schema; raster tiles by the OpenStreetMap " +
+                        "Foundation. Address search by Photon. Routing by Valhalla, hosted by " +
+                        "Stadia Maps or the FOSSGIS demo server. Places by Overpass. Weather by " +
+                        "Open-Meteo. Petrol prices published as open data by Spain's Ministerio " +
+                        "para la Transición Ecológica, Portugal's DGEG, the French Ministère de " +
+                        "l'Économie and Italy's MIMIT. DGEG's data may not be used commercially."
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant

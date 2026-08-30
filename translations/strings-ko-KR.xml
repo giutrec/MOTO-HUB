@@ -1288,7 +1288,7 @@
     <string name="legacy_community_source_fe28bfcc">커뮤니티 및 소스</string>
     <string name="legacy_discord_c6d7d50c">Discord</string>
     <string name="legacy_github_7f258fe3">GitHub</string>
-    <string name="legacy_map_rendering_by_maplibre_native_bsd_2_clause_ve_cb6afe3f">지도 렌더링: MapLibre Native(BSD-2-Clause). 벡터 타일: OpenFreeMap, OpenMapTiles 스키마 기준. 래스터 타일: CARTO. 주소 검색: Photon. 경로 안내: Valhalla(Stadia Maps 또는 FOSSGIS 데모 서버 호스팅). 장소 정보: Overpass. 날씨: Open-Meteo. 연료 가격은 스페인 Ministerio para la Transición Ecológica, 포르투갈 DGEG, 프랑스 Ministère de l\'Économie, 이탈리아 MIMIT가 공개 데이터로 제공합니다. DGEG 데이터는 상업적으로 사용할 수 없습니다.</string>
+    <string name="legacy_map_rendering_by_maplibre_native_bsd_2_clause_ve_1f7cda7f">지도 렌더링: MapLibre Native(BSD-2-Clause). 벡터 타일: OpenFreeMap, OpenMapTiles 스키마 기준. 래스터 타일: OpenStreetMap 재단. 주소 검색: Photon. 경로 안내: Valhalla(Stadia Maps 또는 FOSSGIS 데모 서버 호스팅). 장소 정보: Overpass. 날씨: Open-Meteo. 연료 가격은 스페인 Ministerio para la Transición Ecológica, 포르투갈 DGEG, 프랑스 Ministère de l\'Économie, 이탈리아 MIMIT가 공개 데이터로 제공합니다. DGEG 데이터는 상업적으로 사용할 수 없습니다.</string>
     <string name="legacy_maps_data_b256210d">지도 및 데이터</string>
     <string name="legacy_maps_addresses_and_routes_are_built_on_data_by_o_f0b02b91">지도, 주소, 경로는 © OpenStreetMap contributors의 데이터를 바탕으로 하며 ODbL 라이선스를 따릅니다.</string>
     <string name="legacy_prototype_unlocked_856a4841">프로토타입 잠금 해제됨</string>
@@ -1484,7 +1484,6 @@
     <string name="legacy_low_power_483394f9">배터리 부족</string>
     <string name="legacy_no_sensor_69b15af9">센서 없음</string>
     <string name="legacy_normal_8999b0e7">정상</string>
-    <string name="legacy_off_1314f">꺼짐</string>
     <string name="legacy_warm_288a85">따뜻함</string>
 
     <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
@@ -1737,4 +1736,148 @@
 
     <!-- Source: feature/about/AboutScreen.kt -->
     <string name="legacy_moto_hub_connects_an_android_12_phone_to_a_motor_b791c32e">MOTO-HUB는 Android 12 이상 휴대폰을 EasyConn으로 페어링되는 모터사이클 계기판에 연결합니다. EasyConn은 CFMOTO를 비롯한 여러 제조사가 탑재하는 Carbit 소프트웨어입니다. 화면 및 앱 미러링, Android Auto 프로젝션, 저장된 모터사이클 프로필, 기기 내 진단을 지원합니다.</string>
+
+    <!-- Source: feature/controls — a controller button stands in for a handlebar press -->
+    <string name="legacy_handlebar_presses_32db65bc">핸들바 조작</string>
+    <string name="legacy_backward_hold_left_72d8761e">뒤로 길게 누르기 - 왼쪽</string>
+    <string name="legacy_forward_hold_right_3f058b83">앞으로 길게 누르기 - 오른쪽</string>
+
+    <!-- Source: feature/diagnostics/BleExplorerScreen.kt — the Bluetooth LE workbench -->
+    <string name="legacy_bluetooth_le_explorer_2ab1f074">블루투스 LE 탐색기</string>
+    <string name="legacy_find_any_bluetooth_le_device_open_it_and_see_wha_ff9d191c">모든 블루투스 LE 기기를 찾아 열어 보고 실제 구성을 확인하세요. 서비스, 특성, 그리고 기기가 보내는 모든 바이트까지. 자신에 대해 아무것도 알리지 않는 리모컨을 위해 만들었습니다. 구독한 상태로 버튼을 누르면 프로토콜이 로그에 저절로 기록됩니다.</string>
+    <string name="legacy_devices_1_d_c9f468d8">기기 (%1$d)</string>
+    <string name="legacy_filter_by_name_address_or_service_5c4953c4">이름, 주소 또는 서비스로 필터</string>
+    <string name="legacy_not_connectable_a36d7984">  - 연결 불가</string>
+    <string name="legacy_services_99327804">서비스: </string>
+    <string name="legacy_manufacturer_5ba47ab7">제조사: </string>
+    <string name="legacy_service_data_703f501b">서비스 데이터: </string>
+    <string name="legacy_connected_839202e9">연결됨</string>
+    <string name="legacy_rediscover_cece7f3c">다시 검색</string>
+    <string name="legacy_mtu_517_7d540d89">MTU 517</string>
+    <string name="legacy_read_rssi_318ccc81">RSSI 읽기</string>
+    <string name="legacy_read_26cdb6">읽기</string>
+    <string name="legacy_write_4ff67bf">쓰기</string>
+    <string name="legacy_write_to_1_s_716e199f">%1$s에 쓰기</string>
+    <string name="legacy_bytes_in_hex_01_ff_0a_01ff0a_and_0x01_0xff_all_w_69a0e8b2">16진수 바이트 — \"01 FF 0A\", \"01ff0a\", \"0x01,0xFF\" 모두 사용할 수 있습니다. 기기에 직접 기록됩니다. 일부 하드웨어에서는 잘못된 값이 되돌리기 어려운 설정을 바꿉니다.</string>
+    <string name="legacy_hex_11afb">16진수</string>
+    <string name="legacy_not_valid_hex_yet_f28e24dc">아직 올바른 16진수가 아닙니다.</string>
+    <string name="legacy_1_d_byte_s_f2d64482">%1$d바이트</string>
+    <string name="legacy_no_response_bdcb77a0">응답 없이</string>
+    <string name="legacy_traffic_eb2daddd">트래픽</string>
+    <string name="legacy_nothing_yet_dc65bed9">아직 없습니다.</string>
+    <string name="legacy_every_line_here_is_also_in_the_application_log_s_f3e682dd">여기의 모든 줄은 애플리케이션 로그에도 기록되므로, 세션을 진단 보고서로 보낼 수 있습니다.</string>
+    <string name="legacy_dash_clock_lab_a1a0638d">계기판 시계 실험실</string>
+    <string name="legacy_experiments_for_dashes_that_reset_the_clock_zont_a4c75a39">시계를 초기화하는 계기판을 위한 실험 (Zontes, Voge)</string>
+    <string name="legacy_scan_connect_and_read_any_ble_device_byte_by_byt_c47fb770">모든 BLE 기기를 검색하고 연결해 바이트 단위로 읽기</string>
+
+    <!-- Source: strings the extractor used to miss inside if/else expressions -->
+    <string name="legacy_stop_scanning_93cac2ef">검색 중지</string>
+    <string name="legacy_scan_for_devices_883edf83">기기 검색</string>
+    <string name="legacy_showing_named_devices_only_18320ef1">이름 있는 기기만 표시</string>
+    <string name="legacy_showing_every_device_ab347b96">모든 기기 표시</string>
+    <string name="legacy_nothing_yet_a_remote_that_sleeps_only_advertises_231ea04a">아직 없습니다. 잠자는 리모컨은 버튼을 누른 뒤 몇 초 동안만 신호를 보냅니다. 버튼을 누르고 가까이 두세요.</string>
+    <string name="legacy_start_a_scan_to_see_what_is_around_bd69ed5b">주변에 무엇이 있는지 보려면 검색을 시작하세요.</string>
+    <string name="legacy_unsubscribe_862dd2b1">구독 해제</string>
+    <string name="legacy_subscribe_9621fd2a">구독</string>
+
+    <!-- Source: feature/controls — actions that drive the Ride Dashboard itself -->
+    <string name="legacy_dashboard_next_panel_8f5432b1">대시보드: 다음 패널</string>
+    <string name="legacy_dashboard_fullscreen_map_1bd08691">대시보드: 전체 화면 지도</string>
+    <string name="legacy_dashboard_zoom_the_map_on_me_4f78353">대시보드: 내 위치로 지도 확대</string>
+    <string name="legacy_dashboard_change_the_left_widget_2ac18bf8">대시보드: 왼쪽 위젯 변경</string>
+    <string name="legacy_dashboard_change_the_right_widget_e40e68ad">대시보드: 오른쪽 위젯 변경</string>
+    <string name="legacy_panel_33b634ef">패널 +</string>
+    <string name="legacy_map_full_b08caf3">지도 전체</string>
+    <string name="legacy_zoom_me_5ca904e5">내 위치</string>
+    <string name="legacy_widget_l_b0744190">위젯 L</string>
+    <string name="legacy_widget_r_b0744196">위젯 R</string>
+
+    <!-- Source: feature/controls — actions that drive the rider's music -->
+    <string name="legacy_music_464f605">음악</string>
+    <string name="legacy_music_play_pause_f246dd44">음악: 재생 / 일시정지</string>
+    <string name="legacy_music_next_track_516d3c09">음악: 다음 곡</string>
+    <string name="legacy_music_previous_track_dab94b8d">음악: 이전 곡</string>
+    <string name="legacy_music_volume_up_f45c31d6">음악: 볼륨 높이기</string>
+    <string name="legacy_music_volume_down_4e0f651d">음악: 볼륨 낮추기</string>
+    <string name="legacy_play_25ff54">재생</string>
+    <string name="legacy_next_24ff13">다음</string>
+    <string name="legacy_previous_b7ee1f17">이전</string>
+    <string name="legacy_vol_4eff3fe">볼륨 +</string>
+    <string name="legacy_vol_4f015e5">볼륨 −</string>
+
+    <!-- Source: feature/controls — the three input sources, and which one is live -->
+    <string name="legacy_motorcycle_handlebar_dc90fcfc">오토바이 핸들바</string>
+    <string name="legacy_android_auto_17_4_removed_the_way_an_app_can_ask_217ec1b2">Android Auto 17.4에서 앱이 투사를 요청하는 방법이 사라졌습니다. MOTO-HUB는 계속 시도하며 이전 버전에서는 동작합니다 — 되지 않을 때는 아래 네 단계로 Android Auto의 개발자 메뉴에서 직접 시작하세요. 다른 방법이 모두 안 될 때 통하는 부분이며, 따로 설치할 것은 없습니다.</string>
+    <string name="legacy_start_android_auto_yourself_3b0dffe1">ANDROID AUTO 직접 시작하기</string>
+    <string name="legacy_open_the_android_auto_app_scroll_to_the_bottom_a_c3e99276">Android Auto 앱을 열고 맨 아래로 내려가 \"버전\"을 열 번 누르세요. 개발자 설정이 나타나며, 한 번만 열어 두면 됩니다.</string>
+    <string name="legacy_in_developer_settings_open_the_menu_at_the_top_r_bc6818f7">개발자 설정에서 오른쪽 위 ⋮ 메뉴를 열고 \"헤드 유닛 서버 시작\"을 선택하세요. 아래 설정 목록이 아니라 그 메뉴 안에 있습니다. 이 단계가 실제로 해결해 주는 단계입니다.</string>
+    <string name="legacy_while_you_are_in_there_629f07a5">들어간 김에</string>
+    <string name="legacy_in_that_same_developer_settings_list_turn_on_add_3c96c7df">같은 개발자 설정 목록에서 \"Android Auto에 새 차량 추가\"를 켜세요(구버전에서는 \"알 수 없는 소스\"). Android Auto 17.2 이하에서는 이 스위치만으로 충분한 경우가 많습니다. 17.3부터는 그렇지 않고 2단계가 필요하므로, Android Auto가 여전히 시작되지 않으면 여기서 멈추지 마세요.</string>
+    <string name="legacy_action_needed_a446e8df">조치 필요</string>
+    <string name="legacy_do_this_in_android_auto_9a49aaee">ANDROID AUTO에서 이렇게 하세요</string>
+    <string name="legacy_show_me_how_73baf02b">방법 보기</string>
+    <string name="legacy_for_dashes_that_reset_their_clock_at_every_ignit_64c2ff15">시동을 켤 때마다 시계가 초기화되는 계기판용입니다(특히 Zontes와 Voge). 계기판을 켠 상태에서 랩이 블루투스로 연결해 수신을 확인한 뒤, 시간을 다섯 가지 형식으로 전송하고 모든 바이트를 기록합니다. 주행한 뒤 시동을 껐다 켜고 애플리케이션 로그를 공유해 주세요. 계기판이 어떤 형식을 받아들였는지 알려 줍니다.</string>
+    <string name="legacy_run_clock_experiments_8ad4688f">시계 실험 실행</string>
+    <string name="legacy_live_log_831d05f0">실시간 로그</string>
+    <string name="legacy_nothing_yet_power_the_dash_on_then_run_the_exper_b1ec5c8f">아직 없습니다. 계기판을 켠 다음 실험을 실행하세요.</string>
+    <string name="legacy_moto_hub_closed_unexpectedly_30f439d7">MOTO-HUB가 예기치 않게 종료되었습니다</string>
+    <string name="legacy_the_last_time_you_used_moto_hub_it_stopped_becau_8448d27c">지난번 MOTO-HUB 사용 중 오류로 중단되었습니다. 진단 보고서를 보내야 개발자가 원인을 찾을 수 있습니다.</string>
+    <string name="legacy_the_report_contains_your_motorcycle_s_dashboard__f4208b9f">보고서에는 오토바이 계기판 모델, 휴대폰 모델, Android 및 Android Auto 버전, 설치된 MOTO-HUB 버전, 그리고 오류를 포함한 애플리케이션 로그가 들어 있습니다. 비밀번호, 위치, 하드웨어 주소는 절대 포함되지 않습니다.</string>
+    <string name="legacy_send_reports_automatically_from_now_on_7cdd2209">이제부터 보고서 자동 전송</string>
+    <string name="legacy_send_report_55908cac">보고서 보내기</string>
+    <string name="legacy_how_your_data_is_handled_ff77c87f">데이터 처리 방식</string>
+    <string name="legacy_not_now_e202d7e9">나중에</string>
+    <string name="legacy_help_improve_moto_hub_9bf5292c">MOTO-HUB 개선에 참여하기</string>
+    <string name="legacy_moto_hub_can_send_a_diagnostics_report_to_the_de_36cc6ba6">MOTO-HUB는 개발자에게 진단 보고서를 보낼 수 있습니다. 오토바이 계기판 모델, 휴대폰 모델, 설치된 Android·Android Auto·MOTO-HUB 버전, 애플리케이션 로그가 포함됩니다. 비밀번호, 위치, 하드웨어 주소는 절대 포함되지 않습니다.</string>
+    <string name="legacy_reports_go_out_at_most_once_a_day_after_an_updat_6fc12b8d">보고서는 하루에 최대 한 번, 업데이트 후 또는 비정상 종료 후에만, 그리고 인터넷에 연결된 상태에서만 전송됩니다. Support ID는 설정 ▸ 진단에 표시되며, 그곳에서 언제든지 켜고 끌 수 있습니다.</string>
+    <string name="legacy_send_reports_5c810947">보고서 전송</string>
+    <string name="legacy_diagnostics_privacy_notice_1f708f84">진단 개인정보 처리 안내</string>
+    <string name="legacy_support_id_5239972c">Support ID</string>
+    <string name="legacy_moto_hub_support_id_7149b87">MOTO-HUB Support ID</string>
+    <string name="legacy_tap_to_copy_quote_it_when_asking_for_help_it_ide_edc7231">탭하여 복사하세요. 도움을 요청할 때 함께 알려 주세요. 이 휴대폰과 오토바이를 식별합니다.</string>
+    <string name="legacy_support_id_copied_63da1e38">Support ID를 복사했습니다</string>
+    <string name="legacy_what_gets_sent_f4a13bbf">전송되는 항목</string>
+    <string name="legacy_read_what_a_report_contains_then_choose_whether__e679dae">보고서에 무엇이 담기는지 읽어 보고 전송 여부를 선택하세요</string>
+    <string name="legacy_who_holds_your_reports_how_long_they_are_kept_an_ea54a6b7">누가 보고서를 보관하는지, 얼마나 오래 보관하는지, 어떻게 삭제를 요청하는지</string>
+    <string name="legacy_send_diagnostics_now_9368c9ea">지금 진단 보내기</string>
+    <string name="legacy_this_build_has_no_collector_configured_e224996">이 빌드에는 수집 서버가 설정되어 있지 않습니다</string>
+    <string name="legacy_logging_is_off_the_log_would_end_at_1_s_c9d7198e">로깅이 꺼져 있습니다. 로그는 %1$s에서 끝납니다</string>
+    <string name="legacy_logging_is_off_there_is_no_log_to_send_eca8d32d">로깅이 꺼져 있어 보낼 로그가 없습니다</string>
+    <string name="legacy_send_diagnostics_automatically_880f35b7">진단 자동 전송</string>
+    <string name="legacy_sends_the_report_above_to_the_developer_at_most__8689def0">위 보고서를 하루에 최대 한 번, 업데이트 후 또는 비정상 종료 후에, 인터넷에 연결된 상태에서만 개발자에게 보냅니다. 계기판과 휴대폰 모델, 앱 버전, 애플리케이션 로그가 포함되며 비밀번호, 위치, 하드웨어 주소는 절대 포함되지 않습니다.</string>
+    <string name="legacy_logging_is_off_d9325d5a">로깅이 꺼져 있음</string>
+    <string name="legacy_nothing_has_been_recorded_since_1_s_what_was_log_1be484ac">%1$s 이후로 기록된 내용이 없습니다. 그 전에 기록된 내용은 그대로 남아 있습니다. 로깅을 끄면 새 기록만 멈출 뿐, 기존 기록은 삭제되지 않습니다.</string>
+    <string name="legacy_nothing_has_been_recorded_and_there_is_no_earlie_dd873fa0">기록된 내용이 없고, 이전 로그도 없습니다.</string>
+    <string name="legacy_a_report_sent_now_carries_that_log_so_it_says_no_cb65d9dc">지금 보내는 보고서에는 그 로그가 담기므로, 앱이 오늘 무엇을 하는지는 알 수 없습니다. 문제를 신고하려면 로깅 활성화를 다시 켜고, 문제를 재현한 뒤 보내세요.</string>
+    <string name="legacy_that_worked_keep_it_b0100883">성공했습니다 - 이대로 유지할까요?</string>
+    <string name="legacy_your_dashboard_is_now_accepting_the_picture_on_t_a2e41389">이제 계기판이 %1$s 프로필로 화면을 받아들이고 있습니다. 이 오토바이에 계속 사용할까요?</string>
+    <string name="legacy_you_have_just_found_out_something_moto_hub_could_5d173f67">MOTO-HUB가 스스로 알아낼 수 없던 사실을 방금 확인했습니다. 이 계기판이 실제로 어떤 프로필을 받아들이는지입니다. 로그를 보내면 이 정보가 공유되어, 같은 오토바이를 타는 다음 라이더가 처음부터 제대로 연결할 수 있습니다.</string>
+    <string name="legacy_send_my_log_now_80f590fe">지금 내 로그 보내기</string>
+    <string name="legacy_send_logs_automatically_from_now_on_1efdfbe9">이제부터 로그 자동 전송</string>
+    <string name="legacy_keep_it_318f8786">유지</string>
+    <string name="legacy_undo_284d04">실행 취소</string>
+    <string name="legacy_try_another_profile_2632e907">다른 프로필 시도</string>
+    <string name="legacy_the_connection_to_your_motorcycle_is_fine_the_da_6a78bba4">오토바이와의 연결은 정상입니다. 계기판이 전송되는 형식의 화면을 거부하고 있을 뿐입니다. 프로필을 바꾸면 그 형식이 바뀝니다. 하나를 고르면 바로 다시 연결되고, 계기판에 화면이 나오기 시작하면 MOTO-HUB가 그대로 유지할지 물어봅니다.</string>
+    <string name="legacy_your_dashboard_is_not_showing_this_9765fbe3">계기판에 표시되지 않고 있습니다</string>
+    <string name="legacy_connected_but_the_picture_is_being_refused_tap_t_b17b1097">연결되었지만 화면이 거부되고 있습니다. 탭하여 다른 프로필을 시도하세요.</string>
+    <string name="legacy_connected_not_displaying_53b322ca">연결됨, 표시 안 됨</string>
+    <string name="legacy_your_dashboard_refused_1_d_of_the_picture_it_was_beaebc06">계기판이 전송된 화면의 %1$d%%를 거부했습니다(%3$d개 중 %2$d개 프레임).</string>
+    <string name="legacy_this_is_what_your_dashboard_reports_itself_to_be_8dfdffdd">계기판이 스스로 밝힌 정보입니다.</string>
+    <string name="legacy_speaks_the_same_protocol_your_motorcycle_is_alre_7a13c9ca">오토바이가 이미 사용 중인 것과 같은 프로토콜을 씁니다.</string>
+    <string name="legacy_plain_settings_no_assumptions_a_good_thing_to_fa_3d3a2213">가정 없이 기본 설정만 사용합니다. 되돌아가기 좋은 선택입니다.</string>
+    <string name="legacy_an_experiment_for_one_dashboard_s_open_question__1eafa773">특정 계기판의 미해결 문제를 위한 실험입니다. 아무 효과가 없을 수도 있습니다.</string>
+    <string name="legacy_navigation_active_on_tft_b6221bcf">TFT에서 내비게이션 실행 중</string>
+    <string name="legacy_tft_is_receiving_your_screen_56fd381">TFT가 화면을 수신 중입니다</string>
+    <string name="legacy_android_auto_is_waiting_for_one_step_from_you_31eacac3">Android Auto가 사용자의 조작을 기다리고 있습니다</string>
+    <string name="legacy_session_is_being_prepared_742c490a">세션을 준비하는 중</string>
+    <string name="legacy_button_presses_are_off_2952e766">버튼 입력이 꺼져 있음</string>
+    <string name="legacy_moto_hub_advanced_owns_this_setting_and_writes_i_b8e328f7">이 설정은 MOTO-HUB ADVANCED의 것이며 그쪽 값이 이 값을 덮어씁니다. 여기가 아니라 그쪽에서 켜세요.</string>
+    <string name="legacy_turn_presses_back_on_9d506146">버튼 입력 다시 켜기</string>
+    <string name="legacy_these_drive_the_ride_dashboard_so_they_do_nothin_d4d30d86">이 항목들은 라이드 대시보드를 조작하므로, 대시보드가 실행 중이 아니면 아무 동작도 하지 않습니다. Android Auto 세션만으로는 부족합니다.</string>
+    <string name="legacy_show_button_presses_on_the_dashboard_4ed2cd5e">계기판에 버튼 입력 표시</string>
+
+    <!-- Source: feature/controls — the handlebar page after the Bluetooth controller was removed -->
+    <string name="legacy_your_motorcycle_s_own_handlebar_drives_moto_hub__f19519f3">오토바이 핸들바가 MOTO-HUB를 조작합니다. 한 번 학습시킨 뒤 각 버튼에 원하는 동작을 지정하세요.</string>
+    <string name="legacy_presses_still_arrive_and_still_show_up_on_this_p_62dfa27d">버튼 입력은 계속 도착하고 이 페이지에도 계속 표시됩니다. 다만 아무 동작도 실행되지 않습니다.</string>
+    <string name="legacy_every_handlebar_press_432fb397">핸들바의 모든 입력 </string>
 </resources>

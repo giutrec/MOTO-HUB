@@ -359,7 +359,9 @@ object TBoxQrParser {
         if (!rawValue.startsWith(WIFI_SCHEME, ignoreCase = true)) return null
         val fields = splitWifiFields(rawValue.substring(WIFI_SCHEME.length))
         val ssid = fields["S"].orEmpty()
-        check(ssid.isNotEmpty()) { "The Wi-Fi QR code does not carry a network name." }
+        check(ssid.isNotEmpty()) {
+            "The Wi-Fi QR code does not carry a network name." + TRY_THE_IOS_CODE
+        }
 
         return TBoxQrPayload(
             ssid = ssid,
@@ -491,6 +493,22 @@ object TBoxQrParser {
     private val MOTO_FUN_PRODUCT_ID = Regex("""productid=([^&#\s]+)""", RegexOption.IGNORE_CASE)
 
     /**
+     * What to try when the remedy is "scan the other code on the dash".
+     *
+     * Dashes that print two codes label one for Android and one for iPhone/CarPlay, and on the
+     * Carbit/EasyConn family it is repeatedly the *iPhone* one that carries the credentials. What
+     * the Android-labelled code holds instead has never been captured - riders scan it, get
+     * nothing usable, and the thread ends once someone tells them to try the other one. Confirmed
+     * that way on Benelli, CFMOTO, QJ-Motor and Voge dashboards through August 2026.
+     *
+     * Said explicitly because nobody guesses it: an Android rider has no reason to scan the code
+     * marked for iPhone, and every rider who got there was told by someone in the community.
+     */
+    private const val TRY_THE_IOS_CODE =
+        " If the dash shows two codes, use the one marked for iPhone / CarPlay - despite the " +
+            "label, it pairs Android too."
+
+    /**
      * The QR decoded cleanly but carries no credentials. Naming the actual content is what lets a
      * rider recover on their own: the dash prints several codes and only one of them pairs, so
      * "unreadable" sends them polishing the screen instead of changing screens.
@@ -505,8 +523,11 @@ object TBoxQrParser {
                 ) ->
                 "That is the vehicle information code (VIN, engine, colour), not the Wi-Fi " +
                     "pairing code. Open the phone-connection screen on the dash and scan the " +
-                    "code shown there."
+                    "code shown there." + TRY_THE_IOS_CODE
 
+            // No iPhone hint here: this dash serves the MotoFun dialect from one screen, and the
+            // pairing code is the only code on it. Sending a Moto Morini rider hunting for a
+            // second code would replace one wrong screen with a search for a screen that has none.
             rawValue.contains("motomorini", ignoreCase = true) ||
                 rawValue.contains("motofun", ignoreCase = true) ->
                 "This Moto Morini code carries no Wifi= field, so it is not the pairing code. " +
@@ -518,6 +539,9 @@ object TBoxQrParser {
             // generic "scan the pairing code instead" advice sends the rider hunting for a code
             // that does not exist. Confirmed on a tester's dash 2026-08-02, whose screen reads
             // "Please open Android hotspot and set the following parameters".
+            //
+            // No iPhone hint either, for the same reason: this code is complete as it is, and the
+            // rider has to set up a hotspot rather than find a better code.
             hostOf(rawValue)?.lowercase()?.let(::isKnownProvisioningHost) == true ->
                 "This dash connects the other way round: it joins a hotspot your phone creates, " +
                     "so its code carries no network to join. On the dash, read the Ssid and " +
@@ -526,9 +550,9 @@ object TBoxQrParser {
 
             rawValue.startsWith("http", ignoreCase = true) ->
                 "That is a web address with no network credentials in it. Scan the dash pairing " +
-                    "code instead (MotoPlay / EasyConnect / MotoFun)."
+                    "code instead (MotoPlay / EasyConnect / MotoFun)." + TRY_THE_IOS_CODE
 
-            else -> "The QR code does not carry a T-Box network name."
+            else -> "The QR code does not carry a T-Box network name." + TRY_THE_IOS_CODE
         }
     }
 }

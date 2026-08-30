@@ -82,6 +82,7 @@ import io.motohub.android.feature.androidauto.AndroidAutoHelpScreen
 import io.motohub.android.feature.androidauto.AndroidAutoPreviewScreen
 import io.motohub.android.feature.androidauto.CompanionAppWarningDialog
 import io.motohub.android.feature.controls.HandlebarTeachPrerequisiteRequest
+import io.motohub.android.feature.diagnostics.BleExplorerScreen
 import io.motohub.android.feature.diagnostics.ClockLabScreen
 import io.motohub.android.feature.diagnostics.ClockLabViewModel
 import io.motohub.android.feature.diagnostics.NetworkDiagnosticsScreen
@@ -285,6 +286,7 @@ class MainActivity : ComponentActivity() {
                 var showManualPairing by rememberSaveable { mutableStateOf(false) }
                 var showNetworkDiagnostics by rememberSaveable { mutableStateOf(false) }
                 var showClockLab by rememberSaveable { mutableStateOf(false) }
+                var showBleExplorer by rememberSaveable { mutableStateOf(false) }
                 var showApplicationLogs by rememberSaveable { mutableStateOf(false) }
                 var showAbout by rememberSaveable { mutableStateOf(false) }
                 var showAndroidAutoHelp by rememberSaveable { mutableStateOf(false) }
@@ -991,8 +993,23 @@ class MainActivity : ComponentActivity() {
                                     "PAIRING",
                                     "QR photo decoding failed after preprocessing attempts: ${failure.message}"
                                 )
+                                // TBoxQrPhotoDecoder carries the parser's own verdict out as the
+                                // last failure, and that verdict is the useful half: it names the
+                                // code that was actually read and what to scan instead. Replacing
+                                // it with one fixed sentence told a rider who had photographed the
+                                // vehicle-information code that no QR was found at all.
+                                //
+                                // Only our two rider-facing throwables are surfaced - the parser's
+                                // check() and the decoder's own "no readable QR" - so an ML Kit or
+                                // file-read failure still gets the generic wording instead of a
+                                // stack-trace message.
+                                val explained = failure
+                                    .takeIf { it is IllegalStateException || it is IllegalArgumentException }
+                                    ?.message
+                                    ?.takeIf(String::isNotBlank)
                                 viewModel.onQrImportFailed(
-                                    "No QR code with motorcycle Wi-Fi details could be read from the photo."
+                                    explained
+                                        ?: "No QR code with motorcycle Wi-Fi details could be read from the photo."
                                 )
                             }
                     }
@@ -1010,6 +1027,7 @@ class MainActivity : ComponentActivity() {
                     editorProfileId != null -> HubScreenKey.MOTORCYCLE_DETAILS
                     showNetworkDiagnostics -> HubScreenKey.NETWORK_DIAGNOSTICS
                     showClockLab -> HubScreenKey.CLOCK_LAB
+                    showBleExplorer -> HubScreenKey.BLE_EXPLORER
                     showQrScanner -> HubScreenKey.QR_SCANNER
                     showManualPairing -> HubScreenKey.MANUAL_PAIRING
                     else -> HubScreenKey.HOME
@@ -1231,6 +1249,13 @@ class MainActivity : ComponentActivity() {
                         onBack = {
                             ProjectionEventLog.record("UI", "Network diagnostics screen closed.")
                             showNetworkDiagnostics = false
+                        }
+                    )
+                        HubScreenKey.BLE_EXPLORER ->
+                    BleExplorerScreen(
+                        onBack = {
+                            ProjectionEventLog.record("UI", "Bluetooth LE explorer closed.")
+                            showBleExplorer = false
                         }
                     )
                         HubScreenKey.CLOCK_LAB ->
@@ -1507,6 +1532,10 @@ class MainActivity : ComponentActivity() {
                                 onOpenNetworkDiagnostics = {
                                     ProjectionEventLog.record("UI", "Network diagnostics screen opened.")
                                     showNetworkDiagnostics = true
+                                },
+                                onOpenBleExplorer = {
+                                    ProjectionEventLog.record("UI", "Bluetooth LE explorer opened.")
+                                    showBleExplorer = true
                                 },
                                 onOpenClockLab = {
                                     ProjectionEventLog.record("UI", "Dash clock lab screen opened.")

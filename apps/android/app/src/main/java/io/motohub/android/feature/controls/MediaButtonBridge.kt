@@ -31,7 +31,6 @@ import android.view.KeyEvent
 import androidx.core.content.ContextCompat
 import io.motohub.android.R
 import io.motohub.android.androidauto.AndroidAutoInputCodes
-import io.motohub.android.androidauto.AndroidAutoPreviewRuntime
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 
@@ -180,6 +179,27 @@ class MediaButtonBridge(
 
     /** Whether this phone should hold the media volume in order to read volume-key presses. */
     private var usesVolumeGestures = true
+
+    /** True only while the calibration wizard is on screen asking the rider for presses. */
+    private var calibrationCapturing = false
+
+    /**
+     * Opens and closes the window in which the volume pin is held unconditionally, so the wizard
+     * can actually see an AVRCP rocker - see the note in [volumeGesturesInUse].
+     *
+     * Opening it also forgets a previous "this dash has no rocker" observation: the rider is
+     * answering that question by hand right now, and the stored answer is checked ahead of the
+     * taught gestures - so without this, a volume gesture taught in the wizard would be thrown
+     * away again the moment the wizard closed.
+     */
+    fun setCalibrating(active: Boolean) {
+        handler.post {
+            if (calibrationCapturing == active) return@post
+            calibrationCapturing = active
+            if (active) HandlebarCalibration.clearVolumeRockerSilent(context)
+            refreshVolumeGestureUse()
+        }
+    }
 
     /**
      * Re-evaluates [usesVolumeGestures] against the current calibration, live. Computed only at
@@ -383,6 +403,14 @@ class MediaButtonBridge(
         // be misread as a second press. AVRCP's pin-and-watch trick is only needed because
         // AVRCP volume changes never arrive as ordinary key events in the first place.
         if (HandlebarControlStore.inputMode(context) == HandlebarInputMode.HID) return false
+        // While the wizard is asking, the pin is taken whatever the stored answer says - because
+        // otherwise the answer can never change. An AVRCP volume rocker reaches the phone as a
+        // change in the stream level and NOTHING else, and [consumeVolumeChange] is the only
+        // code that reads that, and it only runs while the pin is held. So a rider whose stored
+        // calibration has no volume gesture could never teach one: every wizard step for the
+        // wheel looked dead, which is exactly what a CFMOTO 800MT-X rider saw before pressing
+        // Skip on all fifteen steps (field log 7c7e9e44, 2026-08-28).
+        if (calibrationCapturing) return true
         // An uncalibrated handlebar assumes a rocker, which is right for most dashboards and
         // wrong forever for the ones that never send one. The silence probe settles it without
         // asking the rider (see [scheduleVolumeSilenceProbe]).
@@ -963,6 +991,10 @@ class MediaButtonBridge(
     }
 
     private fun dispatch(gesture: HandlebarGesture) {
+        // Before the capture gate: a handlebar press that arrives while capture is off is still a
+        // press the rider made, and not showing it is how "is this thing even listening" becomes
+        // an evening of guessing.
+        HandlebarPressHud.pressed(context, gesture.label)
         if (!captureActive) return
         // Published before anything consumes it, so the mapping screen shows what the
         // handlebar sent even when the gesture is unmapped or swallowed by the dashboard.
@@ -976,26 +1008,15 @@ class MediaButtonBridge(
             .getOrDefault(false)
         if (handledByTarget) {
             log("[BTN] ${gesture.label} -> $targetName")
+            HandlebarPressHud.performed(context, gesture.label, targetName)
             return
         }
         val action = HandlebarControlStore.action(context, gesture)
         log("[BTN] ${gesture.label} -> ${action.label}")
-        when (action) {
-            HandlebarAction.NONE -> Unit
-            HandlebarAction.SCROLL_FORWARD -> sendScroll(+1)
-            HandlebarAction.SCROLL_BACK -> sendScroll(-1)
-            HandlebarAction.DPAD_UP -> sendKey(AndroidAutoInputCodes.KEY_UP)
-            HandlebarAction.DPAD_DOWN -> sendKey(AndroidAutoInputCodes.KEY_DOWN)
-            HandlebarAction.DPAD_LEFT -> sendKey(AndroidAutoInputCodes.KEY_LEFT)
-            HandlebarAction.DPAD_RIGHT -> sendKey(AndroidAutoInputCodes.KEY_RIGHT)
-            HandlebarAction.SELECT -> sendKey(AndroidAutoInputCodes.KEY_ENTER)
-            HandlebarAction.BACK -> sendKey(AndroidAutoInputCodes.KEY_BACK)
-            HandlebarAction.HOME -> sendKey(AndroidAutoInputCodes.KEY_HOME)
-            HandlebarAction.ASSISTANT -> sendKey(AndroidAutoInputCodes.KEY_ASSISTANT)
-            HandlebarAction.NAV_1 -> navToSavedPlace(context, 0)
-            HandlebarAction.NAV_2 -> navToSavedPlace(context, 1)
-            HandlebarAction.NAV_3 -> navToSavedPlace(context, 2)
-        }
+        // On the picture as well as in the log: mid-ride nobody reads a log, and "did that do
+        // anything" is the question this whole screen keeps failing to answer.
+        HandlebarPressHud.performed(context, gesture.label, action.label)
+        HandlebarActionRunner.run(context, action, log)
     }
 
     /**
@@ -1022,7 +1043,7 @@ class MediaButtonBridge(
         dpadKeyTarget(keyCode)?.let { target ->
             if (action == KeyEvent.ACTION_DOWN && repeatCount == 0) {
                 log("[BTN] HID D-pad ${KeyEvent.keyCodeToString(keyCode)} -> $targetName")
-                sendKey(target)
+                HandlebarActionRunner.sendKey(target, log)
             }
             return true
         }
@@ -1053,27 +1074,6 @@ class MediaButtonBridge(
         }
     }
 
-    private fun navToSavedPlace(context: Context, slot: Int) {
-        val query = SavedPlaces.query(context, slot)
-        if (query.isBlank()) {
-            log("[BTN] saved place ${slot + 1} is not set — set it in Controls → Saved Places")
-            return
-        }
-        log("[BTN] launching navigation to saved place ${slot + 1}: $query")
-        NavLauncher.navigate(context, query, log)
-    }
-
-    private fun sendKey(keycode: Int) {
-        // Routes through AndroidAutoPreviewRuntime (not AaInputBridge directly) so this reaches
-        // Core's live AA session over AIDL when Android Auto is delegated there (PRO), not just
-        // a local AaInput sink that only exists when AA runs in-process (CORE).
-        if (!AndroidAutoPreviewRuntime.sendKey(keycode)) log("[BTN] Android Auto input is not ready; key=$keycode dropped")
-    }
-
-    private fun sendScroll(delta: Int) {
-        if (!AndroidAutoPreviewRuntime.sendScroll(delta)) log("[BTN] Android Auto input is not ready; scroll=$delta dropped")
-    }
-
     private val callback = object : MediaSession.Callback() {
         override fun onMediaButtonEvent(intent: Intent): Boolean {
             @Suppress("DEPRECATION")
@@ -1097,6 +1097,10 @@ class MediaButtonBridge(
                     if (captureActive) "" else " (capture inactive; ignored)"
             )
             if (!captureActive) return false
+            if (isSelfInjected(event.keyCode)) {
+                log("[BTN] ignoring ${KeyEvent.keyCodeToString(event.keyCode)} - this app dispatched it")
+                return true
+            }
             val handled = isSelectKey(event.keyCode) || event.keyCode == KeyEvent.KEYCODE_MEDIA_NEXT ||
                 event.keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS ||
                 event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ||
@@ -1473,9 +1477,40 @@ class MediaButtonBridge(
         fun dispatchHidKeyEvent(keyCode: Int, action: Int, repeatCount: Int): Boolean =
             bridges.values.any { it.onHidKeyEvent(keyCode, action, repeatCount) }
 
+        @Volatile private var selfInjectedKey = 0
+        @Volatile private var selfInjectedUntil = 0L
+
+        /**
+         * Announces a media key this app is about to dispatch itself.
+         *
+         * Android delivers a dispatched media key to the most recently active session, and during
+         * a handlebar capture that can be the fake one this class publishes for AVRCP - so a rider
+         * mapping "play/pause" to a controller button would have it come straight back and be read
+         * as a handlebar press. Announced here, ignored on arrival, for as long as a round trip
+         * plausibly takes.
+         */
+        fun noteSelfInjectedMediaKey(keyCode: Int) {
+            selfInjectedKey = keyCode
+            selfInjectedUntil = SystemClock.elapsedRealtime() + SELF_INJECTION_WINDOW_MILLIS
+        }
+
+        internal fun isSelfInjected(keyCode: Int): Boolean =
+            keyCode == selfInjectedKey && SystemClock.elapsedRealtime() < selfInjectedUntil
+
+        private const val SELF_INJECTION_WINDOW_MILLIS = 400L
+
         /** Calibration changed — every live bridge re-decides whether to hold the volume pin. */
         fun refreshVolumeGestureUse() {
             bridges.values.forEach { it.refreshVolumeGestureUse() }
+        }
+
+        /**
+         * The calibration wizard opened or closed. While it is open every live bridge holds the
+         * volume pin, so a rocker that only ever arrives as an absolute-volume change is
+         * readable by the very screen whose job is to learn it.
+         */
+        fun setCalibrating(active: Boolean) {
+            bridges.values.forEach { it.setCalibrating(active) }
         }
 
         /**

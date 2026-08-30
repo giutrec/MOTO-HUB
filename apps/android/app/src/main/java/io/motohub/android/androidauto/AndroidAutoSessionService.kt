@@ -52,6 +52,7 @@ import io.motohub.android.tbox.TBoxSessionHandle
 import io.motohub.android.tbox.TBoxSessionRegistry
 import io.motohub.android.tbox.TBoxStreamingLocks
 import io.motohub.android.tbox.TBoxTouchTransform
+import io.motohub.android.tbox.tBoxFailureOwnedByHandshake
 import io.motohub.android.tbox.TBoxTouchFilter
 import io.motohub.android.tbox.TBoxVideoAreaSource
 import io.motohub.android.tbox.negotiateVideoConfiguration
@@ -120,6 +121,13 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
     /** When the dash last took a still. The stills path's liveness signal; see the offer below. */
     private val lastStillAcceptedAt = AtomicLong(0)
     private val recoveryRequested = AtomicBoolean(false)
+    /**
+     * True for exactly as long as [startBikeStream] is inside the EasyConn handshake, both
+     * attempts included. A `Stopped`/`FatalError` arriving in that window is that handshake's own
+     * failure reaching us by a second route, not the session dying; see
+     * [tBoxFailureOwnedByHandshake] for what it cost to find that out.
+     */
+    private val handshakeInFlight = AtomicBoolean(false)
     private var capabilityProfile = AndroidAutoCapabilityProfiles.fallback()
     @Volatile private var tBoxTouchTransform: TBoxTouchTransform? = null
     private var touchFilter: TBoxTouchFilter? = null
@@ -413,11 +421,17 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                                 "The AAP session was closed; start Android Auto again."
                         )
                     } else if (io.motohub.android.aa.AaSelfMode.anyEntryPointAccepted) {
-                        // Android Auto took the request and ignored it, which is the "Add new
-                        // cars" switch, not the release having closed self-mode. Sending these
-                        // riders to the head unit server was answering a question they had not
-                        // asked - see AndroidAutoSelfModeHelp.ACCEPTED_BUT_SILENT_MESSAGE.
-                        fail(AndroidAutoSelfModeHelp.ACCEPTED_BUT_SILENT_MESSAGE)
+                        // Android Auto took the request and ignored it. On a release that still
+                        // has self-mode that is the "Add new cars" switch, and sending those
+                        // riders to the head unit server answers a question they did not ask;
+                        // from 17.3 on it is the release itself, and the switch is a dead end
+                        // they have usually already tried. The version decides which - see
+                        // AndroidAutoSelfModeHelp.acceptedButSilentMessage.
+                        fail(
+                            AndroidAutoSelfModeHelp.acceptedButSilentMessage(
+                                io.motohub.android.aa.AaSelfMode.lastGearheadVersion
+                            )
+                        )
                     } else {
                         fail(AndroidAutoSelfModeHelp.NEVER_CONNECTED_MESSAGE)
                     }
@@ -514,38 +528,56 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
             capabilityStore.load(handle.motorcycle)?.capabilities,
             ProfileOverride.byKey(handle.motorcycle.profileOverrideKey)
         )
-        var configurationResult = handle.transport.negotiateVideoConfiguration(
-            host = handle.host,
-            savedArea = savedArea,
-            fallbackArea = fallbackArea,
-            timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
-        )
-        if (configurationResult.isFailure) {
-            // Same root cause as the other streaming-mode fix: whichever mode ran before this one
-            // called transport.stop() on end, which for the real GPL transport fully tears down
-            // the underlying session, so a bare retry of negotiateVideoConfiguration fails
-            // identically every time. Re-run discover() from scratch instead, exactly like a
-            // rider's manual "Connect" retry does.
-            ProjectionEventLog.warning(
-                "ANDROID AUTO",
-                "T-Box handshake failed (first attempt): ${configurationResult.exceptionOrNull()?.message}. " +
-                    "Re-discovering the T-Box before retrying."
+        // Both attempts run under this flag. The transport reports a failed handshake twice - once
+        // as the return value below, once as a Stopped/FatalError event - and the event handler
+        // must not race this block to the teardown; see onTBoxFailureEvent.
+        handshakeInFlight.set(true)
+        val configurationResult = try {
+            var result = handle.transport.negotiateVideoConfiguration(
+                host = handle.host,
+                savedArea = savedArea,
+                fallbackArea = fallbackArea,
+                videoAreaTimeoutMillis = VIDEO_AREA_TIMEOUT_MS
             )
-            val rediscovered = handle.transport.discover(handle.link, handle.motorcycle.modelId)
-            val freshHost = rediscovered.getOrNull()
-            if (freshHost != null) {
-                handle = handle.copy(host = freshHost)
-                tBoxHandle = handle
-                TBoxSessionRegistry.install(handle)
-                // install() resets the claim list; this session is still using it.
-                TBoxSessionRegistry.claim(SESSION_CONSUMER)
-                configurationResult = handle.transport.negotiateVideoConfiguration(
-                    host = handle.host,
-                    savedArea = savedArea,
-                    fallbackArea = fallbackArea,
-                    timeoutMillis = VIDEO_CONFIGURATION_TIMEOUT_MS
+            if (result.isFailure) {
+                // Same root cause as the other streaming-mode fix: whichever mode ran before this
+                // one called transport.stop() on end, which for the real GPL transport fully tears
+                // down the underlying session, so a bare retry of negotiateVideoConfiguration
+                // fails identically every time. Re-run discover() from scratch instead, exactly
+                // like a rider's manual "Connect" retry does.
+                ProjectionEventLog.warning(
+                    "ANDROID AUTO",
+                    "T-Box handshake failed (first attempt): ${result.exceptionOrNull()?.message}. " +
+                        "Re-discovering the T-Box before retrying."
                 )
+                val rediscovered = handle.transport.discover(handle.link, handle.motorcycle.modelId)
+                val freshHost = rediscovered.getOrNull()
+                if (freshHost == null) {
+                    // Said out loud because the alternative reads identically in a log: a
+                    // re-discovery that failed and a retry that was never reached both look like
+                    // the warning above followed by nothing.
+                    ProjectionEventLog.warning(
+                        "ANDROID AUTO",
+                        "Re-discovery failed, so there is no second handshake attempt: " +
+                            "${rediscovered.exceptionOrNull()?.message}"
+                    )
+                } else {
+                    handle = handle.copy(host = freshHost)
+                    tBoxHandle = handle
+                    TBoxSessionRegistry.install(handle)
+                    // install() resets the claim list; this session is still using it.
+                    TBoxSessionRegistry.claim(SESSION_CONSUMER)
+                    result = handle.transport.negotiateVideoConfiguration(
+                        host = handle.host,
+                        savedArea = savedArea,
+                        fallbackArea = fallbackArea,
+                        videoAreaTimeoutMillis = VIDEO_AREA_TIMEOUT_MS
+                    )
+                }
             }
+            result
+        } finally {
+            handshakeInFlight.set(false)
         }
         configurationResult.exceptionOrNull()?.let {
             throw IllegalStateException("T-Box handshake for Android Auto failed: ${it.message}", it)
@@ -904,8 +936,8 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
                     }
                     is TBoxEvent.Touch -> touchFilter?.onTouch(event)
                     is TBoxEvent.Warning -> ProjectionEventLog.record("T-BOX", event.message)
-                    is TBoxEvent.FatalError -> handleRecoverableFailure("T-Box error: ${event.message}")
-                    TBoxEvent.Stopped -> handleRecoverableFailure("The T-Box ended Android Auto.")
+                    is TBoxEvent.FatalError -> onTBoxFailureEvent("T-Box error: ${event.message}")
+                    TBoxEvent.Stopped -> onTBoxFailureEvent("The T-Box ended Android Auto.")
                     is TBoxEvent.VideoArea -> Unit
                 }
             }
@@ -1072,6 +1104,22 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
     private fun markWatchdogProgress() {
         lastWatchdogFrameCount = framesAccepted.get()
         lastWatchdogProgressAt = SystemClock.elapsedRealtime()
+    }
+
+    /**
+     * Routes a transport failure event, unless the handshake that produced it is still running and
+     * about to report the same failure itself.
+     */
+    private fun onTBoxFailureEvent(message: String) {
+        val ownedByHandshake =
+            tBoxFailureOwnedByHandshake(handshakeInFlight.get(), "Android Auto", message)
+        if (ownedByHandshake != null) {
+            // INFO, not DEBUG: this is the line that says why the session did NOT end here, and
+            // the console hides DEBUG by default.
+            ProjectionEventLog.record("WATCHDOG", ownedByHandshake)
+            return
+        }
+        handleRecoverableFailure(message)
     }
 
     private fun handleRecoverableFailure(message: String) {
@@ -1426,7 +1474,7 @@ class AndroidAutoSessionService : Service(), AndroidAutoPreviewController {
         private const val ACTION_STOP = "io.motohub.android.action.STOP_ANDROID_AUTO"
         private const val AAP_VIDEO_READY_TIMEOUT_MS = 60_000L
         private const val TBOX_NETWORK_REBIND_TIMEOUT_MS = 8_000L
-        private const val VIDEO_CONFIGURATION_TIMEOUT_MS = 10_000L
+        private const val VIDEO_AREA_TIMEOUT_MS = 10_000L
         private const val WATCHDOG_TICK_MS = 5_000L
         private const val WATCHDOG_STALL_MS = 10_000L
         private const val NETWORK_LOSS_GRACE_MILLIS = 60_000L

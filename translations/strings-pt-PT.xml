@@ -717,7 +717,7 @@
     <string name="legacy_community_source_fe28bfcc">COMUNIDADE E CÓDIGO</string>
     <string name="legacy_discord_c6d7d50c">Discord</string>
     <string name="legacy_github_7f258fe3">GitHub</string>
-    <string name="legacy_map_rendering_by_maplibre_native_bsd_2_clause_ve_cb6afe3f">Renderização do mapa por MapLibre Native (BSD-2-Clause). Mosaicos vetoriais da OpenFreeMap, segundo o esquema OpenMapTiles; mosaicos raster da CARTO. Pesquisa de moradas por Photon. Cálculo de rotas por Valhalla, alojado pela Stadia Maps ou pelo servidor de demonstração da FOSSGIS. Locais por Overpass. Meteorologia por Open-Meteo. Preços dos combustíveis publicados como dados abertos pelo Ministerio para la Transición Ecológica de Espanha, pela DGEG portuguesa, pelo Ministère de l\'Économie francês e pelo MIMIT italiano. Os dados da DGEG não podem ser usados comercialmente.</string>
+    <string name="legacy_map_rendering_by_maplibre_native_bsd_2_clause_ve_1f7cda7f">Renderização do mapa por MapLibre Native (BSD-2-Clause). Mosaicos vetoriais da OpenFreeMap, segundo o esquema OpenMapTiles; mosaicos raster da OpenStreetMap Foundation. Pesquisa de moradas por Photon. Cálculo de rotas por Valhalla, alojado pela Stadia Maps ou pelo servidor de demonstração da FOSSGIS. Locais por Overpass. Meteorologia por Open-Meteo. Preços dos combustíveis publicados como dados abertos pelo Ministerio para la Transición Ecológica de Espanha, pela DGEG portuguesa, pelo Ministère de l\'Économie francês e pelo MIMIT italiano. Os dados da DGEG não podem ser usados comercialmente.</string>
     <string name="legacy_maps_data_b256210d">MAPAS E DADOS</string>
     <string name="legacy_maps_addresses_and_routes_are_built_on_data_by_o_f0b02b91">Mapas, moradas e rotas assentam em dados de © OpenStreetMap contributors, sob licença ODbL.</string>
     <string name="legacy_prototype_unlocked_856a4841">Protótipo desbloqueado</string>
@@ -913,7 +913,6 @@
     <string name="legacy_low_power_483394f9">BATERIA FRACA</string>
     <string name="legacy_no_sensor_69b15af9">SEM SENSOR</string>
     <string name="legacy_normal_8999b0e7">NORMAL</string>
-    <string name="legacy_off_1314f">DESLIGADO</string>
     <string name="legacy_warm_288a85">MORNO</string>
 
     <!-- Source: feature/ridedashboard/widget/CompassWidget.kt -->
@@ -1166,4 +1165,148 @@
 
     <!-- Source: feature/about/AboutScreen.kt -->
     <string name="legacy_moto_hub_connects_an_android_12_phone_to_a_motor_b791c32e">O MOTO-HUB liga um telemóvel Android 12+ a um painel de mota que se emparelha por EasyConn, o software da Carbit que vários fabricantes incluem, a CFMOTO entre eles. Suporta espelhamento do ecrã e das aplicações, projeção do Android Auto, perfis de mota guardados e diagnósticos no próprio dispositivo.</string>
+
+    <!-- Source: feature/controls — a controller button stands in for a handlebar press -->
+    <string name="legacy_handlebar_presses_32db65bc">PRESSÕES DO GUIADOR</string>
+    <string name="legacy_backward_hold_left_72d8761e">Recuar premido - Esquerda</string>
+    <string name="legacy_forward_hold_right_3f058b83">Avançar premido - Direita</string>
+
+    <!-- Source: feature/diagnostics/BleExplorerScreen.kt — the Bluetooth LE workbench -->
+    <string name="legacy_bluetooth_le_explorer_2ab1f074">Explorador Bluetooth LE</string>
+    <string name="legacy_find_any_bluetooth_le_device_open_it_and_see_wha_ff9d191c">Encontre qualquer dispositivo Bluetooth LE, abra-o e veja de que é realmente feito: os seus serviços, as suas características e cada byte que envia. Feito para comandos que não anunciam nada sobre si — prima os seus botões enquanto está subscrito e o protocolo escreve-se sozinho no registo.</string>
+    <string name="legacy_devices_1_d_c9f468d8">DISPOSITIVOS (%1$d)</string>
+    <string name="legacy_filter_by_name_address_or_service_5c4953c4">Filtrar por nome, endereço ou serviço</string>
+    <string name="legacy_not_connectable_a36d7984">  - não ligável</string>
+    <string name="legacy_services_99327804">serviços: </string>
+    <string name="legacy_manufacturer_5ba47ab7">fabricante: </string>
+    <string name="legacy_service_data_703f501b">dados de serviço: </string>
+    <string name="legacy_connected_839202e9">LIGADO</string>
+    <string name="legacy_rediscover_cece7f3c">Voltar a detetar</string>
+    <string name="legacy_mtu_517_7d540d89">MTU 517</string>
+    <string name="legacy_read_rssi_318ccc81">Ler RSSI</string>
+    <string name="legacy_read_26cdb6">Ler</string>
+    <string name="legacy_write_4ff67bf">Escrever</string>
+    <string name="legacy_write_to_1_s_716e199f">Escrever em %1$s</string>
+    <string name="legacy_bytes_in_hex_01_ff_0a_01ff0a_and_0x01_0xff_all_w_69a0e8b2">Bytes em hexadecimal — \"01 FF 0A\", \"01ff0a\" e \"0x01,0xFF\" funcionam todos. Isto escreve diretamente no dispositivo: nalgum hardware um valor errado altera definições difíceis de reverter.</string>
+    <string name="legacy_hex_11afb">Hex</string>
+    <string name="legacy_not_valid_hex_yet_f28e24dc">Ainda não é hexadecimal válido.</string>
+    <string name="legacy_1_d_byte_s_f2d64482">%1$d byte(s)</string>
+    <string name="legacy_no_response_bdcb77a0">Sem resposta</string>
+    <string name="legacy_traffic_eb2daddd">TRÁFEGO</string>
+    <string name="legacy_nothing_yet_dc65bed9">Ainda nada.</string>
+    <string name="legacy_every_line_here_is_also_in_the_application_log_s_f3e682dd">Cada linha aqui está também no registo da aplicação, por isso uma sessão pode ser enviada num relatório de diagnóstico.</string>
+    <string name="legacy_dash_clock_lab_a1a0638d">Laboratório do relógio do painel</string>
+    <string name="legacy_experiments_for_dashes_that_reset_the_clock_zont_a4c75a39">Experiências para painéis que reiniciam o relógio (Zontes, Voge)</string>
+    <string name="legacy_scan_connect_and_read_any_ble_device_byte_by_byt_c47fb770">Analise, ligue e leia qualquer dispositivo BLE byte a byte</string>
+
+    <!-- Source: strings the extractor used to miss inside if/else expressions -->
+    <string name="legacy_stop_scanning_93cac2ef">Parar a procura</string>
+    <string name="legacy_scan_for_devices_883edf83">Procurar dispositivos</string>
+    <string name="legacy_showing_named_devices_only_18320ef1">A mostrar apenas dispositivos com nome</string>
+    <string name="legacy_showing_every_device_ab347b96">A mostrar todos os dispositivos</string>
+    <string name="legacy_nothing_yet_a_remote_that_sleeps_only_advertises_231ea04a">Ainda nada. Um comando adormecido só se anuncia durante alguns segundos após uma pressão — prima um botão e mantenha-o por perto.</string>
+    <string name="legacy_start_a_scan_to_see_what_is_around_bd69ed5b">Inicie uma procura para ver o que há à volta.</string>
+    <string name="legacy_unsubscribe_862dd2b1">Cancelar subscrição</string>
+    <string name="legacy_subscribe_9621fd2a">Subscrever</string>
+
+    <!-- Source: feature/controls — actions that drive the Ride Dashboard itself -->
+    <string name="legacy_dashboard_next_panel_8f5432b1">Painel: painel seguinte</string>
+    <string name="legacy_dashboard_fullscreen_map_1bd08691">Painel: mapa em ecrã inteiro</string>
+    <string name="legacy_dashboard_zoom_the_map_on_me_4f78353">Painel: aproximar o mapa em mim</string>
+    <string name="legacy_dashboard_change_the_left_widget_2ac18bf8">Painel: mudar o widget da esquerda</string>
+    <string name="legacy_dashboard_change_the_right_widget_e40e68ad">Painel: mudar o widget da direita</string>
+    <string name="legacy_panel_33b634ef">Painel +</string>
+    <string name="legacy_map_full_b08caf3">Mapa cheio</string>
+    <string name="legacy_zoom_me_5ca904e5">Em mim</string>
+    <string name="legacy_widget_l_b0744190">Widget E</string>
+    <string name="legacy_widget_r_b0744196">Widget D</string>
+
+    <!-- Source: feature/controls — actions that drive the rider's music -->
+    <string name="legacy_music_464f605">MÚSICA</string>
+    <string name="legacy_music_play_pause_f246dd44">Música: reproduzir / pausa</string>
+    <string name="legacy_music_next_track_516d3c09">Música: faixa seguinte</string>
+    <string name="legacy_music_previous_track_dab94b8d">Música: faixa anterior</string>
+    <string name="legacy_music_volume_up_f45c31d6">Música: aumentar volume</string>
+    <string name="legacy_music_volume_down_4e0f651d">Música: baixar volume</string>
+    <string name="legacy_play_25ff54">Reproduzir</string>
+    <string name="legacy_next_24ff13">Seguinte</string>
+    <string name="legacy_previous_b7ee1f17">Anterior</string>
+    <string name="legacy_vol_4eff3fe">Vol +</string>
+    <string name="legacy_vol_4f015e5">Vol −</string>
+
+    <!-- Source: feature/controls — the three input sources, and which one is live -->
+    <string name="legacy_motorcycle_handlebar_dc90fcfc">GUIADOR DA MOTA</string>
+    <string name="legacy_android_auto_17_4_removed_the_way_an_app_can_ask_217ec1b2">O Android Auto 17.4 removeu a forma de uma aplicação pedir para projetar. O MOTO-HUB continua a tentar, e em versões anteriores funciona — mas quando não funciona, os quatro passos abaixo iniciam o Android Auto a partir do seu próprio menu de programador. É a parte que funciona quando mais nada funciona, e não precisa de instalar nada.</string>
+    <string name="legacy_start_android_auto_yourself_3b0dffe1">INICIE O ANDROID AUTO MANUALMENTE</string>
+    <string name="legacy_open_the_android_auto_app_scroll_to_the_bottom_a_c3e99276">Abra a aplicação Android Auto, desça até ao fim e toque dez vezes em \"Versão\". Aparecem as definições de Programador — só precisa de as desbloquear uma vez.</string>
+    <string name="legacy_in_developer_settings_open_the_menu_at_the_top_r_bc6818f7">Nas definições de Programador, abra o menu ⋮ no canto superior direito e escolha \"Iniciar servidor da unidade principal\". Está nesse menu, não na lista de definições abaixo. É este o passo que resolve.</string>
+    <string name="legacy_while_you_are_in_there_629f07a5">JÁ QUE ESTÁ LÁ</string>
+    <string name="legacy_in_that_same_developer_settings_list_turn_on_add_3c96c7df">Nessa mesma lista de definições de Programador, ative \"Adicionar novos carros ao Android Auto\" (nas versões mais antigas chama-se \"Origens desconhecidas\"). No Android Auto 17.2 e anteriores esse interruptor sozinho costuma bastar. A partir da 17.3 já não — é o passo 2 — por isso não pare aqui se o Android Auto continuar a não arrancar.</string>
+    <string name="legacy_action_needed_a446e8df">AÇÃO NECESSÁRIA</string>
+    <string name="legacy_do_this_in_android_auto_9a49aaee">FAÇA ISTO NO ANDROID AUTO</string>
+    <string name="legacy_show_me_how_73baf02b">Mostra-me como</string>
+    <string name="legacy_for_dashes_that_reset_their_clock_at_every_ignit_64c2ff15">Para painéis que reiniciam o relógio a cada ciclo de ignição (Zontes e Voge sobretudo). Com o painel ligado, o laboratório liga-se por Bluetooth, escuta e depois envia a hora em cinco formas diferentes e regista cada byte. Ande, desligue e volte a ligar a ignição e partilhe o registo da aplicação: dirá qual a forma que o painel aceitou.</string>
+    <string name="legacy_run_clock_experiments_8ad4688f">Executar experiências de relógio</string>
+    <string name="legacy_live_log_831d05f0">REGISTO AO VIVO</string>
+    <string name="legacy_nothing_yet_power_the_dash_on_then_run_the_exper_b1ec5c8f">Ainda nada. Ligue o painel e depois execute as experiências.</string>
+    <string name="legacy_moto_hub_closed_unexpectedly_30f439d7">O MOTO-HUB fechou inesperadamente</string>
+    <string name="legacy_the_last_time_you_used_moto_hub_it_stopped_becau_8448d27c">Da última vez que usou o MOTO-HUB, este parou devido a um erro. Enviar o relatório de diagnóstico é o que permite ao programador descobrir porquê.</string>
+    <string name="legacy_the_report_contains_your_motorcycle_s_dashboard__f4208b9f">O relatório contém o modelo do painel da sua mota, o modelo do seu telemóvel, as versões do Android e do Android Auto, as versões do MOTO-HUB instaladas e o registo da aplicação incluindo o erro. Palavras-passe, posições e endereços de hardware nunca são incluídos.</string>
+    <string name="legacy_send_reports_automatically_from_now_on_7cdd2209">Enviar relatórios automaticamente a partir de agora</string>
+    <string name="legacy_send_report_55908cac">Enviar relatório</string>
+    <string name="legacy_how_your_data_is_handled_ff77c87f">Como os seus dados são tratados</string>
+    <string name="legacy_not_now_e202d7e9">Agora não</string>
+    <string name="legacy_help_improve_moto_hub_9bf5292c">Ajude a melhorar o MOTO-HUB</string>
+    <string name="legacy_moto_hub_can_send_a_diagnostics_report_to_the_de_36cc6ba6">O MOTO-HUB pode enviar um relatório de diagnóstico ao programador: o modelo do painel da sua mota, o modelo do seu telemóvel, as versões do Android, do Android Auto e do MOTO-HUB instaladas e o registo da aplicação. Palavras-passe, posições e endereços de hardware nunca são incluídos.</string>
+    <string name="legacy_reports_go_out_at_most_once_a_day_after_an_updat_6fc12b8d">Os relatórios são enviados no máximo uma vez por dia, após uma atualização ou após uma falha, e apenas através de uma ligação com acesso à Internet. O seu Support ID aparece em Definições ▸ Diagnóstico, onde pode ativar ou desativar isto a qualquer momento.</string>
+    <string name="legacy_send_reports_5c810947">Enviar relatórios</string>
+    <string name="legacy_diagnostics_privacy_notice_1f708f84">Aviso de privacidade do diagnóstico</string>
+    <string name="legacy_support_id_5239972c">Support ID</string>
+    <string name="legacy_moto_hub_support_id_7149b87">MOTO-HUB Support ID</string>
+    <string name="legacy_tap_to_copy_quote_it_when_asking_for_help_it_ide_edc7231">Toque para copiar. Indique-o quando pedir ajuda: identifica este telemóvel e esta mota.</string>
+    <string name="legacy_support_id_copied_63da1e38">Support ID copiado</string>
+    <string name="legacy_what_gets_sent_f4a13bbf">O que é enviado</string>
+    <string name="legacy_read_what_a_report_contains_then_choose_whether__e679dae">Leia o que contém um relatório e depois escolha se os quer enviar</string>
+    <string name="legacy_who_holds_your_reports_how_long_they_are_kept_an_ea54a6b7">Quem guarda os seus relatórios, durante quanto tempo são mantidos e como pedir que sejam apagados</string>
+    <string name="legacy_send_diagnostics_now_9368c9ea">Enviar diagnóstico agora</string>
+    <string name="legacy_this_build_has_no_collector_configured_e224996">Esta compilação não tem nenhum collector configurado</string>
+    <string name="legacy_logging_is_off_the_log_would_end_at_1_s_c9d7198e">O registo está desativado; o log terminaria em %1$s</string>
+    <string name="legacy_logging_is_off_there_is_no_log_to_send_eca8d32d">O registo está desativado; não há nenhum log para enviar</string>
+    <string name="legacy_send_diagnostics_automatically_880f35b7">Enviar diagnóstico automaticamente</string>
+    <string name="legacy_sends_the_report_above_to_the_developer_at_most__8689def0">Envia o relatório acima ao programador no máximo uma vez por dia, após uma atualização ou após uma falha - apenas através de uma ligação com acesso à Internet. Modelos do painel e do telemóvel, versões da aplicação e registo da aplicação; nunca palavras-passe, posições ou endereços de hardware.</string>
+    <string name="legacy_logging_is_off_d9325d5a">REGISTO DESATIVADO</string>
+    <string name="legacy_nothing_has_been_recorded_since_1_s_what_was_log_1be484ac">Nada foi registado desde %1$s. O que foi registado antes é mantido - desativar o registo impede novas entradas, nunca apaga as antigas.</string>
+    <string name="legacy_nothing_has_been_recorded_and_there_is_no_earlie_dd873fa0">Nada foi registado e também não existe um registo anterior.</string>
+    <string name="legacy_a_report_sent_now_carries_that_log_so_it_says_no_cb65d9dc">Um relatório enviado agora leva esse registo, por isso não diz nada sobre o que a aplicação está a fazer hoje. Para comunicar um problema, volte a ativar Ativar o registo, faça acontecer de novo e depois envie.</string>
+    <string name="legacy_that_worked_keep_it_b0100883">Funcionou - mantemos?</string>
+    <string name="legacy_your_dashboard_is_now_accepting_the_picture_on_t_a2e41389">O seu painel está agora a aceitar a imagem com o perfil %1$s. Quer continuar a usá-lo para esta mota?</string>
+    <string name="legacy_you_have_just_found_out_something_moto_hub_could_5d173f67">Acabou de descobrir algo que o MOTO-HUB não conseguia determinar sozinho: que perfil este painel aceita de facto. Enviar o seu registo partilha essa informação, para que o próximo motociclista com a sua mota acerte à primeira.</string>
+    <string name="legacy_send_my_log_now_80f590fe">Enviar o meu registo agora</string>
+    <string name="legacy_send_logs_automatically_from_now_on_1efdfbe9">Enviar registos automaticamente a partir de agora</string>
+    <string name="legacy_keep_it_318f8786">Manter</string>
+    <string name="legacy_undo_284d04">Anular</string>
+    <string name="legacy_try_another_profile_2632e907">Experimentar outro perfil</string>
+    <string name="legacy_the_connection_to_your_motorcycle_is_fine_the_da_6a78bba4">A ligação à sua mota está bem - o painel está simplesmente a recusar a imagem no formato em que é enviada. Um perfil diferente muda esse formato. Escolher um volta a ligar de imediato e, se o painel começar a mostrá-la, o MOTO-HUB pergunta se o quer manter.</string>
+    <string name="legacy_your_dashboard_is_not_showing_this_9765fbe3">O SEU PAINEL NÃO ESTÁ A MOSTRAR ISTO</string>
+    <string name="legacy_connected_but_the_picture_is_being_refused_tap_t_b17b1097">Ligado, mas a imagem está a ser recusada. Toque para experimentar outro perfil.</string>
+    <string name="legacy_connected_not_displaying_53b322ca">LIGADO, SEM IMAGEM</string>
+    <string name="legacy_your_dashboard_refused_1_d_of_the_picture_it_was_beaebc06">O seu painel recusou %1$d%% da imagem enviada (%2$d fotogramas em %3$d).</string>
+    <string name="legacy_this_is_what_your_dashboard_reports_itself_to_be_8dfdffdd">É isto que o seu painel declara ser.</string>
+    <string name="legacy_speaks_the_same_protocol_your_motorcycle_is_alre_7a13c9ca">Fala o mesmo protocolo que a sua mota já usa.</string>
+    <string name="legacy_plain_settings_no_assumptions_a_good_thing_to_fa_3d3a2213">Definições simples, sem suposições - uma boa opção de recurso.</string>
+    <string name="legacy_an_experiment_for_one_dashboard_s_open_question__1eafa773">Uma experiência para a questão em aberto de um painel. Pode não fazer nada.</string>
+    <string name="legacy_navigation_active_on_tft_b6221bcf">Navegação ativa no TFT</string>
+    <string name="legacy_tft_is_receiving_your_screen_56fd381">O TFT está a receber o seu ecrã</string>
+    <string name="legacy_android_auto_is_waiting_for_one_step_from_you_31eacac3">O Android Auto está à espera de um passo seu</string>
+    <string name="legacy_session_is_being_prepared_742c490a">A preparar a sessão</string>
+    <string name="legacy_button_presses_are_off_2952e766">PRESSÕES DE BOTÃO DESATIVADAS</string>
+    <string name="legacy_moto_hub_advanced_owns_this_setting_and_writes_i_b8e328f7">Esta definição pertence ao MOTO-HUB ADVANCED, que escreve a sua por cima desta: ative-a lá, não aqui.</string>
+    <string name="legacy_turn_presses_back_on_9d506146">Voltar a ativar as pressões</string>
+    <string name="legacy_these_drive_the_ride_dashboard_so_they_do_nothin_d4d30d86">Estas comandam o Ride Dashboard, por isso não fazem nada enquanto ele não estiver a correr - uma sessão Android Auto por si só não chega.</string>
+    <string name="legacy_show_button_presses_on_the_dashboard_4ed2cd5e">Mostrar as pressões de botão no painel</string>
+
+    <!-- Source: feature/controls — the handlebar page after the Bluetooth controller was removed -->
+    <string name="legacy_your_motorcycle_s_own_handlebar_drives_moto_hub__f19519f3">O guiador da tua mota comanda o MOTO-HUB. Ensina-o uma vez e depois dá a cada botão a ação que quiseres.</string>
+    <string name="legacy_presses_still_arrive_and_still_show_up_on_this_p_62dfa27d">As pressões continuam a chegar e a aparecer nesta página - simplesmente não é executado nada.</string>
+    <string name="legacy_every_handlebar_press_432fb397">Cada pressão no guiador </string>
 </resources>

@@ -61,6 +61,7 @@ import io.motohub.android.ui.components.MotoHubActionRow
 import io.motohub.android.ui.components.MotoHubCardGroup
 import io.motohub.android.ui.components.MotoHubDetailScreen
 import io.motohub.android.ui.components.MotoHubRadioRow
+import io.motohub.android.feature.controls.HandlebarPressHud
 import io.motohub.android.ui.components.ToggleRow
 
 private enum class SettingsDetail {
@@ -72,6 +73,7 @@ private enum class SettingsDetail {
 fun SettingsTabContent(
     onOpenNetworkDiagnostics: () -> Unit,
     onOpenClockLab: () -> Unit,
+    onOpenBleExplorer: () -> Unit,
     onOpenApplicationLogs: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenAndroidAutoHelp: () -> Unit,
@@ -138,6 +140,7 @@ fun SettingsTabContent(
                 onBack = { detail = null },
                 onOpenNetworkDiagnostics = onOpenNetworkDiagnostics,
                 onOpenClockLab = onOpenClockLab,
+                onOpenBleExplorer = onOpenBleExplorer,
                 onOpenApplicationLogs = onOpenApplicationLogs
             )
         }
@@ -519,11 +522,13 @@ private fun DiagnosticsDetail(
     onBack: () -> Unit,
     onOpenNetworkDiagnostics: () -> Unit,
     onOpenClockLab: () -> Unit,
+    onOpenBleExplorer: () -> Unit,
     onOpenApplicationLogs: () -> Unit
 ) {
     val context = LocalContext.current
     var loggingEnabled by remember { mutableStateOf(MotoHubSettings.loggingEnabled(context)) }
     var verboseLogging by remember { mutableStateOf(MotoHubSettings.verboseTBoxLogging(context)) }
+    var pressBanner by remember { mutableStateOf(HandlebarPressHud.isEnabled(context)) }
 
     MotoHubDetailScreen(title = motoHubText("Diagnostics"), backLabel = motoHubText("‹ Settings"), onBack = onBack) {
         SupportIdSection(loggingEnabled = loggingEnabled)
@@ -535,8 +540,13 @@ private fun DiagnosticsDetail(
             )
             MotoHubActionRow(
                 title = motoHubText("Dash clock lab"),
-                description = motoHubText("Experiments for dashes that reset the clock (Zontes)"),
+                description = motoHubText("Experiments for dashes that reset the clock (Zontes, Voge)"),
                 onClick = onOpenClockLab
+            )
+            MotoHubActionRow(
+                title = motoHubText("Bluetooth LE explorer"),
+                description = motoHubText("Scan, connect and read any BLE device byte by byte"),
+                onClick = onOpenBleExplorer
             )
             MotoHubActionRow(
                 title = motoHubText("Application logs"),
@@ -577,6 +587,20 @@ private fun DiagnosticsDetail(
                 verboseLogging = it
                 MotoHubSettings.setVerboseTBoxLogging(context, it)
                 ProjectionEventLog.record("SETTINGS", "Verbose T-Box logging changed to enabled=$it.")
+            }
+        )
+        ToggleRow(
+            title = motoHubText("Show button presses on the dashboard"),
+            description = motoHubText("Every handlebar press ") +
+                "- puts a black banner on the TFT for one second naming the button and the " +
+                "action it ran. It is how you find out whether a press arrived at all, and " +
+                "what it did, without reading a log. Works in Android Auto and on the Ride " +
+                "Dashboard alike.",
+            checked = pressBanner,
+            onCheckedChange = {
+                pressBanner = it
+                HandlebarPressHud.setEnabled(context, it)
+                ProjectionEventLog.record("SETTINGS", "Press banner changed to enabled=$it.")
             }
         )
     }
