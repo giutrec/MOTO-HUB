@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.feature.controls
 
 import android.os.SystemClock
@@ -26,8 +29,15 @@ object HandlebarGestureFeed {
     private val mutableLastGesture = MutableStateFlow<HandlebarGestureEvent?>(null)
     val lastGesture: StateFlow<HandlebarGestureEvent?> = mutableLastGesture.asStateFlow()
 
-    @Volatile
-    private var captureOnly = false
+    private val mutableCaptureOnly = MutableStateFlow(false)
+
+    /**
+     * Observable so the half that ISN'T decoding the presses can mirror the promise across the
+     * bridge. An Android Auto session's gestures are recognised in Core, and this flag is set by
+     * a wizard running in the companion app: without something to watch, "observed, not obeyed"
+     * was true in the process that wasn't listening and false in the one that was.
+     */
+    val captureOnly: StateFlow<Boolean> = mutableCaptureOnly.asStateFlow()
 
     /**
      * While teaching the handlebar, gestures are observed but NOT acted on: otherwise every
@@ -35,10 +45,10 @@ object HandlebarGestureFeed {
      * Auto cursor, and the motorcycle jumps around under them mid-calibration.
      */
     fun setCaptureOnly(enabled: Boolean) {
-        captureOnly = enabled
+        mutableCaptureOnly.value = enabled
     }
 
-    fun isCaptureOnly(): Boolean = captureOnly
+    fun isCaptureOnly(): Boolean = mutableCaptureOnly.value
 
     /** Called by [MediaButtonBridge] for every gesture it recognises, mapped or not. */
     fun publish(gesture: HandlebarGesture) {

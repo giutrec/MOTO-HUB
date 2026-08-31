@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 // MOTO-HUB glue. The entry point Android Auto 17.4 leaves open, and why this file exists at all.
 //
 // Everything AaSelfMode asks for is closed on 17.4.663004 (manifest read from the shipping bundle):

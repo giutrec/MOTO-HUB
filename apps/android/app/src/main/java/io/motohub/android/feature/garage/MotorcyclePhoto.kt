@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.feature.garage
 
 import android.graphics.BitmapFactory
@@ -23,6 +26,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.motohub.android.i18n.motoHubText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -58,7 +62,7 @@ fun MotorcyclePhoto(
         } else {
             Image(
                 bitmap = image.asImageBitmap(),
-                contentDescription = "Motorcycle photo",
+                contentDescription = motoHubText("Motorcycle photo"),
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )

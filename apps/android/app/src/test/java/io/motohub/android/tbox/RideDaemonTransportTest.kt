@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.tbox
 
 import java.nio.ByteBuffer
@@ -9,6 +12,39 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RideDaemonTransportTest {
+    @Test
+    fun `a dash that advertises no package name still has a usable identity`() {
+        // The Zontes 125X (modelId 21340, field log 2026-08-19) resolves _EasyConn._tcp with a
+        // usable host and port and no packagename at all. Discovery no longer rejects that
+        // advertisement, and the name it sends back in the EC init command comes from the wake
+        // probe's ladder instead: the leading candidate until a probe settles the question, then
+        // whatever the dash acknowledged.
+        EasyConnClientIdentity.forget()
+        try {
+            assertNull(decodeEasyConnPackage(null))
+            assertNull(decodeEasyConnPackage("   ".toByteArray(Charsets.UTF_8)))
+            assertEquals("com.cfmoto.cfmotointernational", EasyConnClientIdentity.probeOrder().first())
+
+            EasyConnClientIdentity.remember("net.easyconn.carman")
+            assertEquals("net.easyconn.carman", EasyConnClientIdentity.probeOrder().first())
+        } finally {
+            EasyConnClientIdentity.forget()
+        }
+    }
+
+    @Test
+    fun `an advertised package name still wins over the probe identity`() {
+        EasyConnClientIdentity.forget()
+        try {
+            assertEquals(
+                "tayo.com.ZontesIntelligence",
+                decodeEasyConnPackage("tayo.com.ZontesIntelligence".toByteArray(Charsets.UTF_8))
+            )
+        } finally {
+            EasyConnClientIdentity.forget()
+        }
+    }
+
     @Test
     fun `decodes CFDL26 capture area`() {
         val payload = captureRequest(width = 720, height = 712)

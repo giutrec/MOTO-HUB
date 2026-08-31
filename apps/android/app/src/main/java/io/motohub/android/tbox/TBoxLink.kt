@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.tbox
 
 import android.content.BroadcastReceiver
@@ -91,13 +94,28 @@ sealed interface TBoxLink {
      * [io.motohub.android.session.TBoxConnectionMode.PHONE_HOTSPOT].
      *
      * Like [WifiDirect] there is no `ConnectivityManager` network to bind to, so sockets are bound
-     * to the phone's own address on the tethering interface. Unlike it there is no known peer: the
-     * dash is a DHCP client somewhere on [subnet], so [peerHint] is null on purpose and discovery
-     * has to sweep for it (`TBoxHotspotScan`).
+     * to the phone's own address on the tethering interface. Unlike it the peer is usually
+     * unknown: the dash is a DHCP client somewhere on [subnet] and discovery has to sweep for it
+     * (`TBoxHotspotScan`). A dash set up over Bluetooth is the exception - it reports the address
+     * it took, which arrives here as [peerHint].
      */
-    class PhoneHotspot(val subnet: TBoxHotspotScan.Subnet) : TBoxLink {
+    class PhoneHotspot(
+        val subnet: TBoxHotspotScan.Subnet,
+        /**
+         * Where the dash said it landed, when something told us. Null is the ordinary case - a
+         * rider's own hotspot hands out leases nobody reports - and discovery sweeps for it. A
+         * dash set up over Bluetooth announces its own address, so that one arrives here and the
+         * sweep is skipped.
+         */
+        override val peerHint: Inet4Address? = null,
+        /**
+         * Undoes whatever had to be created to make this network exist. Empty for a hotspot the
+         * rider turned on by hand - theirs to keep - and, for one this app created, the call that
+         * takes the hotspot and the Bluetooth link back down.
+         */
+        private val release: () -> Unit = {}
+    ) : TBoxLink {
         override val network: Network? = null
-        override val peerHint: Inet4Address? = null
         // "hotspot" was a claim this link is in no position to make: the scan behind it accepts
         // any private /24 the phone holds, so a log line reading "hotspot wlan0" was produced on
         // a phone whose hotspot was switched off and whose wlan0 was the rider's home Wi-Fi. The
@@ -107,7 +125,7 @@ sealed interface TBoxLink {
 
         override fun createSocket(): Socket = Socket().apply { bind(InetSocketAddress(subnet.localAddress, 0)) }
 
-        override fun disconnect() = Unit
+        override fun disconnect() = release()
 
         override fun startNsdDiscovery(
             nsdManager: NsdManager,

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.tbox
 
 import org.junit.Assert.assertEquals
@@ -34,6 +37,51 @@ class TBoxConflictDiagnosticsTest {
         assertEquals(
             TBoxConflictDiagnostics.PORT_CONFLICT_MESSAGE,
             TBoxConflictDiagnostics.userFacingMessage("bind: address already in use on 10922")
+        )
+    }
+
+    /**
+     * The Zontes rider of 2026-08-23 was told to force-stop CFMOTO's app, which they do not have,
+     * while `tayo.com.ZontesIntelligence` held the ports for four minutes. Naming no brand is the
+     * floor; naming the one actually installed is the point.
+     */
+    @Test
+    fun namesTheCompanionAppWhenOneIsKnownToBeInstalled() {
+        val message = TBoxConflictDiagnostics.userFacingMessage(
+            "bind: address already in use on 10922",
+            companionAppName = "Zontes Smart"
+        )
+        assertTrue(message.contains("Zontes Smart"))
+        assertFalse(message.contains("CFMOTO"))
+    }
+
+    @Test
+    fun fallsBackToTheBrandNeutralMessageWhenNoCompanionAppIsInstalled() {
+        assertEquals(
+            TBoxConflictDiagnostics.PORT_CONFLICT_MESSAGE,
+            TBoxConflictDiagnostics.userFacingMessage(
+                "bind: address already in use on 10922",
+                companionAppName = null
+            )
+        )
+        assertEquals(
+            TBoxConflictDiagnostics.PORT_CONFLICT_MESSAGE,
+            TBoxConflictDiagnostics.userFacingMessage(
+                "bind: address already in use on 10922",
+                companionAppName = "   "
+            )
+        )
+    }
+
+    /** A non-conflict failure must pass through untouched, named companion app or not. */
+    @Test
+    fun leavesUnrelatedFailuresAlone() {
+        assertEquals(
+            "connection timed out",
+            TBoxConflictDiagnostics.userFacingMessage(
+                "connection timed out",
+                companionAppName = "Zontes Smart"
+            )
         )
     }
 }

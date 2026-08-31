@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.feature.pairing
 
 import io.motohub.android.session.TBoxConnectionMode
@@ -213,6 +216,38 @@ class TBoxQrParserTest {
     }
 
     @Test
+    fun pointsAtTheIphoneCodeWheneverTheRemedyIsScanningAnotherCode() {
+        // The single most common support thread across Benelli, CFMOTO, QJ-Motor and Voge: the
+        // dash prints two codes and only the one labelled for iPhone pairs. Riders never guess it,
+        // so every failure whose remedy is "scan the other code" has to say it.
+        val remediable = listOf(
+            "https://example.com/some/page",
+            "just some scanned text",
+            "code:8A1&engine:CF400&vin:LCEPRJ&color:Fuji White",
+            "WIFI:T:WPA;P:secret;;"
+        )
+        for (raw in remediable) {
+            val message = TBoxQrParser.parse(raw).exceptionOrNull()?.message.orEmpty()
+            assertTrue(raw, message.contains("iPhone / CarPlay"))
+        }
+    }
+
+    @Test
+    fun keepsTheIphoneHintAwayFromFailuresItWouldMisdirect() {
+        // Two codes are complete as they are, and their remedy is not another code: the Moto
+        // Morini screen carries only the one, and the phone-hotspot dash prints none at all.
+        // Telling either rider to hunt for an iPhone code sends them looking for nothing.
+        val misdirected = listOf(
+            "http://admin.motomorini.com/app.html?MachineID=dc0d30da",
+            "https://www.carbit.com.cn/app/download.html"
+        )
+        for (raw in misdirected) {
+            val message = TBoxQrParser.parse(raw).exceptionOrNull()?.message.orEmpty()
+            assertFalse(raw, message.contains("iPhone / CarPlay"))
+        }
+    }
+
+    @Test
     fun aPhoneHotspotCodeCarriesNoNetworkAndStillPairs() {
         // Carbit's dash-as-client dialect: action bit7, a `bm=` MAC, and deliberately no ssid/pwd
         // because the dash has no access point to name. This used to be rejected outright.
@@ -229,6 +264,51 @@ class TBoxQrParserTest {
         assertTrue(payload.topology.phoneHostsHotspot)
         assertFalse(payload.topology.accessPoint)
         assertFalse(payload.topology.wifiDirect)
+    }
+
+    @Test
+    fun theTopologyClaimReadsBackInWords() {
+        val both = TBoxQrParser.parse(
+            "http://www.carbit.com.cn/x?ssid=ZT_e0082100e5ff_3&pwd=12345678&action=9"
+        ).getOrThrow()
+        val hotspot = TBoxQrParser.parse(
+            "http://www.carbit.com.cn/x?modelid=21322&action=128&bm=DD0D3024876D"
+        ).getOrThrow()
+        val silent = TBoxQrParser.parse("http://www.carbit.com.cn/x?ssid=EASYCONN_5G-A1").getOrThrow()
+
+        assertEquals("access point, Wi-Fi Direct (action=9)", both.topology.describe())
+        assertEquals("phone hosts the hotspot (action=128)", hotspot.topology.describe())
+        assertEquals("nothing (no action bitmask in the code)", silent.topology.describe())
+    }
+
+    @Test
+    fun anOpaqueCarbitTokenPairsOverBluetooth() {
+        // The whole code a Zontes S350 prints. No network, no password, no action bitmask - just
+        // the dash's identity - so the only transport that can use it is the Bluetooth one.
+        val payload = TBoxQrParser.parse("CARBITDC0D301738D4").getOrThrow()
+
+        assertEquals("EC301738D4", payload.ssid)
+        assertEquals("EC301738D4", payload.displayName)
+        assertEquals("", payload.password)
+        assertEquals("dc:0d:30:17:38:d4", payload.dashMacAddress)
+        assertEquals(TBoxConnectionMode.BLE_PROVISIONED, payload.suggestedConnectionMode)
+        assertEquals(TBoxQrOrigin.RECOGNISED, payload.origin)
+    }
+
+    @Test
+    fun aCarbitTokenIsRecognisedWhateverCaseItIsPrintedIn() {
+        assertEquals("EC301738D4", TBoxQrParser.parse("carbitdc0d301738d4").getOrThrow().ssid)
+    }
+
+    @Test
+    fun somethingThatMerelyStartsWithCarbitIsNotAToken() {
+        // Twelve hex digits and nothing else: a URL that happens to mention Carbit still has to
+        // go through the provisioning parser, which is the one that can read its parameters.
+        assertTrue(TBoxQrParser.parse("CARBITDC0D3017").isFailure)
+        val url = TBoxQrParser.parse(
+            "http://www.carbit.com.cn/x?ssid=EASYCONN_5G-F3116E&pwd=12345678"
+        ).getOrThrow()
+        assertEquals("EASYCONN_5G-F3116E", url.ssid)
     }
 
     @Test
@@ -249,8 +329,36 @@ class TBoxQrParserTest {
         assertTrue(p2pOnly.topology.wifiDirect)
         assertFalse(p2pOnly.topology.accessPoint)
         assertTrue(p2pOnly.topology.neverOffersAccessPoint)
-        // AUTO already resolves an advertised network correctly, so no mode is forced here.
-        assertNull(p2pOnly.suggestedConnectionMode)
+        assertEquals(TBoxConnectionMode.WIFI_DIRECT, p2pOnly.suggestedConnectionMode)
+    }
+
+    @Test
+    fun aWifiDirectOnlyCodeForcesP2pEvenWhenTheSsidIsNotDirectShaped() {
+        // The QJ SRK921 RR of field log 6b345de4 (2026-08-28). AUTO would test the SSID for a
+        // "DIRECT-" prefix, not find one, and spend every attempt on an access point that is not
+        // in a single Wi-Fi scan - which is exactly what happened to that rider three times.
+        // A P2P code carries the dash's peer name in ssid=, never the group name, so the prefix
+        // test can never pass here and the mask has to decide.
+        val payload = TBoxQrParser.parse(
+            "http://www.carbit.com.cn/x?ssid=qj5inch-0758&pwd=12345678&auth=WPA2&action=8&modelid=37303"
+        ).getOrThrow()
+
+        assertEquals("qj5inch-0758", payload.ssid)
+        assertEquals(TBoxConnectionMode.WIFI_DIRECT, payload.suggestedConnectionMode)
+    }
+
+    @Test
+    fun aCodeClaimingBothAnAccessPointAndP2pLeavesTheChoiceToAuto() {
+        // action=9 advertises both. Only the dash knows which it will be on when the rider taps
+        // Connect, and AUTO picks from the SSID at that moment - forcing either one here would
+        // be a guess made minutes too early.
+        val both = TBoxQrParser.parse(
+            "http://www.carbit.com.cn/x?ssid=ZT_e0082100e5ff_3&pwd=12345678&action=9"
+        ).getOrThrow()
+
+        assertTrue(both.topology.accessPoint)
+        assertTrue(both.topology.wifiDirect)
+        assertNull(both.suggestedConnectionMode)
     }
 
     @Test

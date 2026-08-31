@@ -1,7 +1,11 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.tbox
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.os.SystemClock
 import io.motohub.android.session.ProjectionEventLog
 import java.io.IOException
 import java.io.OutputStream
@@ -20,6 +24,9 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -65,7 +72,10 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
     private var session: Session? = null
     private val sessionLock = Any()
 
-    override fun configureProtocolProfile(profile: TBoxModelProfile) {
+    override fun configureProtocolProfile(
+        profile: TBoxModelProfile,
+        motorcycle: io.motohub.android.session.MotorcycleProfile?
+    ) {
         protocolProfile = profile
     }
 
@@ -131,7 +141,8 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
             // The dash only acts on a mirror-start once its own pairing handshake has landed, so
             // never fire one into a half-finished BLE session — that is what the AA retry path
             // used to do, 8 ms after re-opening the link.
-            if (!active.ble.awaitPairConfirmation(PAIR_CONFIRM_TIMEOUT_MS)) {
+            val confirmedBeforeStart = active.ble.awaitPairConfirmation(PAIR_CONFIRM_TIMEOUT_MS)
+            if (!confirmedBeforeStart) {
                 ProjectionEventLog.record(
                     "THINKERRIDE",
                     "The dashboard has not confirmed Bluetooth pairing after " +
@@ -167,11 +178,56 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
                         "(stream ${area.width}x${area.height})."
                 }
             )
-            val video = withTimeoutOrNull(VIDEO_CONNECT_TIMEOUT_MS) { active.videoConnected.await() }
-                ?: error(
-                    "The dashboard acknowledged the session but never opened the video " +
-                        "connection. Power-cycle the dash screen and connect again."
-                )
+            // A mirror-start sent without a confirmation is a shot in the dark: in the field every
+            // session that fired one went on to wait out the full video timeout, while every
+            // session whose confirmation had landed got its video channel within 9s (KOVE 800X
+            // rider log, 2026-08-20, 3 of each). If the confirmation turns up late - it has taken
+            // 11s where the fallback allows 6 - that is new information arriving on a session that
+            // is otherwise heading for the timeout, so spend one more mirror-start on it.
+            //
+            // Deliberately NOT a repeat of the 2026-08-14 experiment described above: no pairing
+            // handshake is re-sent and nothing is added in front of a mirror-start that already
+            // had its confirmation. This fires only when the first attempt went out blind and the
+            // dash has since confirmed, so a session that works today never reaches it.
+            val video = coroutineScope {
+                val lateRetry = if (confirmedBeforeStart) null else launch {
+                    if (!active.ble.awaitPairConfirmation(LATE_PAIR_CONFIRM_WINDOW_MS)) return@launch
+                    if (active.videoConnected.isCompleted) return@launch
+                    ProjectionEventLog.record(
+                        "THINKERRIDE",
+                        "The dashboard confirmed Bluetooth pairing after the first mirror-start " +
+                            "had already gone out blind, and no video channel has opened since; " +
+                            "sending one more mirror-start now that the confirmation is in."
+                    )
+                    active.ble.sendMirrorStatus(true)
+                }
+                // A dash that is going to answer by itself has always done so within 25.3s.
+                // Past that the wait is on the rider, and a log that only ever says "waiting"
+                // cannot tell the two apart - which is how a rider spent three days retrying a
+                // dash that was working exactly as designed (case 32e132d0, 2026-08-24).
+                val notice = launch {
+                    delay(VIDEO_WAIT_NOTICE_MS)
+                    if (active.videoConnected.isCompleted) return@launch
+                    val message = "The dashboard has not opened the video connection " +
+                        "${VIDEO_WAIT_NOTICE_MS / 1000}s after mirror-start. On these dashboards " +
+                        "the rider starts projection FROM THE DASH by long-pressing UP; still " +
+                        "listening on port ${ThinkerRideProtocol.VIDEO_PORT} until the timeout."
+                    ProjectionEventLog.record("THINKERRIDE", message)
+                    mutableEvents.tryEmit(TBoxEvent.Warning(message))
+                }
+                val connected =
+                    withTimeoutOrNull(VIDEO_CONNECT_TIMEOUT_MS) { active.videoConnected.await() }
+                // Cancel before leaving: coroutineScope waits for its children, and these would
+                // otherwise hold the session open for the rest of their own windows.
+                lateRetry?.cancel()
+                notice.cancel()
+                connected
+            } ?: error(
+                "The dashboard acknowledged the session but never opened the video connection. " +
+                    "On these dashboards projection is started FROM THE DASH: press and hold the " +
+                    "UP button on it while MOTO-HUB is connecting. If that does nothing, " +
+                    "power-cycle the dash screen and connect again."
+            )
             // The dash may have dropped and reopened the channel since the first accept; the
             // newest socket is the live one, the deferred only remembers the first.
             active.beginVideo(active.latestVideoSocket ?: video, area)
@@ -245,12 +301,16 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
         val ble = ThinkerRideBleLink(
             appContext,
             log = { message -> ProjectionEventLog.record("THINKERRIDE", message) },
-            onLinkLost = { reason -> reportFatal(reason) }
+            onLinkLost = { reason -> reportFatal(reason) },
+            useByteCatFraming = { protocolProfile?.bleUsesByteCatFraming == true }
         )
 
         private var controlServer: ServerSocket? = null
         private var heartbeatServer: ServerSocket? = null
         private var videoServer: ServerSocket? = null
+
+        /** The dash repeats its TUC reply on every control reconnect; report the state once. */
+        private val activationReported = AtomicBoolean(false)
         private val liveSockets = java.util.concurrent.CopyOnWriteArrayList<Socket>()
 
         private val pulseScheduler = ScheduledThreadPoolExecutor(1) { runnable ->
@@ -276,11 +336,65 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
         @Volatile
         private var videoSocket: Socket? = null
 
+        /**
+         * Binds the three server ports, retrying the ones still busy until [BIND_RETRY_WINDOW_MS]
+         * runs out.
+         *
+         * The wait is there because the commonest holder of these ports is US, milliseconds ago.
+         * A watchdog recovery tears the old session down and rebuilds it immediately: in rider
+         * a7cda9d1's log (2026-08-24 17:34:35) the registry cleared at .162 and the rebind failed
+         * at .171 - nine milliseconds - with "close the other dashboard/mirroring app", which was
+         * not only wrong but cost recovery attempt 1 of the 3 that fit in the watchdog's 120s.
+         * The very same bind succeeded five seconds later on attempt 2. The dash's own accepted
+         * connections outlive our close() for as long as the kernel needs to finish tearing them
+         * down, and SO_REUSEADDR does not cover a socket that has not reached TIME_WAIT yet.
+         *
+         * All three ports retry *together* against one deadline. Binding them in sequence, each
+         * one free to spend the whole window, meant a busy first port starved the other two: they
+         * got a single attempt apiece and were reported busy on the strength of it, which is the
+         * opposite of what the retry is for.
+         *
+         * A port a DIFFERENT app holds still ends on the same honest error - just
+         * [BIND_RETRY_WINDOW_MS] later, once per connect attempt.
+         */
         fun bindServers() {
-            val busy = mutableListOf<Int>()
-            controlServer = bindOrNull(ThinkerRideProtocol.CONTROL_PORT) ?: run { busy += ThinkerRideProtocol.CONTROL_PORT; null }
-            heartbeatServer = bindOrNull(ThinkerRideProtocol.HEARTBEAT_PORT) ?: run { busy += ThinkerRideProtocol.HEARTBEAT_PORT; null }
-            videoServer = bindOrNull(ThinkerRideProtocol.VIDEO_PORT) ?: run { busy += ThinkerRideProtocol.VIDEO_PORT; null }
+            val ports = listOf(
+                ThinkerRideProtocol.CONTROL_PORT,
+                ThinkerRideProtocol.HEARTBEAT_PORT,
+                ThinkerRideProtocol.VIDEO_PORT
+            )
+            val startedAt = SystemClock.elapsedRealtime()
+            val deadline = startedAt + BIND_RETRY_WINDOW_MS
+            val bound = mutableMapOf<Int, ServerSocket>()
+            val waitedFor = mutableListOf<Int>()
+            var pass = 0
+            while (true) {
+                for (port in ports) {
+                    if (bound.containsKey(port)) continue
+                    val server = bindOnce(port) ?: continue
+                    bound[port] = server
+                    if (pass > 0) waitedFor += port
+                }
+                if (bound.size == ports.size) break
+                if (SystemClock.elapsedRealtime() + BIND_RETRY_STEP_MS > deadline) break
+                pass++
+                Thread.sleep(BIND_RETRY_STEP_MS)
+            }
+            // Assign before any throw: the sockets that did bind belong to this session, and only
+            // its close() will release them.
+            controlServer = bound[ThinkerRideProtocol.CONTROL_PORT]
+            heartbeatServer = bound[ThinkerRideProtocol.HEARTBEAT_PORT]
+            videoServer = bound[ThinkerRideProtocol.VIDEO_PORT]
+            if (waitedFor.isNotEmpty()) {
+                // Logged only when the wait was actually needed: this is the line that tells a
+                // future reader a recovery raced its own teardown rather than a rival app.
+                ProjectionEventLog.record(
+                    "THINKERRIDE",
+                    "Ports ${waitedFor.joinToString()} were still busy when this session started " +
+                        "and came free after ${SystemClock.elapsedRealtime() - startedAt}ms."
+                )
+            }
+            val busy = ports.filterNot { bound.containsKey(it) }
             if (busy.isNotEmpty()) {
                 error(
                     "Ports ${busy.joinToString()} are already in use on this phone, so the " +
@@ -289,7 +403,8 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
             }
         }
 
-        private fun bindOrNull(port: Int): ServerSocket? = runCatching {
+        /** One bind attempt, or null when the port is taken right now. */
+        private fun bindOnce(port: Int): ServerSocket? = runCatching {
             ServerSocket().apply {
                 reuseAddress = true
                 bind(InetSocketAddress(port), 1)
@@ -452,6 +567,35 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
             }
         }
 
+        /**
+         * Reads the activation flag out of the dash's TUC reply and says so once per session.
+         * We have always asked the question - [ThinkerRideProtocol.controlOpeningQuery] goes out
+         * the moment the control channel opens - and always thrown the answer away, so a rider
+         * whose dash reports `tucs != 1` got "the dashboard never opened the video connection,
+         * power-cycle it" for a firmware gate that no power cycle clears.
+         *
+         * Reporting only; nothing is blocked on it. A dash that says it is not activated and then
+         * mirrors anyway is a fact worth having in the log rather than a session worth refusing.
+         */
+        private fun reportActivation(payload: String) {
+            val flag = ThinkerRideProtocol.parseActivationFlag(payload) ?: return
+            if (!activationReported.compareAndSet(false, true)) return
+            if (flag == ThinkerRideProtocol.ACTIVATED_TUCS) {
+                ProjectionEventLog.record(
+                    "THINKERRIDE",
+                    "Dashboard reports it is activated (tucs=$flag); projection is not gated."
+                )
+            } else {
+                ProjectionEventLog.warning(
+                    "THINKERRIDE",
+                    "Dashboard reports it is NOT activated (tucs=$flag). ThinkerRide firmware " +
+                        "refuses to open the video channel in this state, so mirroring will be " +
+                        "acknowledged and then never start. Power-cycling the dash does not " +
+                        "clear this - the dash has to be activated through the OEM app once."
+                )
+            }
+        }
+
         private fun logControlPayload(buffer: ByteArray, length: Int) {
             // The control channel is where an unknown ThinkerRide model would identify itself,
             // so keep whatever readable content arrives; a future profile is written from these
@@ -469,6 +613,7 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
             val printable = text.count { it.code in 32..126 }
             if (printable >= length / 2 && text.isNotBlank()) {
                 ProjectionEventLog.record("THINKERRIDE", "Dash control payload: ${text.trim()}")
+                reportActivation(text)
                 return
             }
             val shown = minOf(length, CONTROL_HEX_DUMP_LIMIT)
@@ -509,11 +654,56 @@ class ThinkerRideTransport(context: Context) : TBoxTransport {
         /**
          * A real KOVE 800X was logged opening the video connection 12.0s and 25.3s after
          * mirror-start (2026-08-13 tester diagnostics), so 15s lost the race half the time.
+         *
+         * Raised from 40s once it became clear what this wait is actually waiting for. On the
+         * SiQi firmware (`SV=3.0.x`, KOVE 450 Rally) the dash dials the video port when the
+         * RIDER long-presses UP on it — a human gesture, not a protocol step, documented in the
+         * owner's manual and in ttarlov/kove-dash but in none of the companion apps. The OEM's
+         * own listener waits indefinitely for it; 40s was sized for a wire handshake and gives a
+         * rider who has just been told what to do barely enough time to reach the bars. The
+         * app's own connection notification already tells riders this can take a minute and a
+         * half (see ConnectionProgressNotification).
          */
-        const val VIDEO_CONNECT_TIMEOUT_MS = 40_000L
+        const val VIDEO_CONNECT_TIMEOUT_MS = 75_000L
+
+        /**
+         * When the wait stops being "the dash is answering" and starts being "the dash is
+         * waiting for the rider", so the log says which one it is. Comfortably past the 25.3s
+         * worst case a dash that answers on its own has ever taken.
+         */
+        const val VIDEO_WAIT_NOTICE_MS = 30_000L
 
         /** How long [start] waits for `send_pairresult` before going ahead regardless. */
         const val PAIR_CONFIRM_TIMEOUT_MS = 6_000L
+
+        /**
+         * How long a blind mirror-start keeps watching for a late `send_pairresult`, so it can
+         * spend one more mirror-start on a confirmation that missed [PAIR_CONFIRM_TIMEOUT_MS].
+         * A confirmation has been seen landing 11.0s after the BLE handshake (KOVE 800X rider
+         * log, 2026-08-20 23:30:10 to 23:30:21), which the 6s fallback cannot wait for without
+         * delaying every dash that answers promptly. Kept well inside
+         * [VIDEO_CONNECT_TIMEOUT_MS] so the second attempt still has a window to be answered in.
+         */
+        const val LATE_PAIR_CONFIRM_WINDOW_MS = 20_000L
+
+        /**
+         * How long [bindServers] keeps trying busy server ports before calling them taken -
+         * for all three together, not each. Sized for the case it exists for: our own previous
+         * session's sockets finishing their teardown, which took under five seconds in the log
+         * that prompted it and normally takes a few hundred milliseconds. A rival app will still
+         * be there afterwards, and gets the same honest error it always did.
+         *
+         * Three seconds was not enough. Rider 2e3b10d2's log (2026-08-27) burnt the whole window
+         * four times in six minutes - 18:45:02, 18:47:06, 18:49:21, 18:50:28 - never once seeing a
+         * port come free, so every retry after a video timeout was spent on a bind that could not
+         * win and the rider got "close the other dashboard/mirroring app" for our own sockets.
+         * Ten seconds covers the five that attempt 2 needed in a7cda9d1's log with margin, and
+         * still fits several times over inside [VIDEO_CONNECT_TIMEOUT_MS].
+         */
+        const val BIND_RETRY_WINDOW_MS = 10_000L
+
+        /** How often [bindServers] retries the still-busy ports inside [BIND_RETRY_WINDOW_MS]. */
+        const val BIND_RETRY_STEP_MS = 100L
 
         /** How long [stop] gives the mirror-stop packets to leave the phone. */
         const val BLE_DRAIN_TIMEOUT_MS = 1_500L

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.feature.pairing
 
 import io.motohub.android.i18n.motoHubText
@@ -134,6 +137,10 @@ private fun TBoxConnectionMode.label(): String = when (this) {
     // this after their dash asks them to open a hotspot, so "phone hotspot" is the phrase they
     // just read on the screen.
     TBoxConnectionMode.PHONE_HOTSPOT -> "My phone hosts the hotspot"
+    // For a dash that shows no credentials anywhere and no network in any scan: the app hosts a
+    // hotspot itself and hands it over on Bluetooth. Named for what the rider observes - their
+    // dash asked them to open an app and did nothing else.
+    TBoxConnectionMode.BLE_PROVISIONED -> "Set up over Bluetooth (no network shown)"
     // Normally set by scanning the ThinkerRide QR; offered here for rebadged units whose code
     // points at an OEM host. "KOVE" is the brand a rider would look for, ThinkerRide the tech.
     TBoxConnectionMode.THINKERRIDE -> "KOVE / ThinkerRide (Bluetooth)"

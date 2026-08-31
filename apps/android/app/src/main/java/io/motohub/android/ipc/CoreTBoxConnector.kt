@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 // CORE-only: runs the actual T-Box connection (Wi-Fi join + EasyConn discovery via the GPL
 // hudlib transport) and installs the session, so a companion app (PRO) can trigger it over AIDL
 // without containing any of this GPL code itself. Mirrors HubViewModel.connectAndDiscover()'s
@@ -16,7 +19,7 @@ import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxLinkResolver
 import io.motohub.android.tbox.TBoxModelProfile
 import io.motohub.android.tbox.TBoxProtocolMemory
-import io.motohub.android.tbox.TBoxNetworkConnector
+import io.motohub.android.tbox.TBoxNetworkConnectors
 import io.motohub.android.tbox.TBoxSessionHandle
 import io.motohub.android.tbox.TBoxSessionRegistry
 
@@ -53,7 +56,9 @@ internal object CoreConnectFailureRecord {
 /** Establishes and tears down a T-Box session on behalf of an AIDL caller. */
 class CoreTBoxConnector(private val context: Context) {
 
-    private val networkConnector = TBoxNetworkConnector(context)
+    // The process's one shared connector (see TBoxNetworkConnectors): an AIDL connect beside a
+    // UI-established session used to put a second exclusive Wi-Fi request on the air.
+    private val networkConnector = TBoxNetworkConnectors.shared(context)
     private val transport = SelectingTBoxTransport(context)
     private val capabilityStore = TBoxCapabilityStore(context)
     private var installed = false
@@ -101,8 +106,11 @@ class CoreTBoxConnector(private val context: Context) {
             CoreConnectFailureRecord.record(IpcBridgeContract.CONNECT_STAGE_REFUSED, refusal)
             return false
         }
+        TBoxNetworkConnectors.acquire(context, AIDL_NETWORK_OWNER)
         val connected = TBoxLinkResolver.connect(context, networkConnector, profile, formedGroup)
         val link = connected.getOrElse {
+            // The lease is kept on a network failure: the specifier request deliberately
+            // outlives its timeout (v1.1.17) and the next AIDL retry joins that hunt.
             ProjectionEventLog.error("IPC_TBOX", "AIDL connect: T-Box network connection failed.", it)
             CoreConnectFailureRecord.record(
                 IpcBridgeContract.CONNECT_STAGE_NETWORK,
@@ -136,10 +144,18 @@ class CoreTBoxConnector(private val context: Context) {
                     "to that transport instead of letting EasyConn discovery time out first."
             )
         }
-        transport.configureProtocolProfile(resolvedProfile)
+        transport.configureProtocolProfile(resolvedProfile, profile)
         val discovered = transport.discover(link, profile.modelId)
         val host = discovered.getOrElse {
-            ProjectionEventLog.error("IPC_TBOX", "AIDL connect: EasyConn discovery failed.", it)
+            // Named after the transport that actually ran. Saying "EasyConn" whatever the family
+            // was is not cosmetic: it is the first line a reader meets in a failing log, and on a
+            // ThinkerRide or Yunmo bike it sends them looking for a fault in a stack that never
+            // executed. Two of us lost the opening minutes of case 2e3b10d2 to exactly that.
+            ProjectionEventLog.error(
+                "IPC_TBOX",
+                "AIDL connect: ${resolvedProfile.transportFamily} discovery failed.",
+                it
+            )
             // A dash that never answers because the packets never left the phone is not a
             // discovery problem, and saying "the dash did not answer" sends the rider to the
             // bike. When the process binding was refused with a VPN demonstrably holding the
@@ -160,12 +176,14 @@ class CoreTBoxConnector(private val context: Context) {
             }
             transport.stop()
             link.disconnect()
-            networkConnector.disconnect()
             TBoxSessionRegistry.clear()
+            TBoxNetworkConnectors.release(AIDL_NETWORK_OWNER)
             return false
         }
-        // Record what discovery settled on, so the next ride skips the slow path.
-        transport.activeProtocolProfile?.let { discoveredProfile ->
+        // Record what discovery settled on, so the next ride skips the slow path. Read off the
+        // switch itself and not off activeProtocolProfile, which now also carries a pin: what is
+        // worth remembering is what the DASH answered unasked, never what the rider tried.
+        transport.discoverySwitchedProfile?.let { discoveredProfile ->
             TBoxProtocolMemory(context).remember(profile.ssid, discoveredProfile.transportFamily)
         }
         capabilityStore.recordDiscovery(profile, host)
@@ -185,13 +203,16 @@ class CoreTBoxConnector(private val context: Context) {
      */
     suspend fun cancel() {
         transport.stop()
-        networkConnector.disconnect()
         TBoxSessionRegistry.clear()
+        TBoxNetworkConnectors.release(AIDL_NETWORK_OWNER)
     }
 
     suspend fun disconnect() = disconnectActiveSession()
 
     companion object {
+        /** The AIDL bridge's name in [TBoxNetworkConnectors]' interest ledger. */
+        private const val AIDL_NETWORK_OWNER = "aidl-bridge"
+
         /**
          * Tears down whatever session the registry holds, whoever established it.
          *
@@ -205,7 +226,10 @@ class CoreTBoxConnector(private val context: Context) {
         suspend fun disconnectActiveSession() {
             val handle = TBoxSessionRegistry.current() ?: return
             handle.transport.stop()
-            handle.networkConnector.disconnect()
+            // No direct connector teardown: clear() releases the session's own lease in the
+            // shared-connector ledger, and the bridge's lease goes with CoreTBoxConnectors.clear()
+            // (its sole caller pairs the two). The network drops when the last of them is gone -
+            // never out from under a lease the UI still holds.
             TBoxSessionRegistry.clear(handle)
         }
     }

@@ -1,8 +1,12 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.tbox
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -218,5 +222,95 @@ class ThinkerRideProtocolTest {
         val messages = assembler.accept("""{"msg_id":9,"name":"a}{b","tag":-1}""")
 
         assertEquals(listOf("""{"msg_id":9,"name":"a}{b","tag":-1}"""), messages)
+    }
+
+    @Test
+    fun readsTheActivationFlagFromTheDashTucReply() {
+        // Verbatim from a KOVE 800X diagnostics log (2026-08-20).
+        val reply = """{"msg_id":27,"func":"TUC","act":"SEND","tuc":"700039886a79c2c9","tucs":1}"""
+
+        assertEquals(1, ThinkerRideProtocol.parseActivationFlag(reply))
+    }
+
+    @Test
+    fun readsAnUnactivatedFlag() {
+        val reply = """{"msg_id":27,"func":"TUC","act":"SEND","tuc":"","tucs":0}"""
+
+        assertEquals(0, ThinkerRideProtocol.parseActivationFlag(reply))
+    }
+
+    @Test
+    fun toleratesWhitespacePaddingAroundTheFlag() {
+        val reply = """{"msg_id":27,"func":"TUC","act":"SEND","tucs" :  1 }"""
+
+        assertEquals(1, ThinkerRideProtocol.parseActivationFlag(reply))
+    }
+
+    @Test
+    fun ignoresPayloadsThatCarryNoActivationFlag() {
+        // A TUC reply without the field is old firmware, not an unactivated dash - the caller
+        // must not be able to tell those apart by accident.
+        assertNull(
+            ThinkerRideProtocol.parseActivationFlag("""{"msg_id":27,"func":"TUC","act":"SEND"}""")
+        )
+        assertNull(
+            ThinkerRideProtocol.parseActivationFlag("""{"msg_id":9,"func":"NAVI","tucs":1}""")
+        )
+        assertNull(ThinkerRideProtocol.parseActivationFlag("not json at all"))
+    }
+
+    /**
+     * The exact bytes the OEM's `byteCat` produces for one short command, computed from
+     * ttarlov/kove-dash `ByteCat.kt`. Pinned literally because every part of this envelope is
+     * arbitrary - the 0x80 in each checksum nibble, the NUL that moves to the end, the fixed
+     * 104-byte length - and a plausible-looking reimplementation is exactly the failure this
+     * cannot afford: an unframed or mis-framed write is not rejected, it is silently ignored.
+     */
+    @Test
+    fun byteCatFramesOneShortCommandIntoASingle104ByteFrame() {
+        val frames = ThinkerRideProtocol.byteCatFrames("""{"msg_id":13}""", startSeq = 0)
+
+        assertEquals(1, frames.size)
+        val frame = frames.single()
+        assertEquals(104, frame.size)
+        assertEquals(
+            "FE 00 00 7B 22 6D 73 67 5F 69 64 22 3A 31 33 7D 84 8D 00 FF",
+            frame.take(20).joinToString(" ") { "%02X".format(it) }
+        )
+        // Everything after the tail is padding, and the dash reads the whole 104 bytes.
+        assertTrue(frame.drop(20).all { it == 0x00.toByte() })
+    }
+
+    /** The NUL terminator is replaced by the checksum and re-appended; the JSON is untouched. */
+    @Test
+    fun theByteCatChecksumIsTheOemNibbleSum() {
+        val body = """{"msg_id":13}""".toByteArray(Charsets.UTF_8) + 0x00.toByte()
+
+        val checksum = ThinkerRideProtocol.byteCatChecksum(body)
+
+        assertEquals(2, checksum.size)
+        assertEquals(0x84.toByte(), checksum[0])
+        assertEquals(0x8D.toByte(), checksum[1])
+        // Neither byte may collide with the frame head or tail, which is what the 0x80 is for.
+        assertTrue(checksum.none { it == ThinkerRideProtocol.BYTE_CAT_HEAD })
+        assertTrue(checksum.none { it == ThinkerRideProtocol.BYTE_CAT_TAIL })
+    }
+
+    /**
+     * A message longer than one chunk numbers its frames one apart. Stamping every frame of a
+     * message with the same sequence is what made the dash see duplicates and gaps, and ask for
+     * retransmits of frames nobody sent (kove-dash ByteCat KDoc).
+     */
+    @Test
+    fun byteCatNumbersEveryFrameOfALongCommandSeparately() {
+        val long = "{\"msg_id\":25,\"msg_type\":23,\"msg_source\":2,\"status\":1,\"pad\":\"" +
+            "x".repeat(60) + "\"}"
+
+        val frames = ThinkerRideProtocol.byteCatFrames(long, startSeq = 7)
+
+        assertEquals(2, frames.size)
+        assertEquals(7, (frames[0][1].toInt() shl 8) or frames[0][2].toInt())
+        assertEquals(8, (frames[1][1].toInt() shl 8) or frames[1][2].toInt())
+        assertTrue(frames.all { it.size == 104 && it[0] == ThinkerRideProtocol.BYTE_CAT_HEAD })
     }
 }

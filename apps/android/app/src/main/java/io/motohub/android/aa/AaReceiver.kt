@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 // MOTO-HUB receiver glue (uses AGPLv3 code ported from headunit-revived). Orchestrates the loopback
 // "self-mode" Android Auto Projection receiver:
 //   1. Listen on TCP 127.0.0.1:5288 (+ NSD _aawireless._tcp).
@@ -17,6 +20,7 @@ import io.motohub.android.androidauto.AndroidAutoCapabilityProfile
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 import io.motohub.android.androidauto.AndroidAutoNightModeStore
 
@@ -28,6 +32,13 @@ class AaReceiver(
     private val onSessionEnded: (clean: Boolean, userExit: Boolean) -> Unit,
     private val mapTouchToSource: (Int, Int) -> Pair<Int, Int>?,
     private val capabilityProfile: AndroidAutoCapabilityProfile,
+    /**
+     * How long whatever consumes [encoderSurface] has spent blocked passing frames onward, so the
+     * decoder's stall watchdog can tell a wedged decoder from a jammed pipe behind it.
+     *
+     * Wired to `AaCompositor.downstreamBlockedMillis` by every caller that owns a compositor.
+     */
+    private val downstreamBlockedMillis: (() -> Long)? = null,
 ) {
     companion object {
         const val PORT = 5288
@@ -64,6 +75,45 @@ class AaReceiver(
     private var registrationListener: NsdManager.RegistrationListener? = null
 
     @Volatile private var transport: AapTransport? = null
+
+    /**
+     * The single session slot, taken before anything is built and released when the session ends.
+     *
+     * Both entry points - gearhead dialling in on [PORT] and us dialling out to
+     * [HEAD_UNIT_SERVER_PORT] - used to test `transport != null` and then call handleConnection,
+     * which assigns `transport` several object constructions later (one of them a SharedPreferences
+     * read that hits disk the first time). @Volatile makes that read visible; it does not make
+     * check-then-act atomic, and on Android Auto releases where the self-mode pokes still land a
+     * rider who has also started the head unit server has both paths live at once. Two sessions
+     * through that window means two SSL handshakes, and the loser is left with no reference - so
+     * `stop()` never reaches it, and its `onQuit` tears down the session that won.
+     */
+    private val sessionSlot = AtomicBoolean(false)
+
+    /** True only for the caller that took the slot; the loser must close its own socket. */
+    private fun claimSession(): Boolean = sessionSlot.compareAndSet(false, true)
+
+    private fun releaseSession() { sessionSlot.set(false) }
+
+    /**
+     * Runs a claimed session, making sure a failure on the way up gives the slot back.
+     *
+     * [handleConnection] returns with the session still *running*, so the slot cannot simply be
+     * freed in a `finally` - only the two places that know the session is over may release it. But
+     * everything before `startReading()` can throw, and an exception escaping there would leave the
+     * slot taken with nothing to release it: the receiver would then refuse every later connection
+     * for the rest of the ride. On the accept thread it would also reach Android's default handler
+     * and take the process down mid-ride, the same way the head unit server poller guards against.
+     */
+    private fun runSession(socket: Socket) {
+        try {
+            handleConnection(socket)
+        } catch (failure: Exception) {
+            log("[AA] session failed to start: ${failure.message}")
+            try { socket.close() } catch (_: Exception) {}
+            releaseSession()
+        }
+    }
     @Volatile private var connection: SocketAccessoryConnection? = null
     @Volatile private var videoReadyFired = false
     /**
@@ -72,11 +122,15 @@ class AaReceiver(
      * one to report when a newer Android Auto refuses every startup entry point.
      */
     @Volatile private var androidAutoConnected = false
+
+    /** Rate-limits the process-pin diagnosis to one line per receiver, not one per poll. */
+    @Volatile private var headUnitPinLogged = false
     val hasAndroidAutoConnected: Boolean get() = androidAutoConnected
     @Volatile private var input: AaInput? = null
     private val videoDecoder = VideoDecoder().apply {
         fallbackWidth = capabilityProfile.video.width
         fallbackHeight = capabilityProfile.video.height
+        downstreamBlockedMillis = this@AaReceiver.downstreamBlockedMillis
         onFirstFrameListener = {
             if (!videoReadyFired) {
                 videoReadyFired = true
@@ -238,6 +292,7 @@ class AaReceiver(
         serverSocket = null
         acceptThread?.interrupt(); acceptThread = null
         headUnitServerThread?.interrupt(); headUnitServerThread = null
+        releaseSession()
         // The nav app can no longer retract its last turn once the session is gone.
         AaNavigationGuidance.clear()
         AaLog.sink = null
@@ -261,12 +316,7 @@ class AaReceiver(
                 continue
             }
             val socket = try {
-                Socket().apply {
-                    connect(
-                        java.net.InetSocketAddress("127.0.0.1", HEAD_UNIT_SERVER_PORT),
-                        HEAD_UNIT_SERVER_CONNECT_TIMEOUT_MS
-                    )
-                }
+                connectHeadUnitServer()
             } catch (_: Exception) {
                 // Not running: this is the normal state until the rider starts it.
                 if (!announced) {
@@ -279,14 +329,14 @@ class AaReceiver(
                 if (!awaitNextPoll()) return
                 continue
             }
-            if (!running || transport != null) {
+            if (!running || !claimSession()) {
                 try { socket.close() } catch (_: Exception) {}
                 return
             }
             log("[AA] <<< connected to Android Auto's head unit server on :$HEAD_UNIT_SERVER_PORT")
             androidAutoConnected = true
             androidAutoConnectedSinceStart = true
-            handleConnection(socket)
+            runSession(socket)
             return
         }
     }
@@ -304,6 +354,72 @@ class AaReceiver(
         false
     }
 
+    /**
+     * Connects to Android Auto's head unit server, stepping over a process→network pin if that is
+     * what is in the way.
+     *
+     * A process pinned to the bike network resolves 127.0.0.1 through that network's routing
+     * table, which carries no loopback route: the connect fails "network is unreachable" while
+     * the server is listening perfectly well, and [headUnitServerLoop] reports it as "not
+     * running" - the wrong diagnosis, and a remedy the rider has already applied.
+     *
+     * The Core session never meets this, because [AndroidAutoSessionService] releases the pin
+     * before it starts the receiver and does not restore it until the hand-off. The receiver
+     * ADVANCED attaches over AIDL has no such release: it starts while the bike link is up, so
+     * this is the path the retry is here for.
+     *
+     * The pin is dropped for the retry only - never on the first attempt, and never on a refused
+     * connection, which is the ordinary "the rider has not started the server yet" answer. Dash
+     * traffic does not ride on the process route (`TBoxLink.createSocket` binds every socket to
+     * the network itself) and the connector already treats an absent pin as a supported state
+     * ([TBoxNetworkConnector.releaseProcessBinding]), so the few hundred microseconds this takes
+     * cost the bike link nothing.
+     */
+    private fun connectHeadUnitServer(): Socket = try {
+        openHeadUnitServerSocket()
+    } catch (failure: Exception) {
+        if (!isStaleNetworkPinFailure(failure)) throw failure
+        val cm = context.getSystemService(ConnectivityManager::class.java) ?: throw failure
+        val pinned = runCatching { cm.boundNetworkForProcess }.getOrNull() ?: throw failure
+        if (!headUnitPinLogged) {
+            headUnitPinLogged = true
+            log(
+                "[AA] head unit server unreachable behind the process→network pin ($pinned), not " +
+                    "absent; dropping the pin for the connect and restoring it straight after"
+            )
+        }
+        try {
+            if (!runCatching { cm.bindProcessToNetwork(null) }.getOrDefault(false)) throw failure
+            openHeadUnitServerSocket()
+        } finally {
+            // Restore only what we took away. If the connector re-pinned the process while we
+            // were connecting, that binding is the current one and overwriting it would undo a
+            // decision this class knows nothing about.
+            if (runCatching { cm.boundNetworkForProcess }.getOrNull() == null) {
+                runCatching { cm.bindProcessToNetwork(pinned) }
+            }
+        }
+    }
+
+    /**
+     * A connect that closes its socket when it fails. `Socket().apply { connect(…) }` leaks the
+     * descriptor on every unsuccessful attempt, and this one runs every [HEAD_UNIT_SERVER_POLL_MS]
+     * for as long as Android Auto has not attached.
+     */
+    private fun openHeadUnitServerSocket(): Socket {
+        val socket = Socket()
+        return try {
+            socket.connect(
+                InetSocketAddress("127.0.0.1", HEAD_UNIT_SERVER_PORT),
+                HEAD_UNIT_SERVER_CONNECT_TIMEOUT_MS
+            )
+            socket
+        } catch (failure: Exception) {
+            runCatching { socket.close() }
+            throw failure
+        }
+    }
+
     private fun acceptLoop() {
         val ss = serverSocket ?: return
         while (running) {
@@ -316,12 +432,12 @@ class AaReceiver(
             androidAutoConnected = true
             androidAutoConnectedSinceStart = true
             log("[AA] <<< Android Auto connected from ${client.inetAddress?.hostAddress}")
-            if (transport != null) {
+            if (!claimSession()) {
                 log("[AA] already have a session — dropping extra connection")
                 try { client.close() } catch (_: Exception) {}
                 continue
             }
-            thread(name = "aa-session", isDaemon = true) { handleConnection(client) }
+            thread(name = "aa-session", isDaemon = true) { runSession(client) }
         }
     }
 
@@ -342,6 +458,7 @@ class AaReceiver(
             transport = null
             try { conn.disconnect() } catch (_: Exception) {}
             connection = null
+            releaseSession()
             onSessionEnded(clean, userExit)
         }
        transport = t
@@ -360,6 +477,8 @@ class AaReceiver(
             transport = null
             try { conn.disconnect() } catch (_: Exception) {}
             connection = null
+            // Nothing else will: onQuit only fires for a transport that started.
+            releaseSession()
             return
         }
         AaInputBridge.install(checkNotNull(input))

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 // Adapted from headunit-revived (AGPLv3): aap/protocol/messages/ServiceDiscoveryResponse.kt
 // Video-only Android Auto receiver profile. These identity values match the proven-compatible
 // OpenCfMoto profile; the decoder output is composed into the T-Box canvas negotiated at runtime.

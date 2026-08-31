@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android
 
 import io.motohub.android.i18n.motoHubText
@@ -52,12 +55,16 @@ import io.motohub.android.androidauto.AndroidAutoRuntimeState
 import io.motohub.android.androidauto.AndroidAutoSessionService
 import io.motohub.android.androidauto.AndroidAutoDisplayMode
 import io.motohub.android.androidauto.AndroidAutoDisplayModeStore
+import io.motohub.android.feature.controls.BluetoothStatus
+import io.motohub.android.feature.controls.MediaButtonBridge
 import io.motohub.android.ipc.IpcBridgeContract
 import io.motohub.android.androidauto.TBoxDisplayGeometryStore
 import io.motohub.android.androidauto.TBoxScreenMargins
 import io.motohub.android.androidauto.TBoxScreenMarginsStore
 import io.motohub.android.data.MotorcyclePhotoStore
 import io.motohub.android.data.MotorcycleProfileStore
+import io.motohub.android.session.AutoConnectDecision
+import io.motohub.android.session.autoConnectDecision
 import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.tbox.ThinkerRideGate
 import io.motohub.android.feature.about.AboutScreen
@@ -65,13 +72,19 @@ import io.motohub.android.feature.about.MOTO_HUB_DISCORD_URL
 import io.motohub.android.feature.about.MOTO_HUB_GITHUB_URL
 import io.motohub.android.feature.garage.GarageTabContent
 import io.motohub.android.feature.garage.MotorcycleDetailsScreen
+import io.motohub.android.feature.garage.MotorcyclePhotoSource
 import io.motohub.android.feature.garage.TBoxCapabilityScreen
 import io.motohub.android.feature.home.HubHomeScreen
 import io.motohub.android.feature.home.HubViewModel
+import io.motohub.android.feature.home.WireNeedsAndroidAutoDialog
+import io.motohub.android.feature.home.WireVerdictDialog
 import io.motohub.android.feature.androidauto.AndroidAutoHelpScreen
 import io.motohub.android.feature.androidauto.AndroidAutoPreviewScreen
-import io.motohub.android.feature.androidauto.OfficialCfmotoWarningDialog
+import io.motohub.android.feature.androidauto.CompanionAppWarningDialog
 import io.motohub.android.feature.controls.HandlebarTeachPrerequisiteRequest
+import io.motohub.android.feature.diagnostics.BleExplorerScreen
+import io.motohub.android.feature.diagnostics.ClockLabScreen
+import io.motohub.android.feature.diagnostics.ClockLabViewModel
 import io.motohub.android.feature.diagnostics.NetworkDiagnosticsScreen
 import io.motohub.android.feature.diagnostics.NetworkDiagnosticsViewModel
 import io.motohub.android.feature.diagnostics.ApplicationLogScreen
@@ -94,6 +107,10 @@ import io.motohub.android.feature.update.GithubUpdateInstaller
 import io.motohub.android.feature.update.GithubUpdateRepository
 import io.motohub.android.feature.update.latestNewerApkRelease
 import io.motohub.android.session.ProjectionSessionService
+import io.motohub.android.feature.diagnostics.report.CrashDiagnosticsConsentDialog
+import io.motohub.android.feature.diagnostics.report.DiagnosticReportScheduler
+import io.motohub.android.feature.diagnostics.report.PrivacyNoticeDialog
+import io.motohub.android.session.CrashRecovery
 import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.session.ProjectionRuntime
 import io.motohub.android.session.PhoneDisplayDimmer
@@ -107,7 +124,7 @@ import io.motohub.android.tbox.TBoxCapabilityStore
 import io.motohub.android.tbox.TBoxModelProfile
 import io.motohub.android.tbox.TBoxPortScanResult
 import io.motohub.android.tbox.TBoxPortScanner
-import io.motohub.android.tbox.OfficialCfmotoClient
+import io.motohub.android.tbox.CompanionAppRegistry
 import io.motohub.android.tbox.WifiGate
 import io.motohub.android.ui.components.HubScreenKey
 import io.motohub.android.ui.components.HubScreenTransition
@@ -153,6 +170,7 @@ private fun applyPhoneOnlyAndroidAutoDisplayMode(context: Context, displayMode: 
 class MainActivity : ComponentActivity() {
     private val viewModel: HubViewModel by viewModels()
     private val diagnosticsViewModel: NetworkDiagnosticsViewModel by viewModels()
+    private val clockLabViewModel: ClockLabViewModel by viewModels()
    private val androidAutoLaunchPending = AtomicBoolean(false)
     private val androidAutoPhoneOnlyBridge by lazy {
         io.motohub.android.androidauto.createAndroidAutoPhoneOnlyBridge(applicationContext)
@@ -210,17 +228,49 @@ class MainActivity : ComponentActivity() {
     private fun isForegroundEnoughForWifiRequest(): Boolean =
         processImportance() <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND_SERVICE
 
+    private val profileTrialDiagnostics by lazy {
+        io.motohub.android.feature.diagnostics.report.ProfileTrialDiagnosticsOffer.createOrNull(applicationContext)
+    }
+
+    /**
+     * Registered as a field, before STARTED, because that is what the Activity Result API
+     * requires - and because this request can arrive on a cold launch whose only purpose it is.
+     *
+     * Always finishes. An activity the companion app opened to ask one question has nothing to
+     * show once it is answered, and a rider who tapped a button over there should be looking at
+     * that button again - including when the answer is no, which is also what a rider sees once
+     * Android has stopped showing the dialog after two refusals. The card they came from is
+     * still up, with the way to system settings on it.
+     */
+    private val handlebarBluetoothLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        ProjectionEventLog.record(
+            "PERMISSION",
+            "Handlebar Bluetooth permission result: granted=$granted."
+        )
+        // A session is usually already running when this is answered - the rider left it to come
+        // here. Nothing is broadcast when a permission is granted, so the bridge that skipped
+        // capture for want of it has to be told.
+        if (granted) MediaButtonBridge.bluetoothPermissionGranted()
+        finish()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ProjectionEventLog.record("UI", "Main activity created.")
+        // Nothing is sent without consent: this only decides whether there is a reason to ask.
+        DiagnosticReportScheduler.onAppStarted(this, CrashRecovery.previousCrashRecovered)
         enableEdgeToEdge()
         refreshAoaAccessoryConnected(intent)
         handleAndroidAutoPreviewLaunchIntent(intent)
+        handleHandlebarBluetoothRequestIntent(intent)
 
         setContent {
             MotoHubTheme {
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
                 val diagnosticsState by diagnosticsViewModel.uiState.collectAsStateWithLifecycle()
+                val clockLabState by clockLabViewModel.uiState.collectAsStateWithLifecycle()
                 val projectionEvents by ProjectionEventLog.events.collectAsStateWithLifecycle()
                 val androidAutoState by AndroidAutoRuntime.state.collectAsStateWithLifecycle()
                 val androidAutoActive = androidAutoState is AndroidAutoRuntimeState.Preparing ||
@@ -235,6 +285,8 @@ class MainActivity : ComponentActivity() {
                 var showQrScanner by rememberSaveable { mutableStateOf(false) }
                 var showManualPairing by rememberSaveable { mutableStateOf(false) }
                 var showNetworkDiagnostics by rememberSaveable { mutableStateOf(false) }
+                var showClockLab by rememberSaveable { mutableStateOf(false) }
+                var showBleExplorer by rememberSaveable { mutableStateOf(false) }
                 var showApplicationLogs by rememberSaveable { mutableStateOf(false) }
                 var showAbout by rememberSaveable { mutableStateOf(false) }
                 var showAndroidAutoHelp by rememberSaveable { mutableStateOf(false) }
@@ -256,6 +308,7 @@ class MainActivity : ComponentActivity() {
                 var qrPhotoProgress by remember { mutableStateOf(0 to 0) }
                 var pendingUnverifiedQr by remember { mutableStateOf<TBoxQrPayload?>(null) }
                 var lastAutoConnectAttemptAt by remember { mutableStateOf(0L) }
+                var autoConnectAttempts by remember { mutableStateOf(0) }
                 var editorProfileId by rememberSaveable { mutableStateOf<String?>(null) }
                 var capabilityProfileId by rememberSaveable { mutableStateOf<String?>(null) }
                 var photoTargetProfileId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -401,26 +454,59 @@ class MainActivity : ComponentActivity() {
                 val projectionManager = context.getSystemService(
                     MediaProjectionManager::class.java
                 )
-                val motorcyclePhotoLauncher = rememberLauncherForActivityResult(
-                    ActivityResultContracts.PickVisualMedia()
-                ) { uri ->
+                // Shared tail of every photo source (gallery, document picker, camera).
+                val storeMotorcyclePhoto: (Uri?) -> Unit = { uri ->
                     val profileId = photoTargetProfileId
                     photoTargetProfileId = null
                     val profile = state.motorcycles.firstOrNull { it.id == profileId }
-                    if (uri == null || profile == null) return@rememberLauncherForActivityResult
-                    motorcyclePhotoStore.copyFromUri(profile.id, uri)
-                        .onSuccess { photoPath ->
-                            if (viewModel.updateMotorcycle(profile.copy(photoPath = photoPath))) {
-                                motorcyclePhotoStore.delete(profile.photoPath)
-                            } else {
-                                motorcyclePhotoStore.delete(photoPath)
+                    if (uri != null && profile != null) {
+                        motorcyclePhotoStore.copyFromUri(profile.id, uri)
+                            .onSuccess { photoPath ->
+                                if (viewModel.updateMotorcycle(profile.copy(photoPath = photoPath))) {
+                                    motorcyclePhotoStore.delete(profile.photoPath)
+                                } else {
+                                    motorcyclePhotoStore.delete(photoPath)
+                                }
+                                ProjectionEventLog.record("GARAGE", "Photo updated for motorcycle ${profile.ssid}.")
                             }
-                            ProjectionEventLog.record("GARAGE", "Photo updated for motorcycle ${profile.ssid}.")
-                        }
-                        .onFailure {
-                            ProjectionEventLog.error("GARAGE", "Unable to store the selected motorcycle photo.", it)
-                            Toast.makeText(context, motoHubText("Unable to save the motorcycle photo"), Toast.LENGTH_SHORT).show()
-                        }
+                            .onFailure {
+                                ProjectionEventLog.error("GARAGE", "Unable to store the selected motorcycle photo.", it)
+                                Toast.makeText(context, motoHubText("Unable to save the motorcycle photo"), Toast.LENGTH_SHORT).show()
+                            }
+                    }
+                }
+                val motorcyclePhotoLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.PickVisualMedia()
+                ) { uri -> storeMotorcyclePhoto(uri) }
+                // The document picker reaches Downloads, SD cards and cloud providers the media picker hides.
+                val motorcyclePhotoFileLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.OpenDocument()
+                ) { uri -> storeMotorcyclePhoto(uri) }
+                var motorcycleCameraCaptureUri by rememberSaveable { mutableStateOf<String?>(null) }
+                val motorcyclePhotoCameraLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.TakePicture()
+                ) { captured ->
+                    val captureUri = motorcycleCameraCaptureUri?.let(Uri::parse)
+                    motorcycleCameraCaptureUri = null
+                    storeMotorcyclePhoto(captureUri.takeIf { captured })
+                    motorcyclePhotoStore.discardCameraCapture(captureUri)
+                }
+                val launchMotorcycleCamera = {
+                    val captureUri = motorcyclePhotoStore.createCameraCaptureUri()
+                    motorcycleCameraCaptureUri = captureUri.toString()
+                    motorcyclePhotoCameraLauncher.launch(captureUri)
+                }
+                // CAMERA is declared in the manifest, so even the system camera intent needs the grant.
+                val motorcyclePhotoCameraPermissionLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission()
+                ) { granted ->
+                    ProjectionEventLog.record("PERMISSION", "Camera permission for the garage photo: granted=$granted.")
+                    if (granted) {
+                        launchMotorcycleCamera()
+                    } else {
+                        photoTargetProfileId = null
+                        Toast.makeText(context, motoHubText("Camera permission is required to take a photo"), Toast.LENGTH_SHORT).show()
+                    }
                 }
                 val projectionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.StartActivityForResult()
@@ -467,7 +553,11 @@ class MainActivity : ComponentActivity() {
                 }
                 var projectionPermissionPending by rememberSaveable { mutableStateOf(false) }
                 var androidAutoPermissionPending by rememberSaveable { mutableStateOf(false) }
-                var showOfficialCfmotoWarning by rememberSaveable { mutableStateOf(false) }
+                // The app itself, not a flag: the dialog has to name it, and re-deriving it at
+                // render time would ask the package manager again on every recomposition.
+                var conflictingCompanionApp by remember {
+                    mutableStateOf<CompanionAppRegistry.CompanionApp?>(null)
+                }
                 var externalDisplayPermissionPending by rememberSaveable { mutableStateOf(false) }
                 // Mirrors androidAutoPermissionPending for the phone-only path (see
                 // startPhoneOnlyBridge below) - a real T-Box session and a phone-only one both
@@ -620,14 +710,14 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 val startAndroidAutoWithWarning: () -> Unit = {
-                    if (OfficialCfmotoClient.isInstalled(context) &&
-                        !MotoHubSettings.motoPlayWarningSuppressed(context)
-                    ) {
+                    val companion = CompanionAppRegistry.installed(context)
+                    if (companion != null && !MotoHubSettings.motoPlayWarningSuppressed(context)) {
                         ProjectionEventLog.record(
                             "ANDROID_AUTO",
-                            "Official CFMOTO app is installed; showing MotoPlay conflict warning before launch."
+                            "${companion.displayName} (${companion.packageName}) is installed; " +
+                                "showing the companion-app conflict warning before launch."
                         )
-                        showOfficialCfmotoWarning = true
+                        conflictingCompanionApp = companion
                     } else {
                         continueAndroidAutoStart()
                     }
@@ -758,7 +848,20 @@ class MainActivity : ComponentActivity() {
                     }
                     val now = SystemClock.elapsedRealtime()
                     if (now - lastAutoConnectAttemptAt < AUTO_CONNECT_RETRY_COOLDOWN_MS) return
+                    // Deliberately before the timestamp is stamped: a skip must not push the
+                    // cooldown out, so the resume that finally finds the dash on the air is not
+                    // made to wait for a decision that cost nothing.
+                    val decision = autoConnectDecision(
+                        riderCancelled = viewModel.riderCancelledConnect,
+                        previousAttempts = autoConnectAttempts,
+                        dashBroadcasting = viewModel.isDashBroadcasting()
+                    )
+                    if (decision is AutoConnectDecision.Skip) {
+                        ProjectionEventLog.debug("AUTO_CONNECT", "Auto-connect skipped; ${decision.reason}")
+                        return
+                    }
                     lastAutoConnectAttemptAt = now
+                    autoConnectAttempts++
                     delay(AUTO_CONNECT_START_DELAY_MS)
                     ProjectionEventLog.record(
                         "AUTO_CONNECT",
@@ -890,8 +993,23 @@ class MainActivity : ComponentActivity() {
                                     "PAIRING",
                                     "QR photo decoding failed after preprocessing attempts: ${failure.message}"
                                 )
+                                // TBoxQrPhotoDecoder carries the parser's own verdict out as the
+                                // last failure, and that verdict is the useful half: it names the
+                                // code that was actually read and what to scan instead. Replacing
+                                // it with one fixed sentence told a rider who had photographed the
+                                // vehicle-information code that no QR was found at all.
+                                //
+                                // Only our two rider-facing throwables are surfaced - the parser's
+                                // check() and the decoder's own "no readable QR" - so an ML Kit or
+                                // file-read failure still gets the generic wording instead of a
+                                // stack-trace message.
+                                val explained = failure
+                                    .takeIf { it is IllegalStateException || it is IllegalArgumentException }
+                                    ?.message
+                                    ?.takeIf(String::isNotBlank)
                                 viewModel.onQrImportFailed(
-                                    "No QR code with motorcycle Wi-Fi details could be read from the photo."
+                                    explained
+                                        ?: "No QR code with motorcycle Wi-Fi details could be read from the photo."
                                 )
                             }
                     }
@@ -908,6 +1026,8 @@ class MainActivity : ComponentActivity() {
                     capabilityProfileId != null -> HubScreenKey.CAPABILITIES
                     editorProfileId != null -> HubScreenKey.MOTORCYCLE_DETAILS
                     showNetworkDiagnostics -> HubScreenKey.NETWORK_DIAGNOSTICS
+                    showClockLab -> HubScreenKey.CLOCK_LAB
+                    showBleExplorer -> HubScreenKey.BLE_EXPLORER
                     showQrScanner -> HubScreenKey.QR_SCANNER
                     showManualPairing -> HubScreenKey.MANUAL_PAIRING
                     else -> HubScreenKey.HOME
@@ -1087,11 +1207,23 @@ class MainActivity : ComponentActivity() {
                                 screenMarginsStore.save(profile, margins)
                                 ProjectionEventLog.record("ANDROID_AUTO", "TFT screen margins changed for ${profile.ssid}: $margins.")
                             },
-                           onChoosePhoto = {
+                           onChoosePhoto = { source ->
                                 photoTargetProfileId = profile.id
-                                motorcyclePhotoLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                )
+                                ProjectionEventLog.record("GARAGE", "Photo source chosen for ${profile.ssid}: $source.")
+                                when (source) {
+                                    MotorcyclePhotoSource.GALLERY -> motorcyclePhotoLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                    MotorcyclePhotoSource.FILES -> motorcyclePhotoFileLauncher.launch(arrayOf("image/*"))
+                                    MotorcyclePhotoSource.CAMERA ->
+                                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                                            PackageManager.PERMISSION_GRANTED
+                                        ) {
+                                            launchMotorcycleCamera()
+                                        } else {
+                                            motorcyclePhotoCameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                                        }
+                                }
                             },
                             onRemovePhoto = {
                                 val oldPath = profile.photoPath
@@ -1117,6 +1249,23 @@ class MainActivity : ComponentActivity() {
                         onBack = {
                             ProjectionEventLog.record("UI", "Network diagnostics screen closed.")
                             showNetworkDiagnostics = false
+                        }
+                    )
+                        HubScreenKey.BLE_EXPLORER ->
+                    BleExplorerScreen(
+                        onBack = {
+                            ProjectionEventLog.record("UI", "Bluetooth LE explorer closed.")
+                            showBleExplorer = false
+                        }
+                    )
+                        HubScreenKey.CLOCK_LAB ->
+                    ClockLabScreen(
+                        state = clockLabState,
+                        onRun = clockLabViewModel::run,
+                        onStop = clockLabViewModel::stop,
+                        onBack = {
+                            ProjectionEventLog.record("UI", "Dash clock lab screen closed.")
+                            showClockLab = false
                         }
                     )
                         HubScreenKey.QR_SCANNER ->
@@ -1210,26 +1359,29 @@ class MainActivity : ComponentActivity() {
                             showManualPairing = true
                         },
                         onConnectAndDiscover = connectToActiveMotorcycle,
-                        officialCfmotoAppInstalled = OfficialCfmotoClient.isInstalled(context),
-                        onCloseOfficialCfmotoAndRetry = {
+                        companionAppName = CompanionAppRegistry.installedName(context),
+                        onCloseCompanionAppAndRetry = {
                             // Android 14+ cannot close another app's process; this action is a
-                            // plain retry for after the user has force-stopped the official app.
+                            // plain retry for after the user has force-stopped the companion app.
                             ProjectionEventLog.record(
                                 "CONNECTION",
-                                "Retry requested from the official-app conflict help."
+                                "Retry requested from the companion-app conflict help."
                             )
                             lifecycleScope.launch {
                                 delay(OFFICIAL_APP_CLOSE_RETRY_DELAY_MS)
                                 // The rider was sent to another app's settings to force-stop it,
                                 // so this retry often lands with MOTO-HUB still in the background.
-                                connectWhenAndroidAccepts("official-app conflict retry")
+                                connectWhenAndroidAccepts("companion-app conflict retry")
                             }
                         },
-                        onOpenOfficialCfmotoSettings = {
-                            if (!OfficialCfmotoClient.openAppSettings(context)) {
+                        onOpenCompanionAppSettings = {
+                            val companion = CompanionAppRegistry.installed(context)
+                            if (companion == null ||
+                                !CompanionAppRegistry.openAppSettings(context, companion)
+                            ) {
                                 Toast.makeText(
                                     context,
-                                    motoHubText("Unable to open official CFMOTO app settings"),
+                                    motoHubText("Unable to open the companion app settings"),
                                     Toast.LENGTH_LONG
                                 ).show()
                             }
@@ -1252,6 +1404,17 @@ class MainActivity : ComponentActivity() {
                         },
                         onCancelConnection = viewModel::cancelConnection,
                         onDisconnect = viewModel::disconnect,
+                        onTryProfile = viewModel::tryProfile,
+                        onKeepTrialledProfile = { sendNow, alwaysSend ->
+                            // The switch first: a rider who ticked both expects the report that
+                            // goes out now to be the first of the automatic ones, not a one-off
+                            // followed by silence.
+                            if (alwaysSend) profileTrialDiagnostics?.enableAutoUpload()
+                            if (sendNow) profileTrialDiagnostics?.sendNow()
+                            viewModel.keepTrialledProfile()
+                        },
+                        onDiscardTrialledProfile = viewModel::discardTrialledProfile,
+                        diagnosticsOffer = profileTrialDiagnostics,
                         onStartProjection = {
                             ProjectionEventLog.record("MIRROR", "User selected mirroring mode.")
                             startMirroring()
@@ -1370,6 +1533,14 @@ class MainActivity : ComponentActivity() {
                                     ProjectionEventLog.record("UI", "Network diagnostics screen opened.")
                                     showNetworkDiagnostics = true
                                 },
+                                onOpenBleExplorer = {
+                                    ProjectionEventLog.record("UI", "Bluetooth LE explorer opened.")
+                                    showBleExplorer = true
+                                },
+                                onOpenClockLab = {
+                                    ProjectionEventLog.record("UI", "Dash clock lab screen opened.")
+                                    showClockLab = true
+                                },
                                 onOpenApplicationLogs = {
                                     ProjectionEventLog.record("UI", "Application log screen opened.")
                                     showApplicationLogs = true
@@ -1476,22 +1647,36 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 }
-                if (showOfficialCfmotoWarning) {
+                // The rider had to be on the motorcycle to answer this, so it is asked when they
+                // are back at the phone rather than the instant the session ended.
+                androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.refreshWireQuestion() }
+                state.wireQuestionFor?.let { motorcycle ->
+                    WireVerdictDialog(
+                        motorcycleName = motorcycle.displayName?.takeIf { it.isNotBlank() } ?: motorcycle.ssid,
+                        onAnswer = { seen -> viewModel.answerWireQuestion(seen) },
+                        onDismiss = { /* Ask again next time rather than guess an answer. */ }
+                    )
+                }
+                state.wireNeedsAndroidAutoFor?.let {
+                    WireNeedsAndroidAutoDialog(onDismiss = { viewModel.dismissWireAndroidAutoNudge() })
+                }
+                conflictingCompanionApp?.let { companion ->
                     var doNotShowMotoPlayWarningAgain by rememberSaveable { mutableStateOf(false) }
-                    OfficialCfmotoWarningDialog(
+                    CompanionAppWarningDialog(
+                        companionAppName = companion.displayName,
                         doNotShowAgain = doNotShowMotoPlayWarningAgain,
                         onDoNotShowAgainChanged = { doNotShowMotoPlayWarningAgain = it },
                         onDismiss = {
                             if (doNotShowMotoPlayWarningAgain) {
                                 MotoHubSettings.setMotoPlayWarningSuppressed(context, true)
                             }
-                            showOfficialCfmotoWarning = false
+                            conflictingCompanionApp = null
                         },
-                        onOpenOfficialAppSettings = {
-                            if (!OfficialCfmotoClient.openAppSettings(context)) {
+                        onOpenCompanionAppSettings = {
+                            if (!CompanionAppRegistry.openAppSettings(context, companion)) {
                                 Toast.makeText(
                                     context,
-                                    motoHubText("Unable to open official CFMOTO app settings"),
+                                    motoHubText("Unable to open the companion app settings"),
                                     Toast.LENGTH_LONG
                                 ).show()
                             }
@@ -1500,15 +1685,44 @@ class MainActivity : ComponentActivity() {
                             if (doNotShowMotoPlayWarningAgain) {
                                 MotoHubSettings.setMotoPlayWarningSuppressed(context, true)
                             }
-                            showOfficialCfmotoWarning = false
+                            conflictingCompanionApp = null
                             ProjectionEventLog.record(
                                 "ANDROID_AUTO",
-                                "User continued Android Auto launch after MotoPlay conflict warning; " +
+                                "User continued Android Auto launch after the " +
+                                    "${companion.displayName} conflict warning; " +
                                     "doNotShowAgain=$doNotShowMotoPlayWarningAgain."
                             )
                             continueAndroidAutoStart()
                         }
                     )
+                }
+                // Asked only of riders who never opted in; the scheduler raises this after a
+                // crash and clears it on either answer. Queued behind the safety disclaimer,
+                // which cannot be dismissed and would otherwise sit under it.
+                val crashConsentRequired by DiagnosticReportScheduler.crashConsentRequired
+                    .collectAsStateWithLifecycle()
+                if (crashConsentRequired && !showSafetyDisclaimer) {
+                    var alwaysSendReports by rememberSaveable { mutableStateOf(false) }
+                    var readingPrivacyNotice by rememberSaveable { mutableStateOf(false) }
+                    // The notice replaces the prompt rather than stacking on top of it: the
+                    // question stays pending underneath and is put back the moment it is closed,
+                    // so reading the terms is never a way to accidentally answer them.
+                    if (readingPrivacyNotice) {
+                        PrivacyNoticeDialog(onDismiss = { readingPrivacyNotice = false })
+                    } else {
+                        CrashDiagnosticsConsentDialog(
+                            alwaysSend = alwaysSendReports,
+                            onAlwaysSendChanged = { alwaysSendReports = it },
+                            onSend = {
+                                DiagnosticReportScheduler.onCrashReportConsented(context, alwaysSendReports)
+                            },
+                            onDecline = { DiagnosticReportScheduler.onCrashReportDeclined(context) },
+                            onOpenPrivacyNotice = { readingPrivacyNotice = true },
+                            // Not an answer: the question comes back next launch. Only the
+                            // rider's own yes or no closes it.
+                            onDismiss = { DiagnosticReportScheduler.dismissCrashPromptForNow() }
+                        )
+                    }
                 }
                 if (showSafetyDisclaimer) {
                     var doNotShowAgain by rememberSaveable { mutableStateOf(false) }
@@ -1581,6 +1795,7 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         refreshAoaAccessoryConnected(intent)
         handleAndroidAutoPreviewLaunchIntent(intent)
+        handleHandlebarBluetoothRequestIntent(intent)
     }
 
     /**
@@ -1604,6 +1819,42 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    /**
+     * Puts THIS app's BLUETOOTH_CONNECT request in front of the rider because the companion app
+     * asked, then closes so they land back where they tapped.
+     *
+     * A runtime permission belongs to a package, and the handlebar of an Android Auto session is
+     * decoded here - so this app's grant is the one that decides whether a press can arrive, and
+     * every screen that could ask for it is over there. The companion app checked its own grant,
+     * found it, and showed a rider a handlebar that could never work: rider 315e0af3 paired the
+     * motorcycle, remapped every button and ran the teaching wizard to the end across three days
+     * while this app logged "capture skipped: Bluetooth is off or unavailable to this app" in
+     * every single session.
+     *
+     * Answers nothing itself when the grant is already held: the companion asks before sending
+     * anyone here, but the two checks are one process apart and the rider may have granted it in
+     * between.
+     */
+    private fun handleHandlebarBluetoothRequestIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(IpcBridgeContract.EXTRA_REQUEST_HANDLEBAR_BLUETOOTH, false) != true) return
+        // Removed so a configuration change or a later onNewIntent does not ask again: the
+        // launch intent outlives the request it carried.
+        intent.removeExtra(IpcBridgeContract.EXTRA_REQUEST_HANDLEBAR_BLUETOOTH)
+        if (BluetoothStatus.hasConnectPermission(this)) {
+            ProjectionEventLog.record(
+                "PERMISSION",
+                "The companion app asked for handlebar Bluetooth; this app already holds it."
+            )
+            finish()
+            return
+        }
+        ProjectionEventLog.record(
+            "PERMISSION",
+            "Requesting handlebar Bluetooth on the companion app's behalf."
+        )
+        handlebarBluetoothLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+    }
+
     /** Handles the phone-only Android Auto deep-link sent by PRO. */
     private fun handleAndroidAutoPreviewLaunchIntent(intent: Intent?) {
         if (intent?.getBooleanExtra(IpcBridgeContract.EXTRA_START_PHONE_ONLY_ANDROID_AUTO, false) != true) return
@@ -1620,6 +1871,9 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         ProjectionEventLog.debug("UI", "Main activity resumed.")
+        // A report the rider agreed to send while on the dashboard's Wi-Fi has no route out;
+        // coming back to the app is the likeliest moment there is one again.
+        DiagnosticReportScheduler.retryIfPending(this)
     }
 
     override fun onPause() {

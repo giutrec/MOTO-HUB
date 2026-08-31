@@ -1,8 +1,19 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.tbox
 
 import io.motohub.android.androidauto.AndroidAutoDisplayMode
 import io.motohub.android.androidauto.AndroidAutoVideoPreset
 import io.motohub.android.androidauto.TBoxScreenMargins
+
+/**
+ * The KOVE 450 Rally's landscape TFT, in the one place [TBoxModelProfile.KOVE_450_RALLY] needs it
+ * twice — the declared stream area and the bitrate derived from it must never drift apart. Not in
+ * ThinkerRideProtocol: that object holds the wire, and this wire never carries a panel size.
+ */
+private const val KOVE_450_RALLY_VIDEO_WIDTH = 1280
+private const val KOVE_450_RALLY_VIDEO_HEIGHT = 640
 
 /** Tunings that can be applied after the transport has decoded a touch frame. */
 data class TBoxTouchPolicy(
@@ -103,6 +114,15 @@ enum class TBoxModelProfile(
      */
     val yunmoJpegVideo: Boolean = false,
     /** Which wire protocol the dash speaks; routes the session to the matching transport. */
+    /**
+     * Wrap every BLE command to a ThinkerRide dash in the OEM's 104-byte `byteCat` frame
+     * instead of writing bare JSON (see [ThinkerRideProtocol.byteCatFrames]).
+     *
+     * Per profile and off by default on purpose: bare JSON is field-proven on a KOVE 800X and
+     * framing it everywhere would break the one rider known to stream, while the SiQi firmware
+     * on the 450 Rally reads nothing we send unframed.
+     */
+    val bleUsesByteCatFraming: Boolean = false,
     val transportFamily: TBoxTransportFamily = TBoxTransportFamily.EASYCONN,
     /**
      * Yunmo only: use the OEM map-navigation display path (A0 cmd=6, with each keyframe split into
@@ -276,7 +296,14 @@ enum class TBoxModelProfile(
         advertisedSupportFunction = 0,
         allowsPlainVideoFraming = true,
         requiresProactivePxcHeartbeat = true,
-        encoderKeyframeIntervalSeconds = 1
+        encoderKeyframeIntervalSeconds = 1,
+        // The 1s GOP IS the experiment, so it must survive whatever the tester's phone can do.
+        // Since 1.1.74 a requested GOP falls back to all-intra on a codec without intra refresh
+        // (the MTX800 green-macroblock fix), which on the wrong phone would silently turn this
+        // profile back into GENERIC and test nothing. Plain periodic IDRs are also exactly what
+        // the one Zontes known to work elsewhere is fed - zanderp's open-cfmoto encodes a 1s
+        // GOP with no intra refresh at all, and its 125X is community-confirmed.
+        encoderPlainGopWithoutIntraRefresh = true
     ),
     /**
      * Compatibility experiment for the Voge dashes (flavor 51, channel 37504, 592x752 portrait
@@ -357,6 +384,47 @@ enum class TBoxModelProfile(
             ThinkerRideProtocol.DEFAULT_VIDEO_HEIGHT * 3,
         encoderPlainGopWithoutIntraRefresh = true,
         encoderUsesExactVideoArea = true,
+        transportFamily = TBoxTransportFamily.THINKERRIDE
+    ),
+    /**
+     * KOVE 450 Rally (2022 dash, SiQi firmware `SV=3.0.x`): the same ThinkerRide wire as
+     * [KOVE_800X] driving a **1280x640 landscape** panel instead of a 600x1024 portrait one.
+     * The protocol never reports a panel size — the phone declares it — so a rider on this bike
+     * pinned to [KOVE_800X] streams a portrait image into a landscape TFT.
+     *
+     * Geometry, bitrate and GOP come from the ttarlov/kove-dash reverse-engineering of the OEM
+     * `oversea.whbluestar.thinkerride` app plus its own working projection on this exact bike
+     * (`refs/kove-dash/proto-poc/PROTOCOL.md`): 1280x640 confirmed rendering, 30fps, 1s GOP,
+     * `3 * width * height` — the same `r=3` bitrate tier [KOVE_800X] uses, which is why both
+     * profiles compute it the same way rather than sharing a constant.
+     *
+     * **[modelIds] is deliberately empty even though this dash answers the same QR.** The
+     * ThinkerRide QR carries only an SSID and a password, so both KOVE profiles would claim
+     * [ThinkerRideProtocol.PROVISIONING_MODEL_ID] — and [fromModelId] resolves an ambiguous
+     * modelId to [GENERIC], which for this family is not a milder answer but a broken one:
+     * GENERIC is an EasyConn profile, so every existing KOVE rider would silently lose the
+     * ThinkerRide transport entirely. A second profile on this wire can therefore only ever be
+     * a manual pin, until something on the wire tells the two panels apart.
+     */
+    KOVE_450_RALLY(
+        key = "kove_450_rally",
+        displayName = "KOVE 450 Rally (ThinkerRide)",
+        modelIds = emptySet(),
+        mapTilesRequireCellular = true,
+        defaultAndroidAutoDisplayMode = AndroidAutoDisplayMode.FILL,
+        supportsScreenTouch = false,
+        defaultAndroidAutoPreset = AndroidAutoVideoPreset.LANDSCAPE_1280X720,
+        fallbackTBoxVideoArea = TBoxEvent.VideoArea(
+            KOVE_450_RALLY_VIDEO_WIDTH,
+            KOVE_450_RALLY_VIDEO_HEIGHT
+        ),
+        requiresSockAuth = false,
+        advertisedSupportFunction = 0,
+        encoderKeyframeIntervalSeconds = 1,
+        encoderBitRate = KOVE_450_RALLY_VIDEO_WIDTH * KOVE_450_RALLY_VIDEO_HEIGHT * 3,
+        encoderPlainGopWithoutIntraRefresh = true,
+        encoderUsesExactVideoArea = true,
+        bleUsesByteCatFraming = true,
         transportFamily = TBoxTransportFamily.THINKERRIDE
     ),
     /**
@@ -490,6 +558,22 @@ enum class TBoxModelProfile(
     );
 
     companion object {
+        /**
+         * The profile whose [key] is [key], or null for an unknown one.
+         *
+         * Exists so a profile can be named across a process boundary. CORE resolves the real
+         * profile of a session - which for a dash that answered Yunmo after EasyConn found
+         * nothing is NOT what the saved motorcycle's modelId resolves to - and the companion app
+         * has to arrive at the same enum entry from the name alone. An unknown key answers null
+         * rather than [GENERIC] so a caller can tell "this build has no such profile" from "this
+         * dash really is generic".
+         */
+        fun byKey(key: String?): TBoxModelProfile? {
+            val normalized = key?.trim().orEmpty()
+            if (normalized.isEmpty()) return null
+            return entries.firstOrNull { it.key == normalized }
+        }
+
         private fun candidatesForModelId(modelId: String?): List<TBoxModelProfile> {
             val normalized = modelId?.trim().orEmpty()
             if (normalized.isEmpty()) return emptyList()
@@ -546,6 +630,9 @@ enum class TBoxModelProfile(
          * matches), reimplemented against [TBoxCapabilities]. Highest positive score wins; a
          * score of 0 means "no claim" and is never selected over [GENERIC].
          */
+        /** CLIENT_INFO `flavor` of Carbit's white-label EasyConn stack; never a CFMOTO unit. */
+        private const val CARBIT_LICENCE_FLAVOR = "51"
+
         private fun score(profile: TBoxModelProfile, capabilities: TBoxCapabilities): Int {
             // Combined lowercase fallback for the same free-text keyword matching resolve()
             // used before this scoring existed (carModel included) - kept alongside the more
@@ -566,6 +653,15 @@ enum class TBoxModelProfile(
             val mirrorOverlayTouch = capabilities.mirrorOverlayTouch ?: false
             val screenTouch = capabilities.screenTouch ?: false
             val landscapeAdaptive = capabilities.landscapeAdaptive ?: false
+            // CLIENT_INFO's `flavor` names the manufacturer that licensed the EasyConn stack
+            // in this dashboard, and it is the one field here that can rule a family OUT rather
+            // than in. 51 is Carbit's white-label stack - the reference fork scores exactly that
+            // number for the Morini SoftAP / Alltrhike units, and every flavor-51 dash in the
+            // collector is a rebadge (two VOGE, one Benelli) while the CFMOTO reference unit
+            // reports 65540. It is used below only to stop a CFMOTO profile being carried by a
+            // firmware fingerprint with no CFMOTO identity behind it; a dash that names itself
+            // still wins, licence or no licence.
+            val carbitLicensed = capabilities.flavor?.trim() == CARBIT_LICENCE_FLAVOR
 
             fun cfdl26BaseScore(): Int {
                 // Identity signals: things only a CFDL26-family CFMOTO dash reports. A modern
@@ -613,8 +709,23 @@ enum class TBoxModelProfile(
                 CFMOTO_800NK -> {
                     var points = 0
                     if (identity.contains("800nk") || identity.contains("800 nk")) points += 4
-                    if (sdkVersion.startsWith("0.9.23") && identity.contains("linux_no_package")) points += 3
                     if (identity.contains("crcp")) points += 2
+                    // sdkVersion 0.9.23.x with package linux_no_package is a firmware DIALECT -
+                    // the older CFDL16-family EasyConn, which other manufacturers ship too - and
+                    // it is the only term here that can carry this profile with nothing else
+                    // agreeing. The same discipline cfdl26BaseScore() states applies: it
+                    // corroborates a CFMOTO identity, it must not establish one over a licence
+                    // saying somebody else built this dash. Rider 36ee9d2c's Benelli TRK 702X
+                    // matched on it alone and scored 3, so Core's Android Auto dressed a Benelli
+                    // in a CFMOTO panel's 22px top margin (visible: an 800x480 TFT letterboxed to
+                    // 763x458) while the Ride Dashboard, which had no capabilities to score at
+                    // all, used none.
+                    if (sdkVersion.startsWith("0.9.23") &&
+                        identity.contains("linux_no_package") &&
+                        (points > 0 || !carbitLicensed)
+                    ) {
+                        points += 3
+                    }
                     points
                 }
                 CFMOTO_MTX800 -> {
@@ -647,7 +758,11 @@ enum class TBoxModelProfile(
                 CL_C450 -> {
                     var points = 0
                     if (identity.contains("48fb4c")) points += 4
-                    if (sdkVersion.startsWith("0.9.23")) points += 1
+                    // Same rule, same reason, and not hypothetical: with CFMOTO_800NK refused
+                    // this lone corroborating point was the next thing standing, and it would
+                    // have moved a Benelli's 800x480 panel onto a 544x512 profile on the strength
+                    // of both dashes running 0.9.23 firmware.
+                    if (sdkVersion.startsWith("0.9.23") && (points > 0 || !carbitLicensed)) points += 1
                     points
                 }
                 MOTO_HUB_SIMULATOR -> {
@@ -665,6 +780,9 @@ enum class TBoxModelProfile(
                 // ThinkerRide dashes never produce CLIENT_INFO (an EasyConn concept), so scoring
                 // has nothing to say; they resolve by the QR's pseudo modelId or a manual pin.
                 KOVE_800X -> 0
+                // Same wire, different panel, and nothing on that wire tells them apart: a
+                // manual pin is the only way here (see the profile's own note).
+                KOVE_450_RALLY -> 0
                 // Yunmo dashes never produce CLIENT_INFO either, and the X-Cape 1200 shares its
                 // QR ProductID with EasyConn Morinis, so detection must never claim it: it is a
                 // manual pin only.

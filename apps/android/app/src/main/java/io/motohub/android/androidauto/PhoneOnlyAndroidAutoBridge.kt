@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.androidauto
 
 import android.content.Context
@@ -88,7 +91,9 @@ class PhoneOnlyAndroidAutoBridge(private val context: Context) :
         val activeCompositor = AaCompositor(
             log = { ProjectionEventLog.debug("PHONE_ONLY_AA", it) },
             displayMode = AndroidAutoDisplayModeStore(context).load(PHONE_ONLY_ANDROID_AUTO_PROFILE),
-            sourceGeometry = profile.video
+            sourceGeometry = profile.video,
+            // There is no bike here: this compositor's output target is the preview panel itself.
+            outputAppliesBackPressure = false
         )
         if (!activeCompositor.start()) {
             AndroidAutoRuntime.publish(AndroidAutoRuntimeState.Failed("Compositor failed to initialize (EGL/GL)."))

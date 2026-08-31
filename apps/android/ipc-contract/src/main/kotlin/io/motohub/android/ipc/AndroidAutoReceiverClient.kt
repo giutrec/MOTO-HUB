@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.ipc
 
 import android.content.ComponentName
@@ -116,6 +119,20 @@ class AndroidAutoReceiverClient(
 
     fun unregisterNavigationGuidanceListener(listener: INavigationGuidanceListener) {
         runCatching { service?.unregisterNavigationGuidanceListener(listener) }
+    }
+
+    /**
+     * Watches the handlebar gestures Core recognises, so the teaching wizard can see the press
+     * the rider was just asked to make. Same older-Core tolerance as the guidance listener above:
+     * false rather than a throw, and the wizard then behaves exactly as it did before this
+     * existed.
+     */
+    fun registerHandlebarGestureListener(listener: IHandlebarGestureListener): Boolean =
+        runCatching { service?.registerHandlebarGestureListener(listener) }.isSuccess &&
+            service != null
+
+    fun unregisterHandlebarGestureListener(listener: IHandlebarGestureListener) {
+        runCatching { service?.unregisterHandlebarGestureListener(listener) }
     }
 
     private companion object {

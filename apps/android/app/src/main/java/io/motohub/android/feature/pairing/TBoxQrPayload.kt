@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.feature.pairing
 
 import io.motohub.android.session.TBoxConnectionMode
@@ -45,16 +48,45 @@ value class TBoxQrTopology(val bits: Int) {
     val wifiDirect: Boolean get() = bits and BIT_P2P != 0
     val phoneHostsHotspot: Boolean get() = bits and BIT_PHONE_HOTSPOT != 0
 
+    /**
+     * The claim in words, for a log a rider will mail in. `bits=0` is itself an answer - a code
+     * that made no claim at all - and is worth saying rather than printing an empty list.
+     */
+    fun describe(): String {
+        if (bits == 0) return "nothing (no action bitmask in the code)"
+        val claims = buildList {
+            if (bits and BIT_AP != 0) add("access point")
+            if (bits and BIT_AP_INTERNET != 0) add("access point with internet")
+            if (wifiDirect) add("Wi-Fi Direct")
+            if (phoneHostsHotspot) add("phone hosts the hotspot")
+        }
+        return if (claims.isEmpty()) "unknown (action=$bits)" else claims.joinToString() + " (action=$bits)"
+    }
+
     /** True only when the dash said something and none of it was an access point of its own. */
     val neverOffersAccessPoint: Boolean get() = bits != 0 && !accessPoint
 
     /**
-     * The transport this code implies, or null to leave the rider's saved choice alone. Only the
-     * phone-hotspot bit is decisive: a dash advertising an access point, Wi-Fi Direct, or both is
-     * exactly what [TBoxConnectionMode.AUTO] already resolves correctly from the SSID.
+     * The transport this code implies, or null to leave the rider's saved choice alone. A code
+     * that claims exactly one topology is decisive; one that claims several is not, because only
+     * the dash knows which it will actually be on, and [TBoxConnectionMode.AUTO] picks between
+     * them from the SSID at connect time.
+     *
+     * The Wi-Fi Direct case is not the same as an access point and AUTO cannot stand in for it.
+     * AUTO infers P2P from a `DIRECT-` SSID prefix ([io.motohub.android.tbox.TBoxLinkResolver]),
+     * but a P2P code does not carry the group name: `ssid=` is the dash's P2P *device* name, and
+     * the group Android will see is `DIRECT-xy-<that name>`. A QJ SRK921 RR (field log
+     * 6b345de4, 2026-08-28) scanned `ssid=qj5inch-0758 action=8` - Wi-Fi Direct and nothing else
+     * - fell to AUTO, failed the prefix test, and spent every attempt asking
+     * `WifiNetworkSpecifier` for an access point that does not exist and never appeared in a
+     * single scan. Three joins, three 30s timeouts, and the rider was then offered the phone
+     * hotspot - the one topology the code had explicitly ruled out.
      */
-    fun suggestedConnectionMode(): TBoxConnectionMode? =
-        if (phoneHostsHotspot && !accessPoint && !wifiDirect) TBoxConnectionMode.PHONE_HOTSPOT else null
+    fun suggestedConnectionMode(): TBoxConnectionMode? = when {
+        phoneHostsHotspot && !accessPoint && !wifiDirect -> TBoxConnectionMode.PHONE_HOTSPOT
+        wifiDirect && !accessPoint && !phoneHostsHotspot -> TBoxConnectionMode.WIFI_DIRECT
+        else -> null
+    }
 
     companion object {
         const val BIT_AP = 1
@@ -109,9 +141,48 @@ object TBoxQrParser {
     fun parse(rawValue: String): Result<TBoxQrPayload> = runCatching {
         val trimmed = rawValue.trim()
         parseWifiNetworkCode(trimmed)
+            ?: parseCarbitToken(trimmed)
             ?: parseMotoFunUrl(trimmed)
             ?: parseThinkerRideUrl(trimmed)
             ?: parseProvisioningUrl(trimmed)
+    }
+
+    /**
+     * The bare `CARBIT` + 12 hex code some dashes print instead of a URL:
+     *
+     *     CARBITDC0D301738D4
+     *
+     * It carries no network, no password and no `action` bitmask, because the dash it comes from
+     * has none of those to offer. Confirmed on a Zontes S350 (Brazil/JTZ, 2026): no access point,
+     * nothing in a Wi-Fi Direct scan, and a dash screen that says only "open the app and scan
+     * this". What it does carry is the dash's identity, and that dash is reachable over Bluetooth
+     * - so this code selects [TBoxConnectionMode.BLE_PROVISIONED], the one transport that can do
+     * anything with it.
+     *
+     * The twelve digits are the dash's Wi-Fi MAC, not its Bluetooth one: on the S350 the QR reads
+     * `DC:0D:30:17:38:D4` while the BLE peripheral answers on `DD:0D:30:17:38:D4`. They are kept
+     * for identification, never used to address the radio - [io.motohub.android.tbox.EcBtpNetLink]
+     * finds the dash by the service it advertises.
+     */
+    private fun parseCarbitToken(rawValue: String): TBoxQrPayload? {
+        val digits = CARBIT_TOKEN.matchEntire(rawValue)?.groupValues?.get(1)?.uppercase() ?: return null
+        // What the dash calls itself over BLE: "EC" followed by the last four bytes of the MAC
+        // (`CARBITDC0D301738D4` -> `EC301738D4`). Used as the profile's name because a profile is
+        // keyed by SSID and this dash has none - and because it is the string the rider can see
+        // for themselves in any Bluetooth scanner.
+        val advertisedName = "EC" + digits.takeLast(8)
+        return TBoxQrPayload(
+            ssid = advertisedName,
+            password = "",
+            encryption = null,
+            modelId = null,
+            displayName = advertisedName,
+            // No other dialect prints this prefix followed by exactly twelve hex digits, which is
+            // the same standard the MotoFun shape is recognised by.
+            origin = TBoxQrOrigin.RECOGNISED,
+            suggestedConnectionMode = TBoxConnectionMode.BLE_PROVISIONED,
+            dashMacAddress = normaliseMac(digits)
+        )
     }
 
     /**
@@ -288,7 +359,9 @@ object TBoxQrParser {
         if (!rawValue.startsWith(WIFI_SCHEME, ignoreCase = true)) return null
         val fields = splitWifiFields(rawValue.substring(WIFI_SCHEME.length))
         val ssid = fields["S"].orEmpty()
-        check(ssid.isNotEmpty()) { "The Wi-Fi QR code does not carry a network name." }
+        check(ssid.isNotEmpty()) {
+            "The Wi-Fi QR code does not carry a network name." + TRY_THE_IOS_CODE
+        }
 
         return TBoxQrPayload(
             ssid = ssid,
@@ -411,10 +484,29 @@ object TBoxQrParser {
     private fun isKnownProvisioningHost(host: String): Boolean =
         KNOWN_PROVISIONING_DOMAINS.any { host == it || host.endsWith(".$it") }
 
+    /** `CARBIT` followed by exactly twelve hex digits, and nothing else in the code. */
+    private val CARBIT_TOKEN = Regex("""CARBIT([0-9A-Fa-f]{12})""", RegexOption.IGNORE_CASE)
+
     /** `Wifi=<ssid>`, where the SSID runs up to the `#` that introduces the password. */
     private val MOTO_FUN_WIFI = Regex("""(?:^|[?&])wifi=([^&#\s]+)""", RegexOption.IGNORE_CASE)
     private val MOTO_FUN_MACHINE_ID = Regex("""machineid=([^&#\s]+)""", RegexOption.IGNORE_CASE)
     private val MOTO_FUN_PRODUCT_ID = Regex("""productid=([^&#\s]+)""", RegexOption.IGNORE_CASE)
+
+    /**
+     * What to try when the remedy is "scan the other code on the dash".
+     *
+     * Dashes that print two codes label one for Android and one for iPhone/CarPlay, and on the
+     * Carbit/EasyConn family it is repeatedly the *iPhone* one that carries the credentials. What
+     * the Android-labelled code holds instead has never been captured - riders scan it, get
+     * nothing usable, and the thread ends once someone tells them to try the other one. Confirmed
+     * that way on Benelli, CFMOTO, QJ-Motor and Voge dashboards through August 2026.
+     *
+     * Said explicitly because nobody guesses it: an Android rider has no reason to scan the code
+     * marked for iPhone, and every rider who got there was told by someone in the community.
+     */
+    private const val TRY_THE_IOS_CODE =
+        " If the dash shows two codes, use the one marked for iPhone / CarPlay - despite the " +
+            "label, it pairs Android too."
 
     /**
      * The QR decoded cleanly but carries no credentials. Naming the actual content is what lets a
@@ -431,8 +523,11 @@ object TBoxQrParser {
                 ) ->
                 "That is the vehicle information code (VIN, engine, colour), not the Wi-Fi " +
                     "pairing code. Open the phone-connection screen on the dash and scan the " +
-                    "code shown there."
+                    "code shown there." + TRY_THE_IOS_CODE
 
+            // No iPhone hint here: this dash serves the MotoFun dialect from one screen, and the
+            // pairing code is the only code on it. Sending a Moto Morini rider hunting for a
+            // second code would replace one wrong screen with a search for a screen that has none.
             rawValue.contains("motomorini", ignoreCase = true) ||
                 rawValue.contains("motofun", ignoreCase = true) ->
                 "This Moto Morini code carries no Wifi= field, so it is not the pairing code. " +
@@ -444,6 +539,9 @@ object TBoxQrParser {
             // generic "scan the pairing code instead" advice sends the rider hunting for a code
             // that does not exist. Confirmed on a tester's dash 2026-08-02, whose screen reads
             // "Please open Android hotspot and set the following parameters".
+            //
+            // No iPhone hint either, for the same reason: this code is complete as it is, and the
+            // rider has to set up a hotspot rather than find a better code.
             hostOf(rawValue)?.lowercase()?.let(::isKnownProvisioningHost) == true ->
                 "This dash connects the other way round: it joins a hotspot your phone creates, " +
                     "so its code carries no network to join. On the dash, read the Ssid and " +
@@ -452,9 +550,9 @@ object TBoxQrParser {
 
             rawValue.startsWith("http", ignoreCase = true) ->
                 "That is a web address with no network credentials in it. Scan the dash pairing " +
-                    "code instead (MotoPlay / EasyConnect / MotoFun)."
+                    "code instead (MotoPlay / EasyConnect / MotoFun)." + TRY_THE_IOS_CODE
 
-            else -> "The QR code does not carry a T-Box network name."
+            else -> "The QR code does not carry a T-Box network name." + TRY_THE_IOS_CODE
         }
     }
 }

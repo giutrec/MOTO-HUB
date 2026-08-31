@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.session
 
 import android.content.Context
@@ -17,6 +20,10 @@ import java.util.Locale
 object CrashRecovery {
     private const val FILE_NAME = "moto-hub-last-crash.txt"
 
+    /** Whether this process started by recovering a crash report left by the previous one. */
+    @Volatile var previousCrashRecovered: Boolean = false
+        private set
+
     fun install(context: Context) {
         val appContext = context.applicationContext
         val previous = Thread.getDefaultUncaughtExceptionHandler()
@@ -35,6 +42,7 @@ object CrashRecovery {
             ?: return false
         ProjectionEventLog.error("CRASH", "Previous process ended unexpectedly.\n$report")
         file.runCatching { delete() }
+        previousCrashRecovered = true
         return true
     }
 

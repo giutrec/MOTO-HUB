@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 // Adapted from headunit-revived (AGPLv3): connection/SocketAccessoryConnection.kt
 // Trimmed to a pre-connected loopback socket (self-mode): no network binding, no outbound
 // connect() — Android Auto (gearhead) connects IN to our WirelessServer on 127.0.0.1:5288.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.ui.components
 
 import io.motohub.android.i18n.motoHubText
@@ -204,7 +207,7 @@ fun HubAppBar(
                     .background(dotColor, CircleShape)
             )
             Text(
-                text = motorcycleName ?: "No motorcycle",
+                text = motorcycleName ?: motoHubText("No motorcycle"),
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -459,7 +462,11 @@ fun MotoHubDetailScreen(
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.SemiBold
         )
-        Text(title, style = MaterialTheme.typography.displaySmall)
+        Text(
+            title,
+            style = MaterialTheme.typography.displaySmall,
+            color = MaterialTheme.colorScheme.onBackground
+        )
         content()
         Spacer(Modifier.height(8.dp))
     }

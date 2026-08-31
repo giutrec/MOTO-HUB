@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.feature.garage
 
 import io.motohub.android.i18n.motoHubText
@@ -84,15 +87,15 @@ fun GarageTabContent(
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     EmptyGarageHero()
                     HeroPrimaryAction(
-                        title = "Scan motorcycle QR code",
-                        subtitle = "Point your camera at the T-Box sticker",
+                        title = motoHubText("Scan motorcycle QR code"),
+                        subtitle = motoHubText("Point your camera at the T-Box sticker"),
                         icon = "QrScan",
                         color = MaterialTheme.colorScheme.primary,
                         onClick = onAddMotorcycle
                     )
                     HeroTile(
-                        title = "No QR? Manual setup",
-                        subtitle = "Type the network in yourself",
+                        title = motoHubText("No QR? Manual setup"),
+                        subtitle = motoHubText("Type the network in yourself"),
                         icon = "Manual",
                         color = MotoHubManual,
                         modifier = Modifier.fillMaxWidth(),
@@ -118,16 +121,16 @@ fun GarageTabContent(
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         HeroTile(
-                            title = "Add motorcycle",
-                            subtitle = "Scan its T-Box QR code",
+                            title = motoHubText("Add motorcycle"),
+                            subtitle = motoHubText("Scan its T-Box QR code"),
                             icon = "Bike",
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.weight(1f),
                             onClick = onAddMotorcycle
                         )
                         HeroTile(
-                            title = "No QR? Manual",
-                            subtitle = "Type the network in",
+                            title = motoHubText("No QR? Manual"),
+                            subtitle = motoHubText("Type the network in"),
                             icon = "Manual",
                             color = MotoHubManual,
                             modifier = Modifier.weight(1f),
@@ -141,8 +144,8 @@ fun GarageTabContent(
         if (BuildConfig.IS_PRO) {
             MonoLabel(motoHubText("NO MOTORCYCLE? NO PROBLEM"))
             HeroTile(
-                title = "Default settings",
-                subtitle = "Used by phone-only display modes without a T-Box",
+                title = motoHubText("Default settings"),
+                subtitle = motoHubText("Used by phone-only display modes without a T-Box"),
                 icon = "Customize",
                 color = MotoHubDashboard,
                 modifier = Modifier.fillMaxWidth(),

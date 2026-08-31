@@ -1,6 +1,10 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.tbox
 
 import android.Manifest
+import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.pm.PackageManager
 import io.motohub.android.session.MotorcycleProfile
@@ -25,9 +29,18 @@ internal object ThinkerRideGate {
         Manifest.permission.BLUETOOTH_CONNECT
     )
 
-    /** True when [profile] pairs over BLE, so connect flows know to ask for [blePermissions]. */
+    /**
+     * True when [profile] pairs over BLE, so connect flows know to ask for [blePermissions].
+     *
+     * Two unrelated protocols answer yes. ThinkerRide runs its pairing handshake over BLE before
+     * the dash connects back over TCP; a Bluetooth-provisioned dash
+     * ([TBoxConnectionMode.BLE_PROVISIONED]) has no network at all until the same radio has been
+     * used to give it one. Both fail the same way without the grant - a `SecurityException` from
+     * inside a scan callback - so both are gated here.
+     */
     fun requiresBle(profile: MotorcycleProfile?): Boolean =
-        profile?.connectionMode == TBoxConnectionMode.THINKERRIDE
+        profile?.connectionMode == TBoxConnectionMode.THINKERRIDE ||
+            profile?.connectionMode == TBoxConnectionMode.BLE_PROVISIONED
 
     /**
      * Like [WifiDirectGate.hasNearbyDevicesPermission], [packageName] matters because the BLE
@@ -41,6 +54,26 @@ internal object ThinkerRideGate {
     ): Boolean = blePermissions.all { permission ->
         context.packageManager.checkPermission(permission, packageName) ==
             PackageManager.PERMISSION_GRANTED
+    }
+
+    /**
+     * Whether a BLE scan could actually run right now: the radio is on and the process that would
+     * do the scanning holds the grants.
+     *
+     * Asked before *offering* a Bluetooth path rather than before taking one. A phone-hotspot dash
+     * with no hotspot running used to fail instantly with "turn your hotspot on", which is the
+     * right advice for the dashes that print credentials and useless for the ones that do not -
+     * those can only be reached by trying Bluetooth. Trying costs a scan, so it is worth doing
+     * when a scan is possible and worth skipping, in favour of the instant message, when it is not.
+     */
+    fun bluetoothReady(
+        context: Context,
+        packageName: String = context.packageName
+    ): Boolean {
+        if (!hasBlePermissions(context, packageName)) return false
+        return runCatching {
+            context.getSystemService(BluetoothManager::class.java)?.adapter?.isEnabled == true
+        }.getOrDefault(false)
     }
 
     fun missingPermissionMessage(appName: String): String =

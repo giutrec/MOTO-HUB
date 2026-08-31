@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.tbox
 
 import org.junit.Assert.assertEquals
@@ -8,6 +11,44 @@ import io.motohub.android.androidauto.AndroidAutoDisplayMode
 import io.motohub.android.androidauto.TBoxScreenMargins
 
 class TBoxModelProfileTest {
+    @Test
+    fun `finds a profile by the key CORE names it with over the bridge`() {
+        // The companion app has nothing but this key to go on: CORE resolved the profile in its
+        // own process and can only name it. Anything less than an exact round trip here sends the
+        // dashboard back to the generic profile, which is the whole bug (rider 315e0af3).
+        TBoxModelProfile.entries.forEach { profile ->
+            assertEquals(profile, TBoxModelProfile.byKey(profile.key))
+        }
+        assertEquals(TBoxModelProfile.MORINI_XCAPE_1200, TBoxModelProfile.byKey(" morini_xcape_1200 "))
+    }
+
+    @Test
+    fun `an unknown key is null rather than the generic profile`() {
+        // A mismatched pair has to be distinguishable from a dash that really is generic: one
+        // needs an update, the other is working as designed.
+        assertNull(TBoxModelProfile.byKey("a_profile_from_a_newer_core"))
+        assertNull(TBoxModelProfile.byKey(null))
+        assertNull(TBoxModelProfile.byKey(""))
+        assertNull(TBoxModelProfile.byKey("   "))
+    }
+
+    @Test
+    fun `every profile key is unique`() {
+        // byKey() picks the first match, so two profiles sharing a key would make the answer
+        // depend on declaration order.
+        val keys = TBoxModelProfile.entries.map { it.key }
+        assertEquals(keys.size, keys.toSet().size)
+    }
+
+    @Test
+    fun `the X-Cape profile still asks for the slow capture the send window needs`() {
+        // The fix is only worth carrying across the bridge because of these two numbers: three
+        // frames fit in YunmoProtocol.SEND_WINDOW, and the generic profile's 30fps does not.
+        assertEquals(10, TBoxModelProfile.MORINI_XCAPE_1200.encoderFrameRate)
+        assertEquals(TBoxTransportFamily.YUNMO, TBoxModelProfile.MORINI_XCAPE_1200.transportFamily)
+        assertNull(TBoxModelProfile.GENERIC.encoderFrameRate)
+    }
+
     @Test
     fun `recognizes the MOTO-HUB simulator model id`() {
         assertEquals(
@@ -296,6 +337,9 @@ class TBoxModelProfileTest {
         assertEquals(a.fallbackTBoxVideoArea, b.fallbackTBoxVideoArea)
         assertEquals(a.advertisedSupportFunction, b.advertisedSupportFunction)
         assertEquals(a.requiresProactivePxcHeartbeat, b.requiresProactivePxcHeartbeat)
+        // B's GOP must reach the wire as real periodic IDRs on any phone: the all-intra fallback
+        // for codecs without intra refresh would otherwise erase the only variable left to test.
+        assertEquals(true, b.encoderPlainGopWithoutIntraRefresh)
     }
 
     @Test
@@ -375,5 +419,63 @@ class TBoxModelProfileTest {
             channel = "21334"
         )
         assertEquals(TBoxModelProfile.GENERIC, TBoxModelProfile.resolve("21334", zontes))
+    }
+
+    /**
+     * Rider 36ee9d2c (2026-08-24), a Benelli TRK 702X: CLIENT_INFO carries no brand, no model and
+     * no HUName a profile knows, so the only thing that matched was the 0.9.23 + linux_no_package
+     * firmware dialect - and that scored CFMOTO 800NK 3, CL-C450 1, GENERIC 0. Core's Android
+     * Auto took the win and letterboxed his 800x480 panel to 763x458 behind a CFMOTO dash's 22px
+     * status-bar margin.
+     */
+    private val benelliTrk702x = TBoxCapabilities(
+        huName = "ZHKJ13-1122",
+        packageName = "linux_no_package",
+        pxcVersion = "1.0.2",
+        sdkVersion = "0.9.23.4",
+        versionName = "1.0.0",
+        versionCode = "0",
+        supportFunction = 128,
+        screenTouch = false,
+        landscapeAdaptive = true,
+        productType = 3,
+        screenType = 1,
+        flavor = "51",
+        channel = "34813"
+    )
+
+    @Test
+    fun `a Carbit-licensed dash is not claimed by the CFMOTO firmware dialect`() {
+        assertEquals(TBoxModelProfile.GENERIC, TBoxModelProfile.resolve(null, benelliTrk702x))
+        assertEquals(TBoxModelProfile.GENERIC, TBoxModelProfile.resolve("34813", benelliTrk702x))
+    }
+
+    @Test
+    fun `the same firmware dialect still identifies a dash no other licence claims`() {
+        // The guard must not cost a real 800NK its profile: same dialect, no Carbit licence.
+        val nk800 = benelliTrk702x.copy(huName = null, flavor = "65540", channel = null)
+        assertEquals(TBoxModelProfile.CFMOTO_800NK, TBoxModelProfile.resolve(null, nk800))
+        // And a dash that reports no flavour at all is exactly where it was before the guard.
+        assertEquals(
+            TBoxModelProfile.CFMOTO_800NK,
+            TBoxModelProfile.resolve(null, nk800.copy(flavor = null))
+        )
+    }
+
+    @Test
+    fun `a dash that names itself outranks its licence`() {
+        // The licence only stops a fingerprint carrying the profile alone. A unit that says
+        // 800NK in CLIENT_INFO is one, whoever licensed the stack it runs.
+        val named = benelliTrk702x.copy(huName = "CFMOTO 800NK")
+        assertEquals(TBoxModelProfile.CFMOTO_800NK, TBoxModelProfile.resolve(null, named))
+    }
+
+    @Test
+    fun `the CL-C450 corroboration cannot carry that profile either`() {
+        // With CFMOTO_800NK refused, this was the next thing standing: one point for 0.9.23,
+        // enough to put a 544x512 profile on an 800x480 Benelli panel.
+        assertEquals(TBoxModelProfile.GENERIC, TBoxModelProfile.resolve(null, benelliTrk702x))
+        val clc450 = benelliTrk702x.copy(huName = "48FB4C-0001")
+        assertEquals(TBoxModelProfile.CL_C450, TBoxModelProfile.resolve(null, clc450))
     }
 }

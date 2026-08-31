@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.feature.settings
 
 import android.app.LocaleManager
@@ -21,7 +24,9 @@ enum class AppLanguage(
     PORTUGUESE("pt-PT", R.string.language_portuguese),
     KOREAN("ko-KR", R.string.language_korean),
     FRENCH("fr-FR", R.string.language_french),
-    SPANISH("es-ES", R.string.language_spanish)
+    SPANISH("es-ES", R.string.language_spanish),
+    GERMAN("de-DE", R.string.language_german),
+    DUTCH("nl-NL", R.string.language_dutch)
 }
 
 object AppLanguageManager {

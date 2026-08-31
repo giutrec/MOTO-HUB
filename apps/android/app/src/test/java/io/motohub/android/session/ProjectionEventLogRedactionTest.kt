@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.session
 
 import org.junit.Assert.assertEquals
@@ -42,6 +45,43 @@ class ProjectionEventLogRedactionTest {
     fun doesNotMangleVersionOrResolutionStrings() {
         val message = "MOTO-HUB 0.9.0-beta.10 negotiated 1280x720@30fps"
         assertEquals(message, ProjectionEventLog.redact(message))
+    }
+
+    /**
+     * The dashboard identity line, which is four-part version numbers and nothing else. Field log
+     * 90438e1e (2026-08-25) carried it as `sdk=<redacted-ip>`: the only line that says which
+     * firmware a rider has, with the firmware scrubbed out of it as if it were an address.
+     */
+    @Test
+    fun keepsAFourPartVersionThatIsAnnouncedAsOne() {
+        val message =
+            "Unrecognised dashboard: package=?, version=V0.0.1(?), sdk=1.0.13.1, pxc=1.0.2.3"
+
+        assertEquals(message, ProjectionEventLog.redact(message))
+    }
+
+    @Test
+    fun keepsAFourPartVersionInsideAQuotedJsonDump() {
+        val redacted = ProjectionEventLog.redact("""{"sdkVersion":"1.0.13.1","pxcVersion":"1.0.2"}""")
+
+        assertTrue(redacted.contains("1.0.13.1"))
+    }
+
+    /** The sparing rule must not become a way to smuggle an address through the scrub. */
+    @Test
+    fun stillRedactsAddressesAlongsideASparedVersion() {
+        val redacted = ProjectionEventLog.redact(
+            "sdk=1.0.13.1 connected to 192.168.49.1 from 192.168.49.37"
+        )
+
+        assertEquals("sdk=1.0.13.1 connected to <redacted-ip> from <redacted-ip>", redacted)
+    }
+
+    @Test
+    fun stillRedactsAnAddressThatNoKeyExcuses() {
+        val redacted = ProjectionEventLog.redact("phone=10.0.0.4, dash=10.0.0.1")
+
+        assertFalse(redacted.contains("10.0.0."))
     }
 
     @Test
@@ -127,5 +167,52 @@ class ProjectionEventLogRedactionTest {
     fun ordinaryProgressStaysInformational() {
         assertEquals(LogLevel.INFO, classifyExternalMessage("[AA] WirelessServer listening on :5288"))
         assertEquals(LogLevel.INFO, classifyExternalMessage("[AA] first decoded video frame received"))
+    }
+
+    /**
+     * AaLog writes every level through Log.i and carries the real one as a `W: `/`E: ` marker.
+     * Reading it is the difference between the console showing rider 4d8a4c5b's 2fps collapse and
+     * showing him a clean bill of health: not one of these lines contains a fault keyword.
+     */
+    @Test
+    fun aDeclaredLevelIsUsedInsteadOfGuessing() {
+        assertEquals(
+            LogLevel.WARNING,
+            classifyExternalMessage(
+                "[AA] W: Decoder stall detected (no output for 9201ms, input 6ms ago). Forcing restart."
+            )
+        )
+        assertEquals(LogLevel.WARNING, classifyExternalMessage("[AA] W: Decoder restart requested: sync_stall"))
+        assertEquals(
+            LogLevel.WARNING,
+            classifyExternalMessage("[AA] W: AapTransport: Requesting recovery keyframe via focus cycle.")
+        )
+        assertEquals(LogLevel.ERROR, classifyExternalMessage("[AA] E: Decrypted payload too short: 3"))
+        assertEquals(LogLevel.ERROR, classifyExternalMessage("[AA] E: No connection."))
+    }
+
+    @Test
+    fun aDeclaredLevelStillLosesToTheTwoDemotions() {
+        // A counter at rest stays a non-event however loudly it is announced...
+        assertEquals(LogLevel.INFO, classifyExternalMessage("[AA] E: frames dropped: 0"))
+        // ...and an ordinary teardown is not an ERROR just because the writer said so.
+        assertEquals(LogLevel.WARNING, classifyExternalMessage("[AA] E: AapRead: read failed: socket closed"))
+        // A teardown a writer already called a warning is not promoted by the demotion either.
+        assertEquals(LogLevel.WARNING, classifyExternalMessage("[AA] W: accept ended: Socket closed"))
+    }
+
+    /**
+     * The marker is a prefix, not a substring: AAP messages carry protobuf and buffer dumps, and
+     * `... lim=25] w: 3` inside one of those declares nothing.
+     */
+    @Test
+    fun onlyAnAnchoredMarkerCounts() {
+        assertEquals(
+            LogLevel.INFO,
+            classifyExternalMessage("Config response: status: HEADUNIT [max_unacked: 12] w: 800")
+        )
+        assertEquals(LogLevel.INFO, classifyExternalMessage("[AA] Output Format Changed: {crop-right=799, w: 800}"))
+        // A tag is stripped, but only one, and only when the message opens with it.
+        assertEquals(LogLevel.WARNING, classifyExternalMessage("[AA] W: AapRead: FIFO overflow! Size: 4096"))
     }
 }

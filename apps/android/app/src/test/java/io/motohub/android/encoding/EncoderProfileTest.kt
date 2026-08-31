@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.encoding
 
 import org.junit.Assert.assertEquals
@@ -70,5 +73,33 @@ class EncoderProfileTest {
         // AA projection and mirroring pace frames by dropping encoder output, which is only
         // decodable on an all-intra stream; GOP encoding is an explicit per-session opt-in.
         assertEquals(0, EncoderProfile.forTBoxArea(800, 386).keyframeIntervalSeconds)
+    }
+
+    @Test
+    fun `a GOP stream gets the short repeat interval`() {
+        // The repeat is a skip-macroblock P-frame here, so a 10 fps floor under a stalled source
+        // is nearly free - and a KOVE 800X reset the video socket after ~8s of the long interval.
+        assertEquals(100_000L, repeatFrameAfterUs(1))
+        assertEquals(100_000L, repeatFrameAfterUs(2))
+    }
+
+    @Test
+    fun `an all-intra stream keeps the long repeat interval`() {
+        // Every repeat would be a full IDR: 10 a second of an unchanged picture costs nine times
+        // the encoding and splits the same bitrate nine ways. All the CFMOTO profiles land here.
+        assertEquals(900_000L, repeatFrameAfterUs(0))
+    }
+
+    @Test
+    fun `a GOP degraded to all-intra is charged as all-intra`() {
+        // The interval follows the shape the stream really has, not the one the profile asked
+        // for: a codec without intra refresh turns a requested GOP into an all-intra stream.
+        val effective = effectiveKeyframeIntervalSeconds(
+            requestedSeconds = 1,
+            plainGopWithoutIntraRefresh = false,
+            intraRefreshAvailable = false
+        )
+
+        assertEquals(900_000L, repeatFrameAfterUs(effective))
     }
 }

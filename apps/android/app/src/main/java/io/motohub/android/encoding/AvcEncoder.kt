@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.encoding
 
 import android.media.MediaCodec
@@ -211,9 +214,33 @@ class AvcEncoder(
                     )
                 }
                 setInteger(MediaFormat.KEY_PREPEND_HEADER_TO_SYNC_FRAMES, 1)
-                // Keep the existing broadly-supported codec setting. Idle pacing is handled by
-                // the compositor; some phone encoders reject larger repeat-frame intervals here.
-                setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 900_000L)
+                // The floor under a stalled pixel source, not idle pacing. When the source stops
+                // - an Android Auto decoder stall, seconds at a time, is the common case - this
+                // interval is the only thing still feeding the dash, because the codec re-submits
+                // the last surface buffer and nothing else arrives. The compositor cannot cover
+                // the gap either: its own idle redraw is slower still.
+                //
+                // What a repeat costs depends on the stream shape, so the interval follows it:
+                //
+                //  - GOP: the repeat is a skip-macroblock P-frame, tens of bytes. 100 ms buys a
+                //    10 fps floor for nothing, and it is the value ThinkerRide, green_trip and
+                //    cn_thinkerride all ship. At 900 ms a stalled source left barely 1 fps on the
+                //    wire and a KOVE 800X reset the video socket after ~8s of it (rider log,
+                //    2026-08-20). 10 fps also stays under AdaptiveVideoController.MIN_FRAME_RATE,
+                //    so the repeat can never outpace the frame cap.
+                //
+                //  - all-intra: every frame is a full IDR, and shouldForwardFrame lets them all
+                //    through because they are all keyframes. A 100 ms repeat would mean 10 IDRs a
+                //    second of an unchanged picture - the rate controller holds the bitrate, so
+                //    each IDR just gets a ninth of the bits and the still image gets worse, at
+                //    nine times the encoding work. All-intra also tolerates arbitrary frame loss
+                //    by design, which is exactly the starvation the short interval exists to
+                //    prevent. It keeps the interval it has always had.
+                //
+                // Keyed on streamInterval, not profile.keyframeIntervalSeconds: a requested GOP
+                // degrades to all-intra on a codec without intra refresh, and it is the shape the
+                // stream really has that decides what a repeated frame costs.
+                setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, repeatFrameAfterUs(streamInterval))
                 if (forceBaseline) {
                     setInteger(
                         MediaFormat.KEY_PROFILE,
@@ -697,6 +724,24 @@ private const val RECOVERY_SYNC_LOG_INTERVAL_NANOS = 15_000_000_000L
  *  was tried on the bike (2026-07-28) and made the picture worse, so periodic IDR bursts are
  *  still what this link cannot absorb — keep them rare. */
 private const val INTRA_REFRESH_IDR_INTERVAL_SECONDS = 10
+
+/** Repeat-frame interval for a GOP stream: a 10 fps floor built out of skip-macroblock
+ *  P-frames, which is what the ThinkerRide, green_trip and cn_thinkerride encoders all use. */
+internal const val GOP_REPEAT_FRAME_AFTER_US = 100_000L
+
+/** Repeat-frame interval for an all-intra stream, where every repeat is a full IDR and the
+ *  cheap 10 fps floor does not exist. Unchanged from before the GOP split. */
+internal const val ALL_INTRA_REPEAT_FRAME_AFTER_US = 900_000L
+
+/**
+ * How long the codec waits before re-sending the last surface buffer, chosen from the shape the
+ * stream actually has. Takes the *effective* interval, not the requested one: a GOP degrades to
+ * all-intra on a codec without intra refresh, and the cost of a repeated frame follows the real
+ * shape. See the call site for why the two values differ.
+ */
+internal fun repeatFrameAfterUs(effectiveKeyframeIntervalSeconds: Int): Long =
+    if (effectiveKeyframeIntervalSeconds > 0) GOP_REPEAT_FRAME_AFTER_US
+    else ALL_INTRA_REPEAT_FRAME_AFTER_US
 
 private const val AVC_NAL_IDR = 5
 private const val AVC_NAL_SPS = 7

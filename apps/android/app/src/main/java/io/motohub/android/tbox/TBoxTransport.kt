@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.tbox
 
 import kotlinx.coroutines.flow.Flow
@@ -47,7 +50,14 @@ sealed interface TBoxTransportStatus {
 
 interface TBoxTransport {
     /** Selects the profile whose wire-level capabilities will be advertised for the next session. */
-    fun configureProtocolProfile(profile: TBoxModelProfile) = Unit
+    /**
+     * [motorcycle] is optional and only [TBoxWireLadder] uses it: its memory of which wire format
+     * a dashboard accepted is per motorcycle. A caller with none gets the profile's own settings.
+     */
+    fun configureProtocolProfile(
+        profile: TBoxModelProfile,
+        motorcycle: io.motohub.android.session.MotorcycleProfile? = null
+    ) = Unit
 
     /**
      * The profile this transport is actually running, when that is not simply the one the caller
@@ -60,6 +70,16 @@ interface TBoxTransport {
     suspend fun discover(link: TBoxLink, expectedModelId: String? = null): Result<TBoxHost>
     suspend fun start(host: TBoxHost): Result<Unit>
     fun offerAccessUnit(avcc: ByteArray): Boolean
+
+    /**
+     * Offers one JPEG still, for the dash families whose OEM app never streams H.264.
+     *
+     * Separate from [offerAccessUnit] because a still carries its own [frameId]: these dashes
+     * acknowledge by id, so an id invented downstream would throw away the link's only liveness
+     * signal. Returns false by default - a transport without a still path must refuse rather
+     * than absorb, or a profile that asked for stills gets silently served something else.
+     */
+    fun offerStillFrame(jpeg: ByteArray, frameId: Int): Boolean = false
     suspend fun stop()
     val events: Flow<TBoxEvent>
 }

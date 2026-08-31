@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.feature.update
 
 import io.motohub.android.i18n.motoHubText
@@ -141,7 +144,7 @@ private fun ReleaseEntry(
                     enabled = !installing,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(if (installing) "Downloading..." else "Download and install")
+                    Text(if (installing) motoHubText("Downloading...") else motoHubText("Download and install"))
                 }
             }
             OutlinedButton(

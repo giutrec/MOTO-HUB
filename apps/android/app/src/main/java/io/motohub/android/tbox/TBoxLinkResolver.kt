@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.tbox
 
 import android.content.Context
@@ -37,9 +40,17 @@ object TBoxLinkResolver {
         profile: MotorcycleProfile,
         formedGroup: FormedP2pGroup? = null
     ): Result<TBoxLink> =
-        if (profile.connectionMode == TBoxConnectionMode.PHONE_HOTSPOT) {
+        if (profile.connectionMode == TBoxConnectionMode.BLE_PROVISIONED) {
+            bluetoothProvisionedLink(context)
+        } else if (profile.connectionMode == TBoxConnectionMode.PHONE_HOTSPOT) {
             hostedLink(context).recoverCatching { hostedFailure ->
-                accessPointFallback(networkConnector, profile, hostedFailure).getOrThrow()
+                // Nothing is hosted. Before telling the rider to turn a hotspot on - which some
+                // dashes give them no credentials for - see whether this is a dash that hands its
+                // network over on Bluetooth instead. It only costs a scan, and it creates nothing
+                // unless a dash actually answers and asks for a network.
+                bluetoothProvisionedLink(context, FALLBACK_SCAN_MILLIS)
+                    .recoverCatching { accessPointFallback(networkConnector, profile, hostedFailure).getOrThrow() }
+                    .getOrThrow()
             }
         } else if (usesWifiDirect(profile)) {
             ProjectionEventLog.record(
@@ -77,6 +88,13 @@ object TBoxLinkResolver {
         awaitNetworkMillis: Long,
         currentLink: TBoxLink? = null
     ): TBoxLink {
+        // A network the phone hosts is still there after a session-level failure: the hotspot did
+        // not go anywhere, and on a Bluetooth-provisioned dash tearing it down and building it
+        // again would put the dash through the whole pairing exchange for nothing.
+        if (currentLink is TBoxLink.PhoneHotspot) return currentLink
+        if (profile.connectionMode == TBoxConnectionMode.BLE_PROVISIONED) {
+            return connect(context, networkConnector, profile).getOrThrow()
+        }
         if (usesWifiDirect(profile)) {
             val handedOver = (currentLink as? TBoxLink.WifiDirect)?.takeIf { it.formedElsewhere }
             if (handedOver != null) {
@@ -106,6 +124,7 @@ object TBoxLinkResolver {
         // request — the dash's AP is ordinary WPA2, so it rides the infrastructure path here.
         TBoxConnectionMode.ACCESS_POINT,
         TBoxConnectionMode.PHONE_HOTSPOT,
+        TBoxConnectionMode.BLE_PROVISIONED,
         TBoxConnectionMode.THINKERRIDE -> false
         TBoxConnectionMode.AUTO -> TBoxWifiDirectConnector.isWifiDirectSsid(profile.ssid)
     }
@@ -119,6 +138,58 @@ object TBoxLinkResolver {
      * Failing with a rider-readable message matters more here than anywhere else: "no hotspot
      * found" is something they can act on immediately, and it is by far the likeliest mistake.
      */
+    /**
+     * Puts a dash onto a network the app itself hosts, over Bluetooth.
+     *
+     * The whole exchange lives in [EcBtpNetLink]; what belongs here is what happens to it
+     * afterwards. Both the hotspot and the BLE link have to outlive this call - the network exists
+     * only while the reservation is held - so they are handed to the link's release, which the
+     * session calls on disconnect. A failure releases them here instead, because a hotspot left
+     * running after a failed connect is a radio the rider never asked to have on.
+     */
+    private suspend fun bluetoothProvisionedLink(
+        context: Context,
+        scanTimeoutMillis: Long = EcBtpNetLink.SCAN_TIMEOUT_MS
+    ): Result<TBoxLink> {
+        val hotspot = PhoneHostedHotspot(context) { message ->
+            ProjectionEventLog.record("NETWORK", message)
+        }
+        val link = EcBtpNetLink(context, { message -> ProjectionEventLog.record("PAIRING", message) }, hotspot)
+        val provisioned = link.provision(scanTimeoutMillis).getOrElse { failure ->
+            link.close()
+            hotspot.close()
+            return Result.failure(failure)
+        }
+        ProjectionEventLog.record(
+            "NETWORK",
+            "${provisioned.dashName} is on the network this phone is hosting " +
+                "(${provisioned.subnet.interfaceName} ${provisioned.subnet.localAddress.hostAddress}/" +
+                "${provisioned.subnet.prefixLength})" +
+                (provisioned.dashIp?.let { ", at ${it.hostAddress}" } ?: ", address not reported") +
+                (provisioned.dashModelId?.let { "; modelId=$it" } ?: "") + "."
+        )
+        return Result.success(
+            TBoxLink.PhoneHotspot(
+                subnet = provisioned.subnet,
+                peerHint = provisioned.dashIp,
+                release = {
+                    link.close()
+                    hotspot.close()
+                }
+            )
+        )
+    }
+
+    /**
+     * How long the phone-hotspot fallback scans before giving up on Bluetooth.
+     *
+     * Shorter than a deliberate Bluetooth connect on purpose. Here the rider has most likely just
+     * forgotten to turn their hotspot on, and used to be told so instantly; a dash that is on and
+     * advertising shows up in the first seconds, so this buys the other kind of rider a chance
+     * without making everyone else wait out a full scan for a message they already know.
+     */
+    private const val FALLBACK_SCAN_MILLIS = 6_000L
+
     private fun hostedLink(context: Context): Result<TBoxLink> {
         // Passing what the phone is *using* is not optional, though it was for a long time: the
         // parameter existed and the only production caller left it empty, so the rider's home
@@ -148,6 +219,11 @@ object TBoxLinkResolver {
                     "."
                 }
         )
+        // Who is actually on that subnet is the other half of the answer, and the half no rider
+        // log has ever carried: a sweep that finds nothing looks identical whether the dash never
+        // joined the hotspot or joined it and stayed quiet. Best-effort, and it says so when the
+        // platform refuses - see TBoxHotspotScan.neighbours.
+        ProjectionEventLog.record("NETWORK", TBoxHotspotScan.describeNeighbours(subnet.interfaceName))
         return Result.success(TBoxLink.PhoneHotspot(subnet))
     }
 
@@ -174,7 +250,27 @@ object TBoxLinkResolver {
         profile: MotorcycleProfile,
         hostedFailure: Throwable
     ): Result<TBoxLink> {
-        if (networkConnector.isDashBroadcasting(profile) != true) return Result.failure(hostedFailure)
+        val broadcasting = networkConnector.isDashBroadcasting(profile)
+        if (broadcasting != true) {
+            // The silence here was a hole. Five identical "no hotspot is running" errors in a
+            // rider log (samsung SM-S948B, qj-5G-d8cf, 2026-08-23) said nothing about whether
+            // this road had even been considered, let alone which of its two answers had closed
+            // it - and those two answers point at opposite problems. The snapshot is the same one
+            // the access-point join records before it starts, so a hotspot-mode log finally
+            // carries the scan a Wi-Fi-client dash would be found in.
+            networkConnector.logVisibleApSnapshot(profile)
+            ProjectionEventLog.record(
+                "NETWORK",
+                "Staying on the phone-hosted transport: the access-point fallback only runs on a " +
+                    "positive sighting, and " +
+                    if (broadcasting == false) {
+                        "${profile.ssid} was not in the phone's latest scan."
+                    } else {
+                        "this phone handed back no usable scan at all."
+                    }
+            )
+            return Result.failure(hostedFailure)
+        }
         ProjectionEventLog.record(
             "NETWORK",
             "No hosted network, but ${profile.ssid} is broadcasting - joining its access point " +
@@ -184,29 +280,7 @@ object TBoxLinkResolver {
         return networkConnector.connect(profile).map { TBoxLink.Infrastructure(it) }
     }
 
-    /**
-     * Every IPv4 address on a network `ConnectivityManager` knows this phone is on - its Wi-Fi,
-     * its mobile link, a VPN. A hosted hotspot is not among them: tethering is not surfaced to
-     * apps as a [android.net.Network], which is exactly what makes this a usable "not the dash's
-     * subnet" filter rather than a guess.
-     *
-     * Best-effort by design. If the query fails or comes back empty the scan simply runs
-     * unfiltered, which is what it did before this existed.
-     */
-    // getAllNetworks() is deprecated with no synchronous replacement: the sanctioned API is a
-    // registered NetworkCallback, which answers a question this code asks once, on demand, at the
-    // start of a connect. activeNetwork alone is not enough - behind a VPN it *is* the VPN, and
-    // the Wi-Fi whose subnet must not be swept stops being reported at all.
-    @Suppress("DEPRECATION")
+    /** Moved to [TBoxHotspotScan.addressesInUse], which the Bluetooth setup path needs as well. */
     private fun addressesTheNetworkStackIsUsing(context: Context): Set<InetAddress> =
-        runCatching {
-            val connectivityManager =
-                context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-            connectivityManager.allNetworks
-                .mapNotNull { network -> connectivityManager.getLinkProperties(network) }
-                .flatMap { properties -> properties.linkAddresses }
-                .map { linkAddress -> linkAddress.address }
-                .filterIsInstance<Inet4Address>()
-                .toSet()
-        }.getOrDefault(emptySet())
+        TBoxHotspotScan.addressesInUse(context)
 }

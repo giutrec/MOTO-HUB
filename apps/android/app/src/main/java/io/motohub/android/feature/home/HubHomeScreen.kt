@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.feature.home
 
 import io.motohub.android.i18n.motoHubText
@@ -35,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import io.motohub.android.tbox.ProfileOverride
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -76,6 +80,7 @@ import io.motohub.android.ui.components.LivePill
 import io.motohub.android.ui.components.MonoLabel
 import io.motohub.android.ui.components.MotoHubBackground
 import io.motohub.android.ui.components.ScreenSlideTransition
+import io.motohub.android.ui.components.StatusPill
 import io.motohub.android.ui.theme.MotoHubAndroidAuto
 import io.motohub.android.ui.theme.MotoHubMirror
 import io.motohub.android.tbox.TBoxConflictDiagnostics
@@ -91,9 +96,9 @@ fun HubHomeScreen(
     onManualPairing: () -> Unit,
     onTryPhoneHotspot: () -> Unit,
     onConnectAndDiscover: () -> Unit,
-    officialCfmotoAppInstalled: Boolean,
-    onCloseOfficialCfmotoAndRetry: () -> Unit,
-    onOpenOfficialCfmotoSettings: () -> Unit,
+    companionAppName: String?,
+    onCloseCompanionAppAndRetry: () -> Unit,
+    onOpenCompanionAppSettings: () -> Unit,
     onOpenWifiSettings: () -> Unit,
     onOpenAndroidAutoSettings: () -> Unit,
     onCancelConnection: () -> Unit,
@@ -115,7 +120,11 @@ fun HubHomeScreen(
     externalDisplayActive: Boolean = false,
     externalDisplayStreaming: Boolean = false,
     onStartExternalDisplay: () -> Unit = {},
-    onStopExternalDisplay: () -> Unit = {}
+    onStopExternalDisplay: () -> Unit = {},
+    onTryProfile: (ProfileOverride) -> Unit = {},
+    onKeepTrialledProfile: (sendNow: Boolean, enableAutoUpload: Boolean) -> Unit = { _, _ -> },
+    onDiscardTrialledProfile: () -> Unit = {},
+    diagnosticsOffer: DiagnosticsOffer? = null
 ) {
     val session = state.session
     val destination = resolveHubDestination(session, androidAutoActive, externalDisplayActive = externalDisplayActive)
@@ -126,6 +135,34 @@ fun HubHomeScreen(
             session.phase == SessionPhase.REQUESTING_PROJECTION ||
             session.phase == SessionPhase.CAPTURING -> ConnectionState.CONNECTED
         else -> ConnectionState.DISCONNECTED
+    }
+
+    // A drill-down rather than an expanding card: this is a decision with its own evidence and
+    // its own list, and the rider taking it has already been told the wrong thing once.
+    var showProfileTrial by rememberSaveable { mutableStateOf(false) }
+    val deliveryWarning = session.deliveryWarning
+    if (showProfileTrial && deliveryWarning != null) {
+        MotoHubBackground(Modifier.fillMaxSize()) {
+            ProfileTrialScreen(
+                warning = deliveryWarning,
+                suggestions = state.profileSuggestions,
+                onTryProfile = {
+                    showProfileTrial = false
+                    onTryProfile(it)
+                },
+                onBack = { showProfileTrial = false }
+            )
+        }
+        return
+    }
+
+    state.trialToConfirm?.let { trial ->
+        ProfileTrialConfirmation(
+            trial = trial,
+            diagnostics = diagnosticsOffer,
+            onKeep = onKeepTrialledProfile,
+            onDiscard = onDiscardTrialledProfile
+        )
     }
 
     MotoHubBackground(Modifier.fillMaxSize()) {
@@ -139,6 +176,12 @@ fun HubHomeScreen(
                 isConnected = connectionState == ConnectionState.CONNECTED,
                 onMotorcycleTap = { onTabSelected(HubTab.GARAGE) }
             )
+            // Only the failing verdict is a banner. The healthy one travels the same field and
+            // is what the confirmation above is built on - showing it here would put "your
+            // dashboard is not showing this" over a dashboard that is showing it.
+            session.deliveryWarning?.takeIf { !it.healthy }?.let {
+                DeliveryWarningBanner(onOpen = { showProfileTrial = true })
+            }
 
             Box(Modifier.weight(1f)) {
                 Crossfade(targetState = selectedTab, label = "tab") { tab ->
@@ -150,9 +193,9 @@ fun HubHomeScreen(
                             onImportQrPhoto = onImportQrPhoto,
                             onManualPairing = onManualPairing,
                             onConnectAndDiscover = onConnectAndDiscover,
-                            officialCfmotoAppInstalled = officialCfmotoAppInstalled,
-                            onCloseOfficialCfmotoAndRetry = onCloseOfficialCfmotoAndRetry,
-                            onOpenOfficialCfmotoSettings = onOpenOfficialCfmotoSettings,
+                            companionAppName = companionAppName,
+                            onCloseCompanionAppAndRetry = onCloseCompanionAppAndRetry,
+                            onOpenCompanionAppSettings = onOpenCompanionAppSettings,
                             onOpenWifiSettings = onOpenWifiSettings,
                             onOpenAndroidAutoSettings = onOpenAndroidAutoSettings,
                             onCancelConnection = onCancelConnection,
@@ -198,9 +241,9 @@ private fun HomeTabContent(
     onManualPairing: () -> Unit,
     onTryPhoneHotspot: () -> Unit,
     onConnectAndDiscover: () -> Unit,
-    officialCfmotoAppInstalled: Boolean,
-    onCloseOfficialCfmotoAndRetry: () -> Unit,
-    onOpenOfficialCfmotoSettings: () -> Unit,
+    companionAppName: String?,
+    onCloseCompanionAppAndRetry: () -> Unit,
+    onOpenCompanionAppSettings: () -> Unit,
     onOpenWifiSettings: () -> Unit,
     onOpenAndroidAutoSettings: () -> Unit,
     onCancelConnection: () -> Unit,
@@ -276,6 +319,7 @@ private fun HomeTabContent(
                 dimDisplayEnabled = dimDisplayEnabled,
                 onDimDisplayChanged = onDimDisplayChanged,
                 onOpenAndroidAutoPreview = onOpenAndroidAutoPreview,
+                onOpenAndroidAutoHelp = onOpenAndroidAutoSettings,
                 externalDisplayActive = externalDisplayActive,
                 externalDisplayStreaming = externalDisplayStreaming,
                 onStopExternalDisplay = onStopExternalDisplay,
@@ -294,10 +338,10 @@ private fun HomeTabContent(
                     session.offerPhoneHotspotRetry,
                 onTryPhoneHotspot = onTryPhoneHotspot,
                 onConnect = onConnectAndDiscover,
-                officialCfmotoAppInstalled = officialCfmotoAppInstalled,
-                officialAppHelpApplies = session.offerOfficialAppHelp,
-                onCloseOfficialCfmotoAndRetry = onCloseOfficialCfmotoAndRetry,
-                onOpenOfficialCfmotoSettings = onOpenOfficialCfmotoSettings,
+                companionAppName = companionAppName,
+                companionAppHelpApplies = session.offerOfficialAppHelp,
+                onCloseCompanionAppAndRetry = onCloseCompanionAppAndRetry,
+                onOpenCompanionAppSettings = onOpenCompanionAppSettings,
                 onOpenWifiSettings = onOpenWifiSettings,
                 onOpenAndroidAutoSettings = onOpenAndroidAutoSettings,
                 onScanQr = onScanQr,
@@ -432,10 +476,10 @@ private fun ConnectionContent(
     showPhoneHotspotRetry: Boolean,
     onTryPhoneHotspot: () -> Unit,
     onConnect: () -> Unit,
-    officialCfmotoAppInstalled: Boolean,
-    officialAppHelpApplies: Boolean,
-    onCloseOfficialCfmotoAndRetry: () -> Unit,
-    onOpenOfficialCfmotoSettings: () -> Unit,
+    companionAppName: String?,
+    companionAppHelpApplies: Boolean,
+    onCloseCompanionAppAndRetry: () -> Unit,
+    onOpenCompanionAppSettings: () -> Unit,
     onOpenWifiSettings: () -> Unit,
     onOpenAndroidAutoSettings: () -> Unit,
     onScanQr: () -> Unit,
@@ -448,10 +492,10 @@ private fun ConnectionContent(
             ErrorBanner(
                 message = message,
                 showPortConflictHelp = TBoxConflictDiagnostics.isPortConflict(message),
-                officialCfmotoAppInstalled = officialCfmotoAppInstalled,
-                officialAppHelpApplies = officialAppHelpApplies,
-                onCloseOfficialCfmotoAndRetry = onCloseOfficialCfmotoAndRetry,
-                onOpenOfficialCfmotoSettings = onOpenOfficialCfmotoSettings,
+                companionAppName = companionAppName,
+                companionAppHelpApplies = companionAppHelpApplies,
+                onCloseCompanionAppAndRetry = onCloseCompanionAppAndRetry,
+                onOpenCompanionAppSettings = onOpenCompanionAppSettings,
                 showWifiSettingsAction = message == WifiGate.WIFI_OFF_MESSAGE,
                 onOpenWifiSettings = onOpenWifiSettings,
                 showAndroidAutoSetupHelp = AndroidAutoSelfModeHelp.isMessageAboutSelfMode(message),
@@ -489,10 +533,10 @@ private fun ConnectionContent(
 private fun ErrorBanner(
     message: String,
     showPortConflictHelp: Boolean,
-    officialCfmotoAppInstalled: Boolean,
-    officialAppHelpApplies: Boolean,
-    onCloseOfficialCfmotoAndRetry: () -> Unit,
-    onOpenOfficialCfmotoSettings: () -> Unit,
+    companionAppName: String?,
+    companionAppHelpApplies: Boolean,
+    onCloseCompanionAppAndRetry: () -> Unit,
+    onOpenCompanionAppSettings: () -> Unit,
     showWifiSettingsAction: Boolean,
     onOpenWifiSettings: () -> Unit,
     showAndroidAutoSetupHelp: Boolean = false,
@@ -508,12 +552,17 @@ private fun ErrorBanner(
     // ...and it is dropped for any failure that never reached a session another app could be
     // holding - see HubSessionState.offerOfficialAppHelp. A port conflict is its own evidence and
     // stands on that alone, whatever stage reported it.
-    val officialAppMayHoldTBox = officialCfmotoAppInstalled &&
-        (officialAppHelpApplies || showPortConflictHelp) &&
+    val companionAppMayHoldTBox = companionAppName != null &&
+        (companionAppHelpApplies || showPortConflictHelp) &&
         !showWifiSettingsAction && !showAndroidAutoSetupHelp
-    val showOfficialAppHintProminently = officialAppMayHoldTBox && showPortConflictHelp
+    val showCompanionAppHintProminently = companionAppMayHoldTBox && showPortConflictHelp
+    // Not threaded up as a callback like the others: a plain navigation intent with no session
+    // state behind it, and the screen it opens is fixed by the message that produced it.
+    val context = LocalContext.current
+    val showHotspotSettingsAction = message == WifiGate.HOTSPOT_OFF_MESSAGE
     val hasExtra = showPortConflictHelp || showWifiSettingsAction || showAndroidAutoSetupHelp ||
-        (officialAppMayHoldTBox && !showOfficialAppHintProminently)
+        showHotspotSettingsAction ||
+        (companionAppMayHoldTBox && !showCompanionAppHintProminently)
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -570,18 +619,18 @@ private fun ErrorBanner(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-            if (showOfficialAppHintProminently) {
+            if (showCompanionAppHintProminently) {
                 // A port conflict is the one failure the official app is known to cause, and
                 // Android gives no way to ask whether another app is currently running -
                 // "installed" is as close as detection gets. The only fix is the rider
                 // force-stopping it from App info, so offer that directly.
                 Text(
-                    motoHubText("The official CFMOTO app is installed and may be holding the T-Box. Force-stop it from its App info page, then retry."),
+                    motoHubText("%1\$s is installed and may be holding the dashboard. Force-stop it from its App info page, then retry.", companionAppName.orEmpty()),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                SecondaryAction(motoHubText("Open CFMOTO app info"), onOpenOfficialCfmotoSettings)
-                SecondaryAction(motoHubText("Retry connection"), onCloseOfficialCfmotoAndRetry)
+                SecondaryAction(motoHubText("Open %1\$s app info", companionAppName.orEmpty()), onOpenCompanionAppSettings)
+                SecondaryAction(motoHubText("Retry connection"), onCloseCompanionAppAndRetry)
             }
             if (expanded) {
                 if (showPortConflictHelp) {
@@ -591,17 +640,23 @@ private fun ErrorBanner(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                if (officialAppMayHoldTBox && !showOfficialAppHintProminently) {
+                if (companionAppMayHoldTBox && !showCompanionAppHintProminently) {
                     Text(
-                        motoHubText("One possible cause: the official CFMOTO app is installed and can keep the T-Box link busy even in the background. If the connection keeps failing, force-stop it from its App info page, then retry."),
+                        motoHubText("One possible cause: %1\$s is installed and can keep the dashboard link busy even in the background. If the connection keeps failing, force-stop it from its App info page, then retry.", companionAppName.orEmpty()),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    SecondaryAction(motoHubText("Open CFMOTO app info"), onOpenOfficialCfmotoSettings)
-                    SecondaryAction(motoHubText("Retry connection"), onCloseOfficialCfmotoAndRetry)
+                    SecondaryAction(motoHubText("Open %1\$s app info", companionAppName.orEmpty()), onOpenCompanionAppSettings)
+                    SecondaryAction(motoHubText("Retry connection"), onCloseCompanionAppAndRetry)
                 }
                 if (showWifiSettingsAction) {
                     SecondaryAction("Open Wi-Fi settings", onOpenWifiSettings)
+                }
+                if (showHotspotSettingsAction) {
+                    SecondaryAction(
+                        motoHubText("Open hotspot settings"),
+                        onClick = { WifiGate.openHotspotSettings(context) }
+                    )
                 }
                 if (showAndroidAutoSetupHelp) {
                     Text(
@@ -812,6 +867,10 @@ private fun ActiveSessionContent(
     dimDisplayEnabled: Boolean,
     onDimDisplayChanged: (Boolean) -> Unit,
     onOpenAndroidAutoPreview: () -> Unit,
+    // Nullable rather than defaulted: the guide is a CORE-flavour screen, so the ADVANCED build
+    // genuinely has nowhere to send the rider, and a silently-defaulted no-op lambda would draw
+    // a button that does nothing instead of not drawing one.
+    onOpenAndroidAutoHelp: (() -> Unit)?,
     externalDisplayActive: Boolean = false,
     externalDisplayStreaming: Boolean = false,
     onStopExternalDisplay: () -> Unit = {},
@@ -835,16 +894,32 @@ private fun ActiveSessionContent(
     // Starting Google Android Auto can take several seconds and several attempts; the detail
     // says which one is running so the card is not a motionless "being prepared".
     val androidAutoStartupDetail by AndroidAutoRuntime.startupDetail.collectAsStateWithLifecycle()
-    val statusText = when {
-        androidAutoActive && ready -> "Navigation active on TFT"
-        externalDisplayActive && ready -> "Streaming to external display via USB"
-        ready -> "TFT is receiving your screen"
-        androidAutoActive -> androidAutoStartupDetail ?: "Session is being prepared"
-        else -> "Session is being prepared"
-    }
+    // A step the rider has to carry out by hand is not a status line, and the caption slot it
+    // used to share with "Asking Android Auto to project…" made it unreadable: small, grey, two
+    // wrapped lines under a title that reports nothing is wrong. Lift it into a card of its own.
+    val riderStep = androidAutoStartupDetail
+        ?.takeIf { androidAutoActive && !ready }
+        ?.let(AndroidAutoSelfModeHelp::riderStepOf)
+    // Through the catalogue, not around it: every branch here is a literal the rider reads, and
+    // tools/i18n/extract.py walks the whole when-expression inside a motoHubText() call. Left
+    // bare, these were the one part of this card that stayed English in seven languages. The
+    // startup-detail branch is a runtime string with no entry, and falls back to itself.
+    val statusText = motoHubText(
+        when {
+            androidAutoActive && ready -> "Navigation active on TFT"
+            externalDisplayActive && ready -> "Streaming to external display via USB"
+            ready -> "TFT is receiving your screen"
+            riderStep != null -> "Android Auto is waiting for one step from you"
+            androidAutoActive -> androidAutoStartupDetail ?: "Session is being prepared"
+            else -> "Session is being prepared"
+        }
+    )
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        ActiveSessionHero(ready, modeName, statusText, modeColor)
+        ActiveSessionHero(ready, modeName, statusText, modeColor, actionRequired = riderStep != null)
+        if (riderStep != null) {
+            RiderStepCard(riderStep, modeColor, onOpenAndroidAutoHelp)
+        }
         MonoLabel(motoHubText("SESSION ACTIONS"))
 
         if (androidAutoActive) {
@@ -865,14 +940,20 @@ private fun ActiveSessionContent(
         }
 
         StopAction(
-            text = "Stop streaming",
+            text = motoHubText("Stop streaming"),
             onClick = onStop
         )
     }
 }
 
 @Composable
-private fun ActiveSessionHero(ready: Boolean, modeName: String, statusText: String, accentColor: Color) {
+private fun ActiveSessionHero(
+    ready: Boolean,
+    modeName: String,
+    statusText: String,
+    accentColor: Color,
+    actionRequired: Boolean = false
+) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = MaterialTheme.shapes.large
@@ -898,13 +979,71 @@ private fun ActiveSessionHero(ready: Boolean, modeName: String, statusText: Stri
                 )
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                LivePill(if (ready) "LIVE ON TFT" else "PREPARING")
+                // "PREPARING" over a session that is in fact waiting on the rider reads as
+                // "sit still, it is working on it" - the exact wrong instruction.
+                if (actionRequired) {
+                    StatusPill(motoHubText("ACTION NEEDED"), accentColor)
+                } else {
+                    LivePill(if (ready) "LIVE ON TFT" else "PREPARING")
+                }
                 Text(modeName, style = MaterialTheme.typography.titleLarge)
                 Text(
                     statusText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (actionRequired) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
                 )
+            }
+        }
+    }
+}
+
+/**
+ * The one thing Android Auto needs from the rider, set to be read at arm's length on a bike.
+ *
+ * Deliberately not the hero's caption style: this is the only text on the screen that is an
+ * instruction rather than a report, so it gets the accent panel, full onSurface contrast, the
+ * thing to tap on its own line above the menu path it is buried in, and the way into the full
+ * guide for the rider who has never opened Android Auto's developer settings.
+ */
+@Composable
+private fun RiderStepCard(
+    step: AndroidAutoSelfModeHelp.RiderStep,
+    accentColor: Color,
+    onOpenHelp: (() -> Unit)?
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = accentColor.copy(alpha = 0.10f)),
+        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.45f)),
+        shape = MaterialTheme.shapes.large
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                motoHubText("DO THIS IN ANDROID AUTO"),
+                style = MaterialTheme.typography.labelMedium,
+                color = accentColor,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                step.action,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                step.where,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (onOpenHelp != null) {
+                SecondaryAction(motoHubText("Show me how"), onOpenHelp)
             }
         }
     }

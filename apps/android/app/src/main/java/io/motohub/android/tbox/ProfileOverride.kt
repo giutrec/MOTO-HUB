@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.tbox
 
 /**
@@ -12,7 +15,23 @@ package io.motohub.android.tbox
 enum class ProfileOverride(
     val key: String,
     val label: String,
-    val description: String
+    val description: String,
+    /**
+     * This entry exists to answer one open question about one dashboard, not to describe a
+     * motorcycle anybody owns.
+     *
+     * Carried on the entry rather than as a list somewhere in the UI because the list is what
+     * rots: the next experiment gets added here, the list is not updated, and it is offered to a
+     * rider as if it were their bike. A screen that suggests profiles has to be able to say
+     * "this one is a guess" without knowing which guesses exist.
+     */
+    val experimental: Boolean = false,
+    /**
+     * Whether this is something to put in front of a rider at all. Only the development
+     * simulator says no - it pairs with software running on a laptop, and picking it on a
+     * motorcycle can only fail.
+     */
+    val riderSelectable: Boolean = true
 ) {
     AUTO("auto", "Auto", "Detect from the motorcycle (recommended)"),
     GENERIC("generic", "Generic dashboard", "Neutral defaults for a dashboard that is not recognised"),
@@ -24,18 +43,30 @@ enum class ProfileOverride(
     CFDL26_NK_TOUCH("cfdl26_nk_touch", "800NK Advanced (CFDL26)", "Near-square touch panel, 720x712"),
     CFDL16_MOTOPLAY_LANDSCAPE("cfdl16_motoplay_landscape", "MotoPlay Landscape (CFDL16)", "modelId 66660742, Wi-Fi Direct, non-touch"),
     CL_C450("cl_c450", "CL-C450", "Near-square panel, 544x512"),
-    ZONTES_368G_TEST("zontes_368g_test", "Zontes 368G (test)", "Experiment for JCDZ dashes stuck on the QR page: indexed framing + 1s GOP"),
+    ZONTES_368G_TEST(
+        "zontes_368g_test",
+        "Zontes 368G (test)",
+        "Experiment for JCDZ dashes stuck on the QR page: indexed framing + 1s GOP",
+        experimental = true
+    ),
     ZONTES_368G_TEST_B(
         "zontes_368g_test_b",
         "Zontes 368G (test B)",
-        "Same experiment with plain framing instead: the dash's ext byte decides, plus a 1s GOP"
+        "Same experiment with plain framing instead: the dash's ext byte decides, plus a 1s GOP",
+        experimental = true
     ),
     VOGE_TEST(
         "voge_test",
         "Voge (test)",
-        "Experiment for Voge dashes that reboot mid-ride: 1s plain-IDR GOP instead of all-intra"
+        "Experiment for Voge dashes that reboot mid-ride: 1s plain-IDR GOP instead of all-intra",
+        experimental = true
     ),
     KOVE_800X("kove_800x", "KOVE 800X (ThinkerRide)", "BLE-paired ThinkerRide dash, 600x1024 portrait"),
+    KOVE_450_RALLY(
+        "kove_450_rally",
+        "KOVE 450 Rally (ThinkerRide)",
+        "Same BLE-paired ThinkerRide dash, 1280x640 landscape panel"
+    ),
     MORINI_XCAPE_1200(
         "morini_xcape_1200",
         "X-Cape 1200 (Yunmo)",
@@ -44,14 +75,21 @@ enum class ProfileOverride(
     MORINI_XCAPE_1200_MIRROR(
         "morini_xcape_1200_mirror",
         "X-Cape 1200 (mirror)",
-        "Same dash, asked for plain mirroring instead of the navigation display mode"
+        "Same dash, asked for plain mirroring instead of the navigation display mode",
+        experimental = true
     ),
     MORINI_XCAPE_1200_JPEG(
         "morini_xcape_1200_jpeg",
         "Moto Morini X-Cape 1200 (JPEG)",
-        "Sends still images instead of video, the way the bike's own app does. Try this if the dash stays black."
+        "Sends still images instead of video, the way the bike's own app does. Try this if the dash stays black.",
+        experimental = true
     ),
-    MOTO_HUB_SIMULATOR("moto_hub_simulator", "MOTO-HUB Simulator", "Development simulator profile");
+    MOTO_HUB_SIMULATOR(
+        "moto_hub_simulator",
+        "MOTO-HUB Simulator",
+        "Development simulator profile",
+        riderSelectable = false
+    );
 
     fun resolve(): TBoxModelProfile? = when (this) {
         AUTO -> null
@@ -68,6 +106,7 @@ enum class ProfileOverride(
         ZONTES_368G_TEST_B -> TBoxModelProfile.ZONTES_368G_TEST_B
         VOGE_TEST -> TBoxModelProfile.VOGE_TEST
         KOVE_800X -> TBoxModelProfile.KOVE_800X
+        KOVE_450_RALLY -> TBoxModelProfile.KOVE_450_RALLY
         MORINI_XCAPE_1200 -> TBoxModelProfile.MORINI_XCAPE_1200
         MORINI_XCAPE_1200_MIRROR -> TBoxModelProfile.MORINI_XCAPE_1200_MIRROR
         MORINI_XCAPE_1200_JPEG -> TBoxModelProfile.MORINI_XCAPE_1200_JPEG

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.tbox
 
 import java.net.Inet4Address
@@ -22,6 +25,37 @@ class TBoxLinkTest {
         link.disconnect()
 
         assertTrue("default behaviour must still release the group", released)
+    }
+
+    @Test
+    fun `disconnecting a hosted link releases whatever created it`() {
+        var released = false
+        val link = TBoxLink.PhoneHotspot(
+            subnet = TBoxHotspotScan.Subnet(
+                localAddress = InetAddress.getByName("192.168.43.1") as Inet4Address,
+                prefixLength = 24,
+                interfaceName = "ap0"
+            ),
+            release = { released = true }
+        )
+
+        link.disconnect()
+
+        assertTrue("a hotspot this app started must not outlive the session", released)
+    }
+
+    @Test
+    fun `a hotspot the rider turned on by hand survives a disconnect`() {
+        val link = TBoxLink.PhoneHotspot(
+            subnet = TBoxHotspotScan.Subnet(
+                localAddress = InetAddress.getByName("192.168.43.1") as Inet4Address,
+                prefixLength = 24,
+                interfaceName = "ap0"
+            )
+        )
+
+        // Nothing to assert but that it does not throw: there is nothing this app may take away.
+        link.disconnect()
     }
 
     @Test

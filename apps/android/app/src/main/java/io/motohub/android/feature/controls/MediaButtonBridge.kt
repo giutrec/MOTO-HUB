@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.feature.controls
 
 import io.motohub.android.i18n.motoHubText
@@ -28,7 +31,6 @@ import android.view.KeyEvent
 import androidx.core.content.ContextCompat
 import io.motohub.android.R
 import io.motohub.android.androidauto.AndroidAutoInputCodes
-import io.motohub.android.androidauto.AndroidAutoPreviewRuntime
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 
@@ -67,6 +69,12 @@ class MediaButtonBridge(
     private var pinnedVolume = -1
     private var previousVolume = -1
     private var pendingCapture = false
+    /** Set once the track appearance has been put on the AVRCP wire, so the keep-alive stops
+     *  re-announcing it every four seconds — see [publishMetadata]. */
+    private var appearancePublished = false
+    /** Same idea for the MediaStyle notification: re-posting an identical one every tick buys
+     *  nothing and is the other half of what [refreshPlayingAppearance] used to redo. */
+    private var notificationPosted = false
     @Volatile private var ignoreVolumeChanges = false
     /** Set at audio-focus loss, cleared once the reclaim has re-pinned the volume. The
      *  assistant's ducking moves the media stream in exactly that window (field log
@@ -142,8 +150,9 @@ class MediaButtonBridge(
             handler.postDelayed({
                 if (!captureActive || session == null) return@postDelayed
                 session?.isActive = true
-                publishMetadata()
-                postMediaNotification()
+                // Forced: the whole point of this path is a transition the AVRCP peer notices.
+                publishMetadata(force = true)
+                postMediaNotification(force = true)
                 if (usesVolumeGestures) pinVolume()
                 startKeepAlive()
                 log("[BTN] $targetName media focus re-asserted; handlebar input ready")
@@ -170,6 +179,27 @@ class MediaButtonBridge(
 
     /** Whether this phone should hold the media volume in order to read volume-key presses. */
     private var usesVolumeGestures = true
+
+    /** True only while the calibration wizard is on screen asking the rider for presses. */
+    private var calibrationCapturing = false
+
+    /**
+     * Opens and closes the window in which the volume pin is held unconditionally, so the wizard
+     * can actually see an AVRCP rocker - see the note in [volumeGesturesInUse].
+     *
+     * Opening it also forgets a previous "this dash has no rocker" observation: the rider is
+     * answering that question by hand right now, and the stored answer is checked ahead of the
+     * taught gestures - so without this, a volume gesture taught in the wizard would be thrown
+     * away again the moment the wizard closed.
+     */
+    fun setCalibrating(active: Boolean) {
+        handler.post {
+            if (calibrationCapturing == active) return@post
+            calibrationCapturing = active
+            if (active) HandlebarCalibration.clearVolumeRockerSilent(context)
+            refreshVolumeGestureUse()
+        }
+    }
 
     /**
      * Re-evaluates [usesVolumeGestures] against the current calibration, live. Computed only at
@@ -257,6 +287,58 @@ class MediaButtonBridge(
      * Only the adapter turning on is watched. A permission cannot be granted without leaving the
      * app, and coming back re-runs the session's own start path.
      */
+    /**
+     * Re-attempts a capture that was skipped for want of the Bluetooth grant.
+     *
+     * [awaitBluetooth] watches the ADAPTER, and a permission arriving is not an adapter event -
+     * nothing is broadcast when a rider answers a runtime dialog. Which is exactly the sequence
+     * the companion app's card now produces: it sends the rider to this app to grant the
+     * permission while a session is already running, and without this the handlebar would stay
+     * dead until the next session start, on the ride they granted it for.
+     */
+    private fun retryAfterBluetoothGrant() {
+        handler.post {
+            if (!pendingCapture || captureActive) return@post
+            if (!BluetoothStatus.canReceiveHandlebarKeys(context)) return@post
+            log("[BTN] Bluetooth is allowed now; starting handlebar capture")
+            enableCapture()
+        }
+    }
+
+    /**
+     * Re-applies the input protocol to a session already running.
+     *
+     * The mode is read at [enableCapture] and nowhere else, so a rider who switched protocol
+     * mid-session changed a preference and nothing else: the bridge kept decoding the old one
+     * until the next session start, with no way to tell from the outside. Support 0df154af
+     * switched AVRCP → HID → AVRCP inside eleven minutes while an Android Auto session ran, and
+     * the log shows all three switches and no consequence of any of them.
+     *
+     * The un-blocking case is the one that matters most. AVRCP capture with no Bluetooth grant
+     * ends in [awaitBluetooth], waiting for an adapter event that HID does not need and will
+     * never produce - so switching to HID has to retry the capture itself, or the rider's fix for
+     * the exact problem they were told about does nothing until they restart the session.
+     */
+    private fun inputModeChanged() {
+        handler.post {
+            val mode = HandlebarControlStore.inputMode(context)
+            if (!captureActive) {
+                if (!pendingCapture) return@post
+                // Skipped earlier for want of Bluetooth: only HID can proceed without it, and
+                // enableCapture re-checks the rest for itself.
+                if (mode != HandlebarInputMode.HID) return@post
+                log("[BTN] input protocol is HID now, which needs no Bluetooth grant; starting handlebar capture")
+                enableCapture()
+                return@post
+            }
+            log("[BTN] input protocol changed to ${mode.id} mid-session; re-applying it")
+            // HID takes its volume keys as ordinary key events, so the pin that AVRCP needs is
+            // wrong for it (and vice versa). This is the same live re-decision the calibration
+            // wizard triggers, for the same reason.
+            refreshVolumeGestureUse()
+        }
+    }
+
     private fun awaitBluetooth() {
         if (bluetoothWaitReceiver != null) return
         val receiver = object : BroadcastReceiver() {
@@ -321,6 +403,14 @@ class MediaButtonBridge(
         // be misread as a second press. AVRCP's pin-and-watch trick is only needed because
         // AVRCP volume changes never arrive as ordinary key events in the first place.
         if (HandlebarControlStore.inputMode(context) == HandlebarInputMode.HID) return false
+        // While the wizard is asking, the pin is taken whatever the stored answer says - because
+        // otherwise the answer can never change. An AVRCP volume rocker reaches the phone as a
+        // change in the stream level and NOTHING else, and [consumeVolumeChange] is the only
+        // code that reads that, and it only runs while the pin is held. So a rider whose stored
+        // calibration has no volume gesture could never teach one: every wizard step for the
+        // wheel looked dead, which is exactly what a CFMOTO 800MT-X rider saw before pressing
+        // Skip on all fifteen steps (field log 7c7e9e44, 2026-08-28).
+        if (calibrationCapturing) return true
         // An uncalibrated handlebar assumes a rocker, which is right for most dashboards and
         // wrong forever for the ones that never send one. The silence probe settles it without
         // asking the rider (see [scheduleVolumeSilenceProbe]).
@@ -357,9 +447,15 @@ class MediaButtonBridge(
         // the Accessibility Service and being dropped downstream for exactly this reason.
         val hidMode = HandlebarControlStore.inputMode(context) == HandlebarInputMode.HID
         if (!hidMode && !BluetoothStatus.canReceiveHandlebarKeys(context)) {
+            // The package name is not decoration. MOTO-HUB is two apps sharing one diagnostics
+            // log, and this line used to say "this app" in a file where two apps are talking:
+            // rider 315e0af3 sent seven reports carrying it, every one of them from CORE, while
+            // the companion app's own bridge printed "capture enabled" a few lines away. Naming
+            // the package is what turns the sentence into a diagnosis.
             log(
-                "[BTN] capture skipped: Bluetooth is off or unavailable to this app, so no " +
-                    "handlebar press can arrive - leaving the media volume and audio focus alone"
+                "[BTN] capture skipped: no usable Bluetooth for ${context.packageName} " +
+                    "(adapter off, or BLUETOOTH_CONNECT never granted to it), so no handlebar " +
+                    "press can arrive - leaving the media volume and audio focus alone"
             )
             awaitBluetooth()
             return
@@ -550,10 +646,23 @@ class MediaButtonBridge(
         }.onFailure { log("[BTN] reclaim failed: ${it.message}") }
     }
 
-    /** Keep metadata / PLAYING state / MediaStyle notification fresh so we stay the button target. */
+    /**
+     * Keep the session ACTIVE — and its MediaStyle notification up — so we stay the button target.
+     *
+     * The keep-alive calls this every [KEEP_ALIVE_MILLIS], so it must stay silent on the AVRCP
+     * wire: only a deliberate re-announcement re-publishes the track appearance, because every
+     * publish puts the dash's "now playing" card back on the rider's screen (see
+     * [publishMetadata]). `isActive` and the notification are local — the dash does not react
+     * to them — so those are safe to re-assert on every tick.
+     */
     private fun refreshPlayingAppearance(reason: String) {
         runCatching {
-            publishMetadata()
+            // The frequent reasons stay silent on the AVRCP wire: the keep-alive fires every
+            // four seconds, and a duck fires at every notification sound or navigation prompt.
+            // Only the rare, genuine transitions - focus regained, session reclaimed - are worth
+            // making the dash re-read the track, at the price of its "now playing" card.
+            val announce = reason != "keep-alive" && reason != "ducked"
+            publishMetadata(force = announce)
             session?.isActive = true
             postMediaNotification()
             if (reason != "keep-alive") log("[BTN] playing appearance refreshed ($reason)")
@@ -564,6 +673,8 @@ class MediaButtonBridge(
         if (!captureActive && focusRequest == null) return
         captureActive = false
         focusLossVolumeGuard = false
+        // The next capture has to announce itself to the dash from scratch.
+        appearancePublished = false
         selectDownAt = 0L
         repeatLatched.clear()
         trackDownAt.clear()
@@ -880,6 +991,10 @@ class MediaButtonBridge(
     }
 
     private fun dispatch(gesture: HandlebarGesture) {
+        // Before the capture gate: a handlebar press that arrives while capture is off is still a
+        // press the rider made, and not showing it is how "is this thing even listening" becomes
+        // an evening of guessing.
+        HandlebarPressHud.pressed(context, gesture.label)
         if (!captureActive) return
         // Published before anything consumes it, so the mapping screen shows what the
         // handlebar sent even when the gesture is unmapped or swallowed by the dashboard.
@@ -893,26 +1008,15 @@ class MediaButtonBridge(
             .getOrDefault(false)
         if (handledByTarget) {
             log("[BTN] ${gesture.label} -> $targetName")
+            HandlebarPressHud.performed(context, gesture.label, targetName)
             return
         }
         val action = HandlebarControlStore.action(context, gesture)
         log("[BTN] ${gesture.label} -> ${action.label}")
-        when (action) {
-            HandlebarAction.NONE -> Unit
-            HandlebarAction.SCROLL_FORWARD -> sendScroll(+1)
-            HandlebarAction.SCROLL_BACK -> sendScroll(-1)
-            HandlebarAction.DPAD_UP -> sendKey(AndroidAutoInputCodes.KEY_UP)
-            HandlebarAction.DPAD_DOWN -> sendKey(AndroidAutoInputCodes.KEY_DOWN)
-            HandlebarAction.DPAD_LEFT -> sendKey(AndroidAutoInputCodes.KEY_LEFT)
-            HandlebarAction.DPAD_RIGHT -> sendKey(AndroidAutoInputCodes.KEY_RIGHT)
-            HandlebarAction.SELECT -> sendKey(AndroidAutoInputCodes.KEY_ENTER)
-            HandlebarAction.BACK -> sendKey(AndroidAutoInputCodes.KEY_BACK)
-            HandlebarAction.HOME -> sendKey(AndroidAutoInputCodes.KEY_HOME)
-            HandlebarAction.ASSISTANT -> sendKey(AndroidAutoInputCodes.KEY_ASSISTANT)
-            HandlebarAction.NAV_1 -> navToSavedPlace(context, 0)
-            HandlebarAction.NAV_2 -> navToSavedPlace(context, 1)
-            HandlebarAction.NAV_3 -> navToSavedPlace(context, 2)
-        }
+        // On the picture as well as in the log: mid-ride nobody reads a log, and "did that do
+        // anything" is the question this whole screen keeps failing to answer.
+        HandlebarPressHud.performed(context, gesture.label, action.label)
+        HandlebarActionRunner.run(context, action, log)
     }
 
     /**
@@ -939,7 +1043,7 @@ class MediaButtonBridge(
         dpadKeyTarget(keyCode)?.let { target ->
             if (action == KeyEvent.ACTION_DOWN && repeatCount == 0) {
                 log("[BTN] HID D-pad ${KeyEvent.keyCodeToString(keyCode)} -> $targetName")
-                sendKey(target)
+                HandlebarActionRunner.sendKey(target, log)
             }
             return true
         }
@@ -970,27 +1074,6 @@ class MediaButtonBridge(
         }
     }
 
-    private fun navToSavedPlace(context: Context, slot: Int) {
-        val query = SavedPlaces.query(context, slot)
-        if (query.isBlank()) {
-            log("[BTN] saved place ${slot + 1} is not set — set it in Controls → Saved Places")
-            return
-        }
-        log("[BTN] launching navigation to saved place ${slot + 1}: $query")
-        NavLauncher.navigate(context, query, log)
-    }
-
-    private fun sendKey(keycode: Int) {
-        // Routes through AndroidAutoPreviewRuntime (not AaInputBridge directly) so this reaches
-        // Core's live AA session over AIDL when Android Auto is delegated there (PRO), not just
-        // a local AaInput sink that only exists when AA runs in-process (CORE).
-        if (!AndroidAutoPreviewRuntime.sendKey(keycode)) log("[BTN] Android Auto input is not ready; key=$keycode dropped")
-    }
-
-    private fun sendScroll(delta: Int) {
-        if (!AndroidAutoPreviewRuntime.sendScroll(delta)) log("[BTN] Android Auto input is not ready; scroll=$delta dropped")
-    }
-
     private val callback = object : MediaSession.Callback() {
         override fun onMediaButtonEvent(intent: Intent): Boolean {
             @Suppress("DEPRECATION")
@@ -1014,6 +1097,10 @@ class MediaButtonBridge(
                     if (captureActive) "" else " (capture inactive; ignored)"
             )
             if (!captureActive) return false
+            if (isSelfInjected(event.keyCode)) {
+                log("[BTN] ignoring ${KeyEvent.keyCodeToString(event.keyCode)} - this app dispatched it")
+                return true
+            }
             val handled = isSelectKey(event.keyCode) || event.keyCode == KeyEvent.KEYCODE_MEDIA_NEXT ||
                 event.keyCode == KeyEvent.KEYCODE_MEDIA_PREVIOUS ||
                 event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD ||
@@ -1272,7 +1359,27 @@ class MediaButtonBridge(
         silentTrack = null
     }
 
-    private fun publishMetadata() {
+    /**
+     * Publishes this session's track appearance — once.
+     *
+     * Neither the metadata nor the playback state ever changes: the title is a constant, the
+     * artist is derived from [targetName], which is fixed for the life of the bridge, and the
+     * state is always PLAYING. But `setMetadata`/`setPlaybackState` are not free even when the
+     * content is identical — each call makes the connected AVRCP peer emit a track-changed /
+     * play-status-changed notification, and a CFMOTO dash answers every one of those by putting
+     * its "now playing" card back on the screen, over whatever the rider was looking at. The
+     * keep-alive ticks every four seconds, so the rider got that popup fifteen times a minute
+     * for the whole ride (field report 2026-08-18).
+     *
+     * What actually keeps this session the AVRCP button target is staying ACTIVE and holding
+     * audio focus, which [refreshPlayingAppearance] and the keep-alive still do every tick.
+     * Re-sending unchanged metadata was never part of that.
+     *
+     * [force] is for the deliberate re-announcements — after a transport re-assert or a focus
+     * reclaim — where making the dash notice a transition IS the point.
+     */
+    private fun publishMetadata(force: Boolean = false) {
+        if (appearancePublished && !force) return
         session?.setMetadata(
             MediaMetadata.Builder()
                 .putString(MediaMetadata.METADATA_KEY_TITLE, "MOTO-HUB controls")
@@ -1286,9 +1393,11 @@ class MediaButtonBridge(
                 .setState(PlaybackState.STATE_PLAYING, 0, 1f)
                 .build()
         )
+        appearancePublished = true
     }
 
-    private fun postMediaNotification() {
+    private fun postMediaNotification(force: Boolean = false) {
+        if (notificationPosted && !force) return
         runCatching {
             val manager = context.getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(
@@ -1305,11 +1414,13 @@ class MediaButtonBridge(
                     .setVisibility(Notification.VISIBILITY_PUBLIC)
                     .build()
             )
+            notificationPosted = true
         }.onFailure { log("[BTN] media notification failed: ${it.message}") }
     }
 
     private fun cancelMediaNotification() {
         runCatching { context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID) }
+        notificationPosted = false
     }
 
     private fun mediaActions() = PlaybackState.ACTION_PLAY or
@@ -1366,9 +1477,56 @@ class MediaButtonBridge(
         fun dispatchHidKeyEvent(keyCode: Int, action: Int, repeatCount: Int): Boolean =
             bridges.values.any { it.onHidKeyEvent(keyCode, action, repeatCount) }
 
+        @Volatile private var selfInjectedKey = 0
+        @Volatile private var selfInjectedUntil = 0L
+
+        /**
+         * Announces a media key this app is about to dispatch itself.
+         *
+         * Android delivers a dispatched media key to the most recently active session, and during
+         * a handlebar capture that can be the fake one this class publishes for AVRCP - so a rider
+         * mapping "play/pause" to a controller button would have it come straight back and be read
+         * as a handlebar press. Announced here, ignored on arrival, for as long as a round trip
+         * plausibly takes.
+         */
+        fun noteSelfInjectedMediaKey(keyCode: Int) {
+            selfInjectedKey = keyCode
+            selfInjectedUntil = SystemClock.elapsedRealtime() + SELF_INJECTION_WINDOW_MILLIS
+        }
+
+        internal fun isSelfInjected(keyCode: Int): Boolean =
+            keyCode == selfInjectedKey && SystemClock.elapsedRealtime() < selfInjectedUntil
+
+        private const val SELF_INJECTION_WINDOW_MILLIS = 400L
+
         /** Calibration changed — every live bridge re-decides whether to hold the volume pin. */
         fun refreshVolumeGestureUse() {
             bridges.values.forEach { it.refreshVolumeGestureUse() }
+        }
+
+        /**
+         * The calibration wizard opened or closed. While it is open every live bridge holds the
+         * volume pin, so a rocker that only ever arrives as an absolute-volume change is
+         * readable by the very screen whose job is to learn it.
+         */
+        fun setCalibrating(active: Boolean) {
+            bridges.values.forEach { it.setCalibrating(active) }
+        }
+
+        /**
+         * Called when this app has just been granted BLUETOOTH_CONNECT, so a session already
+         * running picks the handlebar up without being restarted. See [retryAfterBluetoothGrant].
+         */
+        fun bluetoothPermissionGranted() {
+            bridges.values.forEach { it.retryAfterBluetoothGrant() }
+        }
+
+        /**
+         * The input protocol changed - here or pushed over the bridge by a companion app - and
+         * every live bridge re-applies it instead of running the old one until the next session.
+         */
+        fun inputModeChanged() {
+            bridges.values.forEach { it.inputModeChanged() }
         }
 
         /** Music volume from the live bridge or plain AudioManager (for the Controls slider). */

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.feature.settings
 
 import android.content.Context
@@ -160,6 +163,7 @@ object MotoHubSettings {
     private const val KEY_USE_DEMO_ROUTING_SERVER = "use_demo_routing_server"
     private const val KEY_SKIPPED_UPDATE_TAG = "skipped_update_tag"
     private const val KEY_AUTO_UPDATE_CHECKS = "auto_update_checks"
+    private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
     private const val KEY_LAST_AUTO_UPDATE_CHECK_AT = "last_auto_update_check_at_millis"
     private const val KEY_LAST_AUTO_UPDATE_CHECK_VERSION = "last_auto_update_check_version"
     private const val KEY_SAFETY_DISCLAIMER_ACKNOWLEDGED = "safety_disclaimer_acknowledged"
@@ -387,6 +391,21 @@ object MotoHubSettings {
 
     fun setAutoUpdateChecks(context: Context, enabled: Boolean) {
         preferences(context).edit().putBoolean(KEY_AUTO_UPDATE_CHECKS, enabled).apply()
+    }
+
+    /**
+     * Hold the phone's screen awake while a MOTO-HUB screen is in the foreground.
+     *
+     * No screen in this edition writes it, so it reads false and the diagnostics report says so -
+     * which is the truth about a CORE install rather than a gap in it. It lives here, and not
+     * behind an edition check at the one place that reads it, so the two copies of this shared
+     * file keep the same surface.
+     */
+    fun keepScreenOn(context: Context): Boolean =
+        preferences(context).getBoolean(KEY_KEEP_SCREEN_ON, false)
+
+    fun setKeepScreenOn(context: Context, enabled: Boolean) {
+        preferences(context).edit().putBoolean(KEY_KEEP_SCREEN_ON, enabled).apply()
     }
 
     /** Epoch millis of the last *automatic* update check; 0 if one has never run. */

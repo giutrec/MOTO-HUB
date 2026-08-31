@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.externaldisplay
 
 import android.app.Activity
@@ -18,6 +21,7 @@ import android.media.projection.MediaProjectionManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.os.PowerManager
 import android.os.ParcelFileDescriptor
 import androidx.core.app.NotificationCompat
@@ -25,6 +29,8 @@ import androidx.core.content.ContextCompat
 import io.motohub.android.R
 import io.motohub.android.encoding.AvcEncoder
 import io.motohub.android.encoding.EncoderProfile
+import io.motohub.android.i18n.motoHubText
+import io.motohub.android.session.FrameLogThrottle
 import io.motohub.android.session.ProjectionEventLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,6 +61,7 @@ class AoaExternalService : Service() {
     private var aoaFileDescriptor: ParcelFileDescriptor? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private val framesSent = AtomicLong(0)
+    private val frameLogThrottle = FrameLogThrottle()
     private val capturing = AtomicBoolean(false)
     @Volatile private var stopping = false
 
@@ -68,7 +75,7 @@ class AoaExternalService : Service() {
                 CHANNEL_ID,
                 getString(R.string.projection_channel_name),
                 NotificationManager.IMPORTANCE_DEFAULT
-            ).apply { description = "MOTO-HUB external display streaming" }
+            ).apply { description = motoHubText("MOTO-HUB external display streaming") }
         )
     }
 
@@ -164,12 +171,13 @@ class AoaExternalService : Service() {
                     try {
                         outputStream.write(accessUnit)
                         val count = framesSent.incrementAndGet()
-                        if (count == 1L || count % FRAME_LOG_INTERVAL == 0L) {
-                            ProjectionEventLog.record(
-                                "AOA_ENCODER",
-                                "AOA frames sent: $count."
-                            )
-                        }
+                        frameLogThrottle.rateSuffixIfDue(count, SystemClock.elapsedRealtime())
+                            ?.let { rate ->
+                                ProjectionEventLog.record(
+                                    "AOA_ENCODER",
+                                    "AOA frames sent: $count$rate."
+                                )
+                            }
                         true
                     } catch (e: IOException) {
                         serviceScope.launch {
@@ -333,11 +341,11 @@ class AoaExternalService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(getString(R.string.projection_notification_title))
-            .setContentText("Streaming to external display via USB")
+            .setContentText(motoHubText("Streaming to external display via USB"))
             .setOngoing(true)
             .addAction(
                 R.drawable.ic_notification,
-                "Stop external display",
+                motoHubText("Stop external display"),
                 serviceAction(ACTION_STOP, 0)
             )
             .build()
@@ -376,7 +384,6 @@ class AoaExternalService : Service() {
         private const val EXTERNAL_HEIGHT = 720
         private const val EXTERNAL_FRAMERATE = 30
         private const val EXTERNAL_BITRATE = 4_194_304
-        private const val FRAME_LOG_INTERVAL = 120L
 
         fun start(context: Context, resultCode: Int, resultData: Intent) {
             val intent = Intent(context, AoaExternalService::class.java)

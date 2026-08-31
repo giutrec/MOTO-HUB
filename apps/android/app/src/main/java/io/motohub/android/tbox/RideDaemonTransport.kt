@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.tbox
 
 import android.content.Context
@@ -15,6 +18,7 @@ import api.Api
 import api.MobileCallback
 import api.MobileSession
 import io.motohub.android.feature.settings.MotoHubSettings
+import io.motohub.android.session.MotorcycleProfile
 import io.motohub.android.session.ProjectionEventLog
 import java.io.InputStream
 import java.io.OutputStream
@@ -124,6 +128,17 @@ class RideDaemonTransport(
     private var activeSessionGeneration = 0L
     @Volatile
     private var protocolProfile: TBoxModelProfile = TBoxModelProfile.GENERIC
+    /**
+     * The motorcycle this transport is serving, when the caller knows it. Only [TBoxWireLadder]
+     * needs it - the ladder's memory is per motorcycle - and a caller that has none (the capability
+     * inspector, a test) simply gets the profile's own wire.
+     */
+    @Volatile
+    private var motorcycleProfile: MotorcycleProfile? = null
+    /** Elapsed-time mark for the running session, so its length can be judged when it ends. */
+    private val sessionStartedElapsed = AtomicLong(0L)
+    /** One ladder verdict per session, whoever ends it first. */
+    private val ladderVerdictFiled = AtomicBoolean(false)
     private val pxcEvents = AtomicLong(0L)
     private val mediaControlEvents = AtomicLong(0L)
     private val framesOffered = AtomicLong(0L)
@@ -148,9 +163,21 @@ class RideDaemonTransport(
     /** Distinct (source, command) pairs already dumped this session for opcode identification. */
     private val unknownCommandsLogged =
         java.util.concurrent.ConcurrentHashMap.newKeySet<Pair<Long, Long>>()
+    /** Keeps a dash's keepalive traffic from spending the whole log ring on itself. */
+    private val beatCollapser = ProtocolBeatCollapser()
 
-    override fun configureProtocolProfile(profile: TBoxModelProfile) {
+    override fun configureProtocolProfile(profile: TBoxModelProfile, motorcycle: MotorcycleProfile?) {
         protocolProfile = profile
+        motorcycleProfile = motorcycle
+    }
+
+    /**
+     * What this session should put on the wire: the profile's own settings when something
+     * recognised it, otherwise whichever rung [TBoxWireLadder] has reached for this motorcycle.
+     */
+    private fun wireConfigFor(profile: TBoxModelProfile): TBoxWireConfig {
+        val motorcycle = motorcycleProfile ?: return profile.wireConfig
+        return TBoxWireLadder.configFor(appContext, motorcycle, profile)
     }
 
     override suspend fun discover(link: TBoxLink, expectedModelId: String?): Result<TBoxHost> = withContext(Dispatchers.IO) {
@@ -161,6 +188,7 @@ class RideDaemonTransport(
             val host = discoverWithRetry(link, expectedModelId)
             val profile = protocolProfile.takeIf { it != TBoxModelProfile.GENERIC }
                 ?: TBoxModelProfile.resolve(expectedModelId, null)
+            val wire = wireConfigFor(profile)
             val mobileConfig = Api.newMobileConfig(
                 ByteArray(0),
                 30L,
@@ -170,12 +198,12 @@ class RideDaemonTransport(
                 3L
             ).apply {
                 setSupportFunction(profile.advertisedSupportFunction.toLong())
-                setProactivePxcHeartbeatEnabled(profile.requiresProactivePxcHeartbeat)
+                setProactivePxcHeartbeatEnabled(wire.requiresProactivePxcHeartbeat)
                 // Only a dashboard that no profile claims - or a framing experiment the rider
                 // pinned by hand - is allowed to renegotiate the video frame format from its
                 // own supportExtendProtocol byte. Every recognised unit keeps the indexed
                 // framing it already displays.
-                setPlainVideoFramingAllowed(profile.allowsPlainVideoFraming)
+                setPlainVideoFramingAllowed(wire.allowsPlainVideoFraming)
                 // The dash asks for wall-clock time over PXC and the daemon answers it,
                 // but only Android knows the zone: Go's local location on a device is
                 // UTC and carries no usable name. The id alone was not enough - it only
@@ -213,8 +241,9 @@ class RideDaemonTransport(
                 "RideDaemon live-only session configured for ${host.ipAddress}:${host.port}; " +
                     "package=${host.packageName}; profile=${profile.key}; " +
                     "supportFunction=${profile.advertisedSupportFunction}; " +
-                    "proactivePxcHeartbeat=${profile.requiresProactivePxcHeartbeat}; " +
-                    "plainVideoFramingAllowed=${profile.allowsPlainVideoFraming}; " +
+                    "wire=${wire.signature}; " +
+                    "proactivePxcHeartbeat=${wire.requiresProactivePxcHeartbeat}; " +
+                    "plainVideoFramingAllowed=${wire.allowsPlainVideoFraming}; " +
                     "timeZone=${java.util.TimeZone.getDefault().id}."
             )
             host
@@ -236,14 +265,21 @@ class RideDaemonTransport(
                 )
             }
             runCatching {
-                ensureReversePortsAvailable()
+                // ensureReversePortsAvailable() is the first thing each attempt does now, inside
+                // startWithNetworkSocket - the ports an attempt needs are the ones the previous
+                // attempt's native session has just released.
                 ProjectionEventLog.record(
                     "TBOX",
                     "Starting EasyConn handshake to ${host.ipAddress}:${host.port}; " +
-                        "waiting for the TFT video area."
+                        "waiting for the TFT video area. This dash has " +
+                        "${RIDE_DAEMON_STARTUP_TIMEOUT_SEC}s to answer before the native session " +
+                        "gives up - the wait a rider sees here is that one, not any shorter " +
+                        "timeout named on the calling side."
                 )
                 startWithNetworkSocket(activeSession, host, activeLink)
                 ProjectionEventLog.record("TBOX", "RideDaemon startSessionWithSocketFd returned successfully.")
+                sessionStartedElapsed.set(SystemClock.elapsedRealtime())
+                ladderVerdictFiled.set(false)
                 armPxcWatchdog(activeSessionGeneration)
             }.onFailure {
                 // The native call may already have opened 10920/10921/10922 before it
@@ -260,7 +296,7 @@ class RideDaemonTransport(
      * Waits for the phone-side EasyConn listeners before handing them to the native session.
      *
      * Failing on the first probe made a routine hand-off look like a hard conflict: a rider log
-     * showed the ports still held 10s after MOTO-HUB asked the official CFMOTO app to stop, the
+     * showed the ports still held 10s after MOTO-HUB asked the OEM companion app to stop, the
      * Android Auto hand-off aborted with EADDRINUSE, and the very next manual attempt ~20s later
      * connected normally. killBackgroundProcesses() cannot touch a foreground service and the
      * kernel releases the sockets asynchronously either way, so the only correct behaviour is to
@@ -285,7 +321,8 @@ class RideDaemonTransport(
             throw IllegalStateException(
                 "Another EasyConn session still holds local reverse ports " +
                     "${busy.joinToString()} after ${REVERSE_PORT_WAIT_MS}ms " +
-                    "(address already in use). Force-stop the official CFMOTO app and retry."
+                    "(address already in use). Force-stop your motorcycle's own companion app " +
+                    "and retry."
             )
         }
         ProjectionEventLog.record("TBOX", "Local reverse ports 10920-10922 were released; continuing.")
@@ -397,6 +434,10 @@ class RideDaemonTransport(
         }
         if (sessionToStop != null) {
             ProjectionEventLog.record("TBOX", "Stopping RideDaemon session. ${protocolSnapshot()}")
+            // A ride the rider ended is the ladder's best evidence: it is the only way a rung
+            // that works reaches TBoxSessionOutcome.STREAMED, because a dashboard that is happy
+            // never stops anything. Ending it ourselves is not held against the wire.
+            fileLadderVerdict(endedByDashboard = false)
         }
         sessionToStop?.runCatching { stopSession() }
             ?.onFailure { ProjectionEventLog.warning("TBOX", "RideDaemon stopSession failed.", it) }
@@ -448,14 +489,32 @@ class RideDaemonTransport(
         return refreshed
     }
 
-    /** Opens the EasyConn command socket over the established T-Box link. */
+    /**
+     * Opens the EasyConn command socket over the established T-Box link and hands it to the
+     * native session - both inside the retry, because both are what the retry was written for.
+     *
+     * The native handshake used to sit OUTSIDE this loop, so "EasyConn attempt 1/3" counted TCP
+     * connects and nothing else. [isTransientEasyConnFailure] gives that away: `context deadline
+     * exceeded`, `unsuccessful ec response`, `failed to decode response`, `initialize easyconn
+     * stream` are Go handshake errors, and not one of them could ever reach the classifier -
+     * `socket.connect` only ever throws `IOException`, which the chain check catches on its own.
+     * A handshake that failed fast was therefore never retried, and the log said 1/3 while
+     * promising three of something else.
+     *
+     * A handshake that fails SLOW still must not be retried here, and
+     * [EC_HANDSHAKE_TOTAL_BUDGET_MS] is what stops it: one attempt that burns the entire native
+     * startup budget is a dash that is not answering at all, and re-dialling it on the same
+     * session would only double the rider's wait. That case belongs to the caller's
+     * re-discover-and-retry, which is a genuinely different attempt - fresh discovery, fresh
+     * native session - not a louder version of this one.
+     */
     private suspend fun startWithNetworkSocket(
         activeSession: MobileSession,
         host: TBoxHost,
         link: TBoxLink
     ) {
-        val policy = EasyConnRetryPolicy()
-        val connectedSocket = retryEasyConnStart(
+        val policy = EasyConnRetryPolicy(totalBudgetMillis = EC_HANDSHAKE_TOTAL_BUDGET_MS)
+        val startedOnAttempt = retryEasyConnStart(
             policy = policy,
             shouldRetry = ::isTransientEasyConnFailure,
             onRetry = { failedAttempt, delayMillis, failure ->
@@ -464,9 +523,34 @@ class RideDaemonTransport(
                     "EasyConn attempt $failedAttempt/${policy.maxAttempts} failed: " +
                         "${failure.message.orEmpty()}. Retrying in ${delayMillis}ms."
                 )
-            }
+                // The failed attempt may already have opened 10920/10921/10922. Without this the
+                // next one meets "already running", which this policy reads as permanent - the
+                // retry would end on an error that says nothing about the dash.
+                activeSession.runCatching { stopSession() }
+                    .onFailure { stopFailure ->
+                        ProjectionEventLog.warning(
+                            "TBOX",
+                            "Failed to clean up the native session before the next EasyConn attempt.",
+                            stopFailure
+                        )
+                    }
+            },
+            onBudgetSpent = { failedAttempt, spentMillis, _ ->
+                ProjectionEventLog.warning(
+                    "TBOX",
+                    "EasyConn attempt $failedAttempt/${policy.maxAttempts} used ${spentMillis}ms of " +
+                        "the ${EC_HANDSHAKE_TOTAL_BUDGET_MS}ms this handshake is allowed, so there " +
+                        "is no time for another one here. A dash that stays silent for the whole " +
+                        "${RIDE_DAEMON_STARTUP_TIMEOUT_SEC}s startup budget needs a fresh session, " +
+                        "not another dial on this one."
+                )
+            },
+            elapsedMillis = SystemClock::elapsedRealtime
         ) { attempt ->
             kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            // Re-checked per attempt now that a whole handshake precedes the next one: the ports
+            // this attempt needs are the ones the previous attempt's native session just gave back.
+            ensureReversePortsAvailable()
             val attemptLink = linkForThisAttempt(link)
             ProjectionEventLog.debug(
                 "TBOX",
@@ -477,26 +561,28 @@ class RideDaemonTransport(
             try {
                 socket.connect(InetSocketAddress(host.ipAddress, host.port), EC_CONNECT_TIMEOUT_MS)
                 ProjectionEventLog.record("TBOX", "EasyConn TCP command socket connected.")
-                socket to attempt
+                socket.use { connected ->
+                    ParcelFileDescriptor.fromSocket(connected).use { descriptor ->
+                        val fd = descriptor.detachFd().toLong()
+                        // ParcelFileDescriptor duplicates the socket descriptor. Go owns and
+                        // closes the detached duplicate; the outer use{} closes the original
+                        // Java socket.
+                        activeSession.startSessionWithSocketFd(fd)
+                    }
+                }
+                attempt
             } catch (failure: Throwable) {
-                socket.close()
+                // Socket.close() is idempotent, so the use{} above having already closed it is fine.
+                runCatching { socket.close() }
                 throw failure
             }
         }
-        if (connectedSocket.second > 1) {
+        if (startedOnAttempt > 1) {
             ProjectionEventLog.record(
                 "TBOX",
-                "EasyConn TCP connection recovered on attempt " +
-                    "${connectedSocket.second}/${policy.maxAttempts}."
+                "EasyConn handshake recovered on attempt " +
+                    "$startedOnAttempt/${policy.maxAttempts}."
             )
-        }
-        connectedSocket.first.use { socket ->
-            ParcelFileDescriptor.fromSocket(socket).use { descriptor ->
-                val fd = descriptor.detachFd().toLong()
-                // ParcelFileDescriptor duplicates the socket descriptor. Go owns and closes the
-                // detached duplicate; the outer use{} closes the original Java socket.
-                activeSession.startSessionWithSocketFd(fd)
-            }
         }
     }
 
@@ -572,9 +658,9 @@ class RideDaemonTransport(
         }
         throw IllegalStateException(
             "The EasyConn service was not advertised in $DISCOVERY_MAX_ATTEMPTS discovery windows of " +
-                "${DISCOVERY_TIMEOUT_MS / 1000}s each. This can happen when the official CFMOTO app is " +
-                "already connected to the motorcycle, or when the T-Box is still starting up after " +
-                "Wi-Fi association."
+                "${DISCOVERY_TIMEOUT_MS / 1000}s each. This can happen when your motorcycle's own " +
+                "companion app is already connected to it, or when the T-Box is still starting up " +
+                "after Wi-Fi association."
         )
     }
 
@@ -664,10 +750,40 @@ class RideDaemonTransport(
      */
     private suspend fun probeHostedSubnet(link: TBoxLink.PhoneHotspot): Pair<Inet4Address, String>? =
         withContext(Dispatchers.IO) {
-            val candidates = TBoxHotspotScan.candidateHosts(link.subnet)
+            // A dash that reported its own address is not a candidate among 253, it is THE
+            // candidate; probing it first turns a sweep into one connect. It still only leads the
+            // list rather than replacing it, because a lease can change and the address the dash
+            // announced a minute ago may no longer be the one it holds.
+            val announced = link.peerHint
+            val candidates = listOfNotNull(announced) +
+                TBoxHotspotScan.candidateHosts(link.subnet).filterNot { it == announced }
             val reachable = mutableListOf<Inet4Address>()
-            for (candidate in candidates) {
+            // A sweep that announces its own length is a sweep a truncated log can still be read
+            // against. The 2026-08-23 QJ log stopped 44 seconds into this loop - the rider closed
+            // the app - and carried no line between "sweeping" and nothing at all, so it could not
+            // even be said how far it had got or whether it had been given time to finish.
+            val sweepStartedAtMs = SystemClock.elapsedRealtime()
+            ProjectionEventLog.record(
+                "DISCOVERY",
+                "Hosted-network sweep: ${candidates.size} addresses to try on port " +
+                    "$WAKE_PROBE_PORT, up to " +
+                    "${candidates.size * HOSTED_SWEEP_CONNECT_TIMEOUT_MS / 1000}s if every one of " +
+                    "them stays silent. Leaving MOTO-HUB now ends it."
+            )
+            for ((index, candidate) in candidates.withIndex()) {
                 kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                if (index > 0 && index % HOSTED_SWEEP_PROGRESS_STRIDE == 0) {
+                    ProjectionEventLog.record(
+                        "DISCOVERY",
+                        "Hosted-network sweep: $index of ${candidates.size} addresses tried in " +
+                            "${SystemClock.elapsedRealtime() - sweepStartedAtMs}ms, " +
+                            if (reachable.isEmpty()) {
+                                "none answering so far."
+                            } else {
+                                "${reachable.size} answering so far."
+                            }
+                    )
+                }
                 val open = runCatching {
                     link.createSocket().use { socket ->
                         socket.connect(
@@ -708,12 +824,22 @@ class RideDaemonTransport(
                 "DISCOVERY",
                 if (reachable.isEmpty()) {
                     "Hosted-network sweep: nothing answered $WAKE_PROBE_PORT on " +
-                        "${candidates.size} addresses. Either the dash has not joined the hotspot " +
-                        "yet, or it speaks on a port MOTO-HUB does not know."
+                        "${candidates.size} addresses in " +
+                        "${SystemClock.elapsedRealtime() - sweepStartedAtMs}ms. Either the dash " +
+                        "has not joined the hotspot yet, or it speaks on a port MOTO-HUB does " +
+                        "not know."
                 } else {
                     "Hosted-network sweep: ${reachable.joinToString { it.hostAddress.orEmpty() }} " +
                         "accepted $WAKE_PROBE_PORT but none completed the EasyConn handshake."
                 }
+            )
+            // Which of those two it was is decided by whether anything is on the subnet at all,
+            // so the neighbour table is read again here rather than only at link time: a dash
+            // that joins slowly is not on it when the hotspot comes up and is by the time the
+            // sweep gives up.
+            ProjectionEventLog.record(
+                "DISCOVERY",
+                TBoxHotspotScan.describeNeighbours(link.subnet.interfaceName)
             )
             null
         }
@@ -1003,11 +1129,30 @@ class RideDaemonTransport(
                         releaseSlot()
                         return
                     }
-                    val packageName = decodeEasyConnPackage(attributes[PACKAGE_ATTRIBUTE])
-                    if (packageName == null) {
+                    // A Zontes 125X (modelId 21340, field log 2026-08-19) advertises
+                    // _EasyConn._tcp with a usable host and port but no packagename in its TXT
+                    // record. Rejecting the resolution over that one missing key threw away an
+                    // endpoint that was otherwise complete - and the reject did not release the
+                    // resolution slot, so the same candidate went on blocking every later one
+                    // until the window expired. Discovery then reported "never advertised" for a
+                    // dash it had just resolved four times, on a bike whose wake probe was being
+                    // acknowledged the whole time.
+                    //
+                    // The name is not ours to learn from the advertisement anyway: it travels
+                    // back to the dash in the EC init command, which is precisely what the wake
+                    // probe negotiates. So the probe's ladder answers it - the identity already
+                    // acknowledged on this device if one has been, the leading candidate
+                    // otherwise, which is the same value the Wi-Fi Direct path records where TXT
+                    // metadata does not exist at all.
+                    val advertisedPackage = decodeEasyConnPackage(attributes[PACKAGE_ATTRIBUTE])
+                    val packageName = advertisedPackage ?: EasyConnClientIdentity.probeOrder().first()
+                    if (advertisedPackage == null) {
                         Log.w(TAG, "EasyConn service resolved without package metadata")
-                        ProjectionEventLog.warning("DISCOVERY", "Resolved EasyConn service has no package metadata.")
-                        return
+                        ProjectionEventLog.warning(
+                            "DISCOVERY",
+                            "Resolved EasyConn service has no package metadata; continuing with " +
+                                "the probe identity \"$packageName\"."
+                        )
                     }
 
                     val advertisedIp = attributes[IP_ATTRIBUTE]
@@ -1239,13 +1384,20 @@ class RideDaemonTransport(
             }
             if (type == PXC_EVENT_SOURCE || type == MEDIA_CONTROL_EVENT_SOURCE) {
                 val commandName = protocolCommandName(type, command)
+                // A dash's keepalive beats are folded into one line a minute (see
+                // ProtocolBeatCollapser); everything else is written as it arrives, after any
+                // open run of beats has been reported.
+                val decision = beatCollapser.onEvent(type, commandName, payload?.size ?: 0, now)
+                decision.rollup?.let { ProjectionEventLog.debug("TBOX", it) }
                 // Lambda form: this is the single highest-volume log line in the app (one per
                 // protocol event, and a drag on the TFT is a stream of them), so the string is
                 // not built at all when logging is off.
-                ProjectionEventLog.debug("TBOX") {
-                    "${protocolSourceName(type)} RX #$sequence command=" +
-                        "0x${command.toString(16)} ($commandName) " +
-                        "bytes=${payload?.size ?: 0}."
+                if (decision is BeatDecision.Write) {
+                    ProjectionEventLog.debug("TBOX") {
+                        "${protocolSourceName(type)} RX #$sequence command=" +
+                            "0x${command.toString(16)} ($commandName) " +
+                            "bytes=${payload?.size ?: 0}."
+                    }
                 }
                 // Any control message that carries a body is worth dumping, named or not.
                 // This used to fire only on UNKNOWN opcodes, which tied the evidence to the
@@ -1278,11 +1430,6 @@ class RideDaemonTransport(
                                 "($commandName) first seen; payload=${preview.toDiagnosticHex()}$truncated."
                         )
                     }
-                }
-            }
-            if (type == PXC_EVENT_SOURCE) {
-                ProjectionEventLog.debug("TBOX") {
-                    "PXC event received: command=$command, bytes=${payload?.size ?: 0}."
                 }
             }
             if (type == PXC_EVENT_SOURCE && command == PXC_HUD_CONFIG_COMMAND) {
@@ -1364,6 +1511,17 @@ class RideDaemonTransport(
                             "Profile scores: ${TBoxModelProfile.scoreBreakdown(capabilities)}."
                         )
                     }
+                    motorcycleProfile?.let { motorcycle ->
+                        // Kept HERE, not only in the session services that observe this event:
+                        // when the companion app drives the session over the AIDL bridge none of
+                        // them is running, and CLIENT_INFO - the only thing that can identify a
+                        // dash whose QR carries no model id - was decoded and then dropped by
+                        // both processes. This is where it arrives, so this is where it is kept;
+                        // the observers' own write becomes a harmless second copy of the same
+                        // snapshot.
+                        TBoxCapabilityStore(appContext).recordCapabilities(motorcycle, capabilities)
+                        TBoxWireLadder.onDashboardIdentified(appContext, motorcycle, capabilities)
+                    }
                     mutableEvents.tryEmit(TBoxEvent.Capabilities(capabilities))
                 }
                 return
@@ -1424,6 +1582,7 @@ class RideDaemonTransport(
                 "TBOX",
                 "RideDaemon reported that the T-Box session stopped. ${protocolSnapshot()}"
             )
+            fileLadderVerdict(endedByDashboard = true)
             mutableEvents.tryEmit(TBoxEvent.Stopped)
         }
 
@@ -1528,6 +1687,46 @@ class RideDaemonTransport(
         pxcStallReported.set(false)
         pxcQuietDashReported.set(false)
         unknownCommandsLogged.clear()
+        // The tally belongs to the session that produced it: reported before it is dropped, so a
+        // log does not end on beats that were counted and never mentioned, and so the next
+        // session writes each beat command's first occurrence again rather than folding it into
+        // a run the previous dash opened.
+        beatCollapser.close(SystemClock.elapsedRealtime())
+            ?.let { ProjectionEventLog.debug("TBOX", it) }
+        beatCollapser.reset()
+    }
+
+    /**
+     * Hands a finished session to [TBoxWireLadder], exactly once. Both ends of a session race to
+     * report it - the dashboard's own close callback and our teardown - and the second one through
+     * must not count as a second attempt.
+     */
+    private fun fileLadderVerdict(endedByDashboard: Boolean) {
+        val motorcycle = motorcycleProfile ?: return
+        val startedAt = sessionStartedElapsed.get()
+        if (startedAt <= 0L) return
+        if (!ladderVerdictFiled.compareAndSet(false, true)) return
+        // Only Android Auto runs the format the ladder chose. Ride Dashboard sends its own, so a
+        // mirroring session would otherwise promote or condemn a rung that never reached the wire
+        // - a rider testing through the Ride Dashboard would have silently ended the search on a
+        // format nobody tried.
+        if (!TBoxSessionRegistry.everClaimed(ANDROID_AUTO_CONSUMER)) {
+            TBoxWireLadder.onSessionIgnored(appContext, motorcycle, protocolProfile)
+            return
+        }
+        TBoxWireLadder.onSessionFinished(
+            context = appContext,
+            motorcycle = motorcycle,
+            modelProfile = protocolProfile,
+            facts = TBoxSessionFacts(
+                durationMillis = (SystemClock.elapsedRealtime() - startedAt).coerceAtLeast(0L),
+                mediaControlEvents = mediaControlEvents.get(),
+                framesOffered = framesOffered.get(),
+                frameTimeouts = framesTimedOut.get(),
+                frameRejections = framesRejected.get(),
+                endedByDashboard = endedByDashboard
+            )
+        )
     }
 
     private fun protocolSnapshot(): String {
@@ -1544,6 +1743,8 @@ class RideDaemonTransport(
     }
 
     private companion object {
+        /** AndroidAutoSessionService's own consumer name in TBoxSessionRegistry. */
+        const val ANDROID_AUTO_CONSUMER = "android-auto"
         const val TAG = "RideDaemonTransport"
         const val SERVICE_TYPE = "_EasyConn._tcp."
         const val PACKAGE_ATTRIBUTE = "packagename"
@@ -1554,6 +1755,18 @@ class RideDaemonTransport(
         const val DISCOVERY_MAX_ATTEMPTS = 2
         const val DISCOVERY_RETRY_DELAY_MS = 500L
         const val EC_CONNECT_TIMEOUT_MS = 10_000
+
+        /**
+         * Wall clock the whole EasyConn handshake gets, retries included.
+         *
+         * Derived, not picked: one attempt that has already spent the entire native startup
+         * budget leaves, by definition, nothing for a second. That keeps every cheap failure
+         * retried exactly as before - three `connection refused` attempts cost ~2s, three
+         * connect timeouts ~22s, both comfortably inside - while a dash that simply says nothing
+         * fails once here, in the same 25s it always took, and is handed to the caller's
+         * re-discover-and-retry instead of being dialled again on a session it never answered.
+         */
+        const val EC_HANDSHAKE_TOTAL_BUDGET_MS = RIDE_DAEMON_STARTUP_TIMEOUT_SEC * 1_000L
         // Wake-probe fallback (see sendEasyConnWakeProbe): well-known port and frame layout
         // reverse-engineered by OpenCfMoto/OpenMoto, not part of the advertised EasyConn contract.
         const val WAKE_PROBE_PORT = 10930
@@ -1570,6 +1783,9 @@ class RideDaemonTransport(
         // short. Everything on it is one Wi-Fi hop away with no router in between, so a dash that
         // is going to answer answers well inside this; the budget is for the silent addresses.
         const val HOSTED_SWEEP_CONNECT_TIMEOUT_MS = 250
+        // Roughly every six seconds of a silent sweep, so a log that ends mid-sweep still says
+        // how far it got, and one that ran to the end shows it moving rather than hung.
+        const val HOSTED_SWEEP_PROGRESS_STRIDE = 24
         const val WAKE_PROBE_HEADER_SIZE = 16
         const val CMD_MDNS_RESPOND = 0x70000010
         const val CMD_MDNS_RESPOND_ACK = 0x70000011
@@ -1675,6 +1891,103 @@ internal fun isStreamingPxcBeat(
     lastFrameOfferedElapsed > 0L &&
         previousPxcEventElapsed > 0L &&
         now - previousPxcEventElapsed >= PXC_STREAMING_BEAT_MIN_GAP_MS
+
+/**
+ * The empty control-plane messages a dash repeats for as long as the link is up: its heartbeat
+ * and whichever keepalive dialect it speaks (see the opcode names in PXC_COMMAND_NAMES). Matched
+ * by name so this list stays readable, and so an opcode nobody has named yet is never folded -
+ * an UNKNOWN arriving every two seconds is a finding, not noise.
+ *
+ * Commands that carry a body are absent on purpose, touch included: a drag is bounded by the
+ * rider's finger, while these run for the whole ride.
+ */
+internal val PROTOCOL_BEAT_COMMAND_NAMES = setOf(
+    "HEARTBEAT",
+    "HEARTBEAT_ACK",
+    "CLOCK_KEEPALIVE",
+    "CLOCK_KEEPALIVE_ACK",
+    "PERIODIC_NOTIFY",
+    "PERIODIC_NOTIFY_ALT",
+    "PING"
+)
+
+/** How long a run of folded beats may stay unreported. */
+internal const val PROTOCOL_BEAT_ROLLUP_INTERVAL_MS = 60_000L
+
+internal sealed interface BeatDecision {
+    /** The line that reports a run of beats ending here, if one did; written before the event. */
+    val rollup: String?
+
+    /** Write this event's own line. */
+    data class Write(override val rollup: String?) : BeatDecision
+
+    /** Counted into the open run instead of written. */
+    data class Fold(override val rollup: String?) : BeatDecision
+}
+
+/**
+ * Folds a dash's repeating keepalive traffic into one line a minute.
+ *
+ * [RepeatCollapser] already folds consecutive identical lines, and cannot help here: these beats
+ * interleave (HEARTBEAT_ACK, PERIODIC_NOTIFY, PERIODIC_NOTIFY_ALT, round again) and each line
+ * carries its own sequence number, so no two in a row are ever equal. The result is a log that
+ * holds only its last few minutes - a VOGE rider's report (support 0df154af, 2026-08-27) spent
+ * all 1500 CORE entries on 8 minutes of beats, and the handlebar presses he was reporting had
+ * long since fallen out of the ring. Every rider with logging on has this, verbose or not: these
+ * lines are gated on the master switch alone.
+ *
+ * The first occurrence of each beat command is always written, so "did this dash ever send X"
+ * stays answerable from the log; the rest become a tally. A run is closed - and its line
+ * emitted - either when the interval elapses or when any other event arrives, so a rollup never
+ * separates an event from the traffic that preceded it.
+ *
+ * Free of Android types so the rule can be unit tested, and synchronized because the transport
+ * callback that drives it is not documented to be single-threaded (a field log shows PXC events
+ * arriving out of sequence order).
+ */
+internal class ProtocolBeatCollapser(
+    private val rollupIntervalMillis: Long = PROTOCOL_BEAT_ROLLUP_INTERVAL_MS
+) {
+    private val lock = Any()
+    private val writtenOnce = mutableSetOf<Pair<Long, String>>()
+    private val folded = LinkedHashMap<String, Int>()
+    private var runStartedAt = 0L
+
+    fun onEvent(type: Long, commandName: String, payloadSize: Int, now: Long): BeatDecision =
+        synchronized(lock) {
+            val isBeat = payloadSize == 0 && commandName in PROTOCOL_BEAT_COMMAND_NAMES
+            if (!isBeat || writtenOnce.add(type to commandName)) {
+                return BeatDecision.Write(closeRun(now))
+            }
+            if (runStartedAt == 0L) runStartedAt = now
+            folded[commandName] = (folded[commandName] ?: 0) + 1
+            val elapsed = now - runStartedAt
+            return BeatDecision.Fold(if (elapsed >= rollupIntervalMillis) closeRun(now) else null)
+        }
+
+    /** Ends the open run, for a teardown that would otherwise drop its tally unreported. */
+    fun close(now: Long): String? = synchronized(lock) { closeRun(now) }
+
+    fun reset() = synchronized(lock) {
+        writtenOnce.clear()
+        folded.clear()
+        runStartedAt = 0L
+    }
+
+    private fun closeRun(now: Long): String? {
+        if (folded.isEmpty()) {
+            runStartedAt = 0L
+            return null
+        }
+        val seconds = ((now - runStartedAt).coerceAtLeast(0L) + 500L) / 1000L
+        val total = folded.values.sum()
+        val breakdown = folded.entries.joinToString(", ") { "${it.key} ×${it.value}" }
+        folded.clear()
+        runStartedAt = 0L
+        return "$total keepalive beat${if (total == 1) "" else "s"} folded over ${seconds}s: " +
+            "$breakdown. Each was empty and identical to the first of its kind, logged above."
+    }
+}
 
 internal fun decodeEasyConnPackage(value: ByteArray?): String? = value
     ?.toString(Charsets.UTF_8)

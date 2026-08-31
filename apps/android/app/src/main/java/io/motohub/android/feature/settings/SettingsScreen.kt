@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.feature.settings
 
 import io.motohub.android.i18n.motoHubText
@@ -51,12 +54,14 @@ import io.motohub.android.feature.controls.HandlebarHidCaptureService
 import io.motohub.android.feature.controls.HandlebarInputMode
 import io.motohub.android.feature.controls.HandlebarMappingScreen
 import io.motohub.android.feature.controls.MediaButtonBridge
+import io.motohub.android.feature.diagnostics.report.SupportIdSection
 import io.motohub.android.session.ProjectionEventLog
 import io.motohub.android.ui.components.MonoLabel
 import io.motohub.android.ui.components.MotoHubActionRow
 import io.motohub.android.ui.components.MotoHubCardGroup
 import io.motohub.android.ui.components.MotoHubDetailScreen
 import io.motohub.android.ui.components.MotoHubRadioRow
+import io.motohub.android.feature.controls.HandlebarPressHud
 import io.motohub.android.ui.components.ToggleRow
 
 private enum class SettingsDetail {
@@ -67,6 +72,8 @@ private enum class SettingsDetail {
 @Composable
 fun SettingsTabContent(
     onOpenNetworkDiagnostics: () -> Unit,
+    onOpenClockLab: () -> Unit,
+    onOpenBleExplorer: () -> Unit,
     onOpenApplicationLogs: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenAndroidAutoHelp: () -> Unit,
@@ -132,6 +139,8 @@ fun SettingsTabContent(
             SettingsDetail.DIAGNOSTICS -> DiagnosticsDetail(
                 onBack = { detail = null },
                 onOpenNetworkDiagnostics = onOpenNetworkDiagnostics,
+                onOpenClockLab = onOpenClockLab,
+                onOpenBleExplorer = onOpenBleExplorer,
                 onOpenApplicationLogs = onOpenApplicationLogs
             )
         }
@@ -512,18 +521,32 @@ private fun AutomationDetail(onBack: () -> Unit) {
 private fun DiagnosticsDetail(
     onBack: () -> Unit,
     onOpenNetworkDiagnostics: () -> Unit,
+    onOpenClockLab: () -> Unit,
+    onOpenBleExplorer: () -> Unit,
     onOpenApplicationLogs: () -> Unit
 ) {
     val context = LocalContext.current
     var loggingEnabled by remember { mutableStateOf(MotoHubSettings.loggingEnabled(context)) }
     var verboseLogging by remember { mutableStateOf(MotoHubSettings.verboseTBoxLogging(context)) }
+    var pressBanner by remember { mutableStateOf(HandlebarPressHud.isEnabled(context)) }
 
     MotoHubDetailScreen(title = motoHubText("Diagnostics"), backLabel = motoHubText("‹ Settings"), onBack = onBack) {
+        SupportIdSection(loggingEnabled = loggingEnabled)
         MotoHubCardGroup {
             MotoHubActionRow(
                 title = motoHubText("Network diagnostics"),
                 description = motoHubText("T-Box discovery, Wi-Fi binding, cellular routes"),
                 onClick = onOpenNetworkDiagnostics
+            )
+            MotoHubActionRow(
+                title = motoHubText("Dash clock lab"),
+                description = motoHubText("Experiments for dashes that reset the clock (Zontes, Voge)"),
+                onClick = onOpenClockLab
+            )
+            MotoHubActionRow(
+                title = motoHubText("Bluetooth LE explorer"),
+                description = motoHubText("Scan, connect and read any BLE device byte by byte"),
+                onClick = onOpenBleExplorer
             )
             MotoHubActionRow(
                 title = motoHubText("Application logs"),
@@ -564,6 +587,20 @@ private fun DiagnosticsDetail(
                 verboseLogging = it
                 MotoHubSettings.setVerboseTBoxLogging(context, it)
                 ProjectionEventLog.record("SETTINGS", "Verbose T-Box logging changed to enabled=$it.")
+            }
+        )
+        ToggleRow(
+            title = motoHubText("Show button presses on the dashboard"),
+            description = motoHubText("Every handlebar press ") +
+                "- puts a black banner on the TFT for one second naming the button and the " +
+                "action it ran. It is how you find out whether a press arrived at all, and " +
+                "what it did, without reading a log. Works in Android Auto and on the Ride " +
+                "Dashboard alike.",
+            checked = pressBanner,
+            onCheckedChange = {
+                pressBanner = it
+                HandlebarPressHud.setEnabled(context, it)
+                ProjectionEventLog.record("SETTINGS", "Press banner changed to enabled=$it.")
             }
         )
     }
@@ -636,6 +673,10 @@ private fun HandlebarControlsDetail(onBack: () -> Unit, onOpenMapping: () -> Uni
                 onClick = {
                     inputMode = candidate
                     HandlebarControlStore.setInputMode(context, candidate)
+                    // A session may well be running while the rider is in here - that is when
+                    // they discover the protocol is wrong. Without this the switch takes effect
+                    // only at the next session start.
+                    MediaButtonBridge.inputModeChanged()
                     ProjectionEventLog.record(
                         "SETTINGS",
                         "Handlebar input mode changed to ${candidate.name}."

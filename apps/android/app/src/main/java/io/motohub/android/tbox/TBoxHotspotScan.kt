@@ -1,5 +1,13 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Vincenzo Buonomano and the MOTO-HUB contributors.
+// Part of MOTO-HUB. Free software under the GNU AGPL v3; see LICENSE.
 package io.motohub.android.tbox
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import java.io.File
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.NetworkInterface
@@ -16,6 +24,65 @@ import java.net.NetworkInterface
  * tested without a motorcycle. See `TBoxHotspotScanTest`.
  */
 object TBoxHotspotScan {
+
+    /**
+     * Every IPv4 address on a network this phone is using as an **uplink** - its Wi-Fi, its
+     * mobile link, a VPN. Excluding those is what stops a rider's home subnet from being swept.
+     *
+     * Networks Android marks `LOCAL_NETWORK` are deliberately kept out of the set, and that
+     * exception is load-bearing. The original version assumed a hosted hotspot is never surfaced
+     * to apps as a [android.net.Network] at all — true when it was written, and false now.
+     * Measured on a OnePlus CPH2653 on 2026-08-09 with tethering on: Android reports the SoftAP
+     * interface `wlan2` as a full `NetworkAgentInfo`, `LinkAddresses: [10.181.20.114/24]`,
+     * carrying the newer `LOCAL_NETWORK` capability. Its address therefore landed in this set,
+     * [tetheringSubnets] dropped the only correct interface, and every caller concluded no
+     * hotspot was running — the group intercom called the hosting phone a guest, and the T-Box's
+     * `PHONE_HOTSPOT` mode would have told the rider to turn on a hotspot that was already on.
+     * `isHostedName` grants immunity too, but only to names it recognises, and `wlan2` is not
+     * one of them.
+     *
+     * The first attempt at this filtered on `INTERNET` instead — "a network the phone hosts
+     * gives it no internet" — and that was wrong in a way worth recording, because it looked
+     * more principled than it was. Carrier IMS/MMS APNs have no `INTERNET` either, so
+     * `rmnet_data3`, a 30-bit carrier link, stopped being excluded, became a candidate, and won
+     * the ranking tie against `wlan2` purely by enumeration order. The host then bound its
+     * listener to the cellular interface, where no guest could ever reach it. `LOCAL_NETWORK`
+     * says what is actually meant; absence of internet merely correlates with it.
+     *
+     * Best-effort by design. If the query fails or comes back empty the scan simply runs
+     * unfiltered, which is what it did before this existed.
+     */
+    // getAllNetworks() is deprecated with no synchronous replacement: the sanctioned API is a
+    // registered NetworkCallback, which answers a question this code asks once, on demand, at the
+    // start of a connect. activeNetwork alone is not enough - behind a VPN it *is* the VPN, and
+    // the Wi-Fi whose subnet must not be swept stops being reported at all.
+    @Suppress("DEPRECATION")
+    fun addressesInUse(context: Context): Set<InetAddress> =
+        runCatching {
+            val connectivityManager =
+                context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            connectivityManager.allNetworks
+                .filterNot { network -> isLocalNetwork(connectivityManager, network) }
+                .mapNotNull { network -> connectivityManager.getLinkProperties(network) }
+                .flatMap { properties -> properties.linkAddresses }
+                .map { linkAddress -> linkAddress.address }
+                .filterIsInstance<Inet4Address>()
+                .toSet()
+        }.getOrDefault(emptySet())
+
+    /**
+     * Whether Android considers this a local network rather than one of the phone's uplinks.
+     *
+     * Guarded because the capability is recent (API 36). On a platform that does not know the
+     * value `hasCapability` can reject it outright, and on one that never surfaces tethering as
+     * a network the question does not arise: either way, "not local" is the answer that leaves
+     * the old behaviour intact.
+     */
+    private fun isLocalNetwork(manager: ConnectivityManager, network: Network): Boolean =
+        runCatching {
+            manager.getNetworkCapabilities(network)
+                ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_LOCAL_NETWORK) == true
+        }.getOrDefault(false)
 
     /**
      * Interface-name prefixes Android has used for the tethering/SoftAP side. The list is
@@ -149,6 +216,79 @@ object TBoxHotspotScan {
             ) as Inet4Address
         }
     }
+
+    /**
+     * One device the kernel has seen on a network this phone hosts. [oui] is the first three
+     * octets of its hardware address - the vendor half - because a full MAC is redacted out of
+     * every shared log, and "who joined" is a question the vendor half answers on its own.
+     */
+    data class Neighbour(val address: String, val oui: String, val interfaceName: String)
+
+    /**
+     * The devices currently on the hosted network, or **null when the phone will not say** -
+     * which is a different answer from "none", and the difference is the entire point.
+     *
+     * A rider whose dash never appears has two unrelated problems and no log has been able to
+     * tell them apart: either the dash never joined the hotspot at all (wrong Ssid, wrong
+     * password, a band its radio cannot see, or it was never in that mode) or it joined and is
+     * simply not answering on the port MOTO-HUB probes. One line naming the occupants of the
+     * subnet separates those before the 253-address sweep even starts, and the sweep's own
+     * silence has never been able to.
+     *
+     * `/proc/net/arp` is the only route to that answer an unprivileged app has - the
+     * `TetheringManager` client callback is gated behind a system permission - and Android has
+     * been tightening access to it since 10. Strictly best-effort, therefore: unreadable is
+     * reported as unreadable, and nothing whatsoever is concluded from it.
+     */
+    fun neighbours(interfaceName: String? = null): List<Neighbour>? =
+        runCatching { parseNeighbours(File(ARP_TABLE_PATH).readLines(), interfaceName) }.getOrNull()
+
+    /** The parsing half, kept separate so it can be tested without a motorcycle or a hotspot. */
+    internal fun parseNeighbours(lines: List<String>, interfaceName: String? = null): List<Neighbour>? =
+        run {
+            // Header only is a real answer ("nothing has joined"); no header at all means the
+            // read was refused or emptied, and that is not evidence about the dash.
+            if (lines.isEmpty()) return@run null
+            lines.drop(1).mapNotNull { line ->
+                val fields = line.trim().split(WHITESPACE)
+                if (fields.size < 6) return@mapNotNull null
+                val device = fields[5]
+                if (interfaceName != null && !device.equals(interfaceName, ignoreCase = true)) {
+                    return@mapNotNull null
+                }
+                val flags = fields[2].removePrefix("0x").toIntOrNull(16) ?: 0
+                val hardware = fields[3]
+                // ATF_COM (0x2) is what separates a neighbour from the record of an ARP request
+                // that went unanswered - and the sweep manufactures those by the hundred.
+                if (flags and 0x2 == 0 || hardware == EMPTY_HARDWARE_ADDRESS) return@mapNotNull null
+                Neighbour(
+                    address = fields[0],
+                    oui = hardware.split(':').take(3).joinToString(":"),
+                    interfaceName = device
+                )
+            }
+        }
+
+    /** [neighbours] as the single log line the connect path records. */
+    fun describeNeighbours(interfaceName: String): String {
+        val seen = neighbours(interfaceName)
+        return when {
+            seen == null ->
+                "This phone will not say which devices are on $interfaceName (Android restricts " +
+                    "the neighbour table), so nothing here proves whether the dash joined."
+            seen.isEmpty() ->
+                "Nothing has joined the network this phone is hosting on $interfaceName yet - the " +
+                    "neighbour table is empty. A dash that never associates is a credentials or " +
+                    "band problem, not a discovery one."
+            else ->
+                "${seen.size} device(s) joined the hosted network on $interfaceName: " +
+                    seen.joinToString { "${it.address} (vendor ${it.oui})" } + "."
+        }
+    }
+
+    private val WHITESPACE = Regex("\\s+")
+    private const val EMPTY_HARDWARE_ADDRESS = "00:00:00:00:00:00"
+    private const val ARP_TABLE_PATH = "/proc/net/arp"
 
     /** Live enumeration; [tetheringSubnets] holds the logic worth testing. */
     fun snapshotInterfaces(): List<InterfaceSnapshot> =
